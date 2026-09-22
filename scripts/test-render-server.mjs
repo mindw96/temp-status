@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import {request as httpRequest} from 'node:http';
 import {spawnSync} from 'node:child_process';
 import {once} from 'node:events';
-import {gunzipSync} from 'node:zlib';
+import {gunzipSync, brotliDecompressSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import {createRenderServer} from './render-server.mjs';
 
 const token = 'render-http-test-only';
@@ -72,6 +73,30 @@ try {
   const plain = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': 'gzip;q=0'}});
   assert.equal(plain.headers['content-encoding'], undefined);
   assert.equal(JSON.parse(plain.body).nodes.length, 2);
+  const br = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': 'gzip, br'}});
+  assert.equal(br.headers['content-encoding'], 'br');
+  assert.equal(JSON.parse(brotliDecompressSync(br.body)).nodes.length, 2);
+  assert.equal(br.headers.etag, undefined);
+  assert.equal(br.headers['cache-control'], 'no-store');
+  for (const [accept, expected] of [
+    ['br;q=0, gzip;q=1', 'gzip'],
+    ['br;q=0.2, gzip;q=0.8', 'gzip'],
+    ['br;q=1, gzip;q=0.5', 'br'],
+    ['br;q=0, gzip;q=0', undefined],
+    ['br;q=0.5, identity;q=1', undefined],
+    ['identity;q=0, br;q=1', 'br'],
+    ['*;q=1, br;q=0', 'gzip'],
+    ['br;q=bad, gzip;q=0', undefined],
+    ['', undefined]
+  ]) {
+    const response = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': accept}});
+    assert.equal(response.status, 200, accept);
+    assert.equal(response.headers['content-encoding'], expected, accept);
+    const decoded = expected === 'br' ? brotliDecompressSync(response.body) : expected === 'gzip' ? gunzipSync(response.body) : response.body;
+    assert.equal(JSON.parse(decoded).nodes.length, 2);
+  }
+  const unacceptable = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': 'br;q=0, gzip;q=0, identity;q=0'}});
+  assert.equal(unacceptable.status, 406);
   const html = await raw(base, '/', {headers: {'Accept-Encoding': 'gzip'}});
   assert.equal(html.status, 200); assert.equal(html.headers['content-encoding'], 'gzip');
   assert.match(gunzipSync(html.body).toString(), /Cluster overview/);
@@ -79,7 +104,48 @@ try {
   assert.equal(head.status, 200); assert.equal(head.body.length, 0);
   assert.equal(head.headers['content-encoding'], 'gzip');
   assert.equal(head.headers['content-length'], undefined);
-  assert.equal((await raw(base, '/live.js')).status, 200);
+  const htmlBytes = gunzipSync(html.body);
+  assert.equal(html.headers.etag, `"${createHash('sha256').update(html.body).digest('hex')}"`);
+  assert.equal(head.headers.etag, html.headers.etag);
+  assert.equal(html.headers['cache-control'], 'public, max-age=0, must-revalidate');
+  const unchanged = await raw(base, '/', {headers: {'Accept-Encoding': 'gzip', 'If-None-Match': html.headers.etag}});
+  assert.equal(unchanged.status, 304); assert.equal(unchanged.body.length, 0);
+  assert.equal(unchanged.headers.etag, html.headers.etag);
+  assert.match(unchanged.headers.vary, /Accept-Encoding/);
+  const weak = await raw(base, '/index.html', {headers: {'Accept-Encoding': 'gzip', 'If-None-Match': `"old-build", W/${html.headers.etag}`}});
+  assert.equal(weak.status, 304); assert.equal(weak.body.length, 0);
+  const old = await raw(base, '/', {headers: {'Accept-Encoding': 'gzip', 'If-None-Match': '"old-build"'}});
+  assert.equal(old.status, 200); assert.deepEqual(old.body, html.body);
+  const differentEncoding = await raw(base, '/', {headers: {'Accept-Encoding': 'br', 'If-None-Match': html.headers.etag}});
+  assert.equal(differentEncoding.status, 200);
+  assert.notEqual(differentEncoding.headers.etag, html.headers.etag);
+  assert.deepEqual(brotliDecompressSync(differentEncoding.body), htmlBytes);
+  const headNotModified = await raw(base, '/', {method: 'HEAD', headers: {'Accept-Encoding': 'br', 'If-None-Match': differentEncoding.headers.etag}});
+  assert.equal(headNotModified.status, 304); assert.equal(headNotModified.body.length, 0);
+  for (const path of ['/styles.css', '/app.js', '/gpu-jobs.js', '/live.js']) {
+    const asset = await raw(base, path, {headers: {'Accept-Encoding': 'br'}});
+    assert.equal(asset.status, 200);
+    assert.notEqual(asset.headers.etag, differentEncoding.headers.etag);
+    const cached = await raw(base, path + '?unchanged', {headers: {'Accept-Encoding': 'br', 'If-None-Match': asset.headers.etag}});
+    assert.equal(cached.status, 304); assert.equal(cached.body.length, 0);
+  }
+  // A static validator must never suppress a report, API response, or error.
+  node.gpus[0].gpu_utilization = 91;
+  const previousReceivedAt = snapshot.nodes.find(n => n.data.server_name === 'test-node').receivedAt;
+  const updated = await raw(base, '/api/report/node', {method: 'POST', headers: {'X-Status-Token': token, 'Content-Type': 'application/json', 'If-None-Match': '*'}, body: JSON.stringify(node)});
+  assert.equal(updated.status, 200); assert.equal(updated.headers.etag, undefined);
+  const fresh = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': 'br', 'If-None-Match': '*'}});
+  assert.equal(fresh.status, 200); assert.equal(fresh.headers.etag, undefined);
+  const freshSnapshot = JSON.parse(brotliDecompressSync(fresh.body));
+  const freshNode = freshSnapshot.nodes.find(n => n.data.server_name === 'test-node');
+  assert.equal(freshNode.data.gpus[0].gpu_utilization, 91);
+  assert.ok(freshNode.receivedAt >= previousReceivedAt);
+  assert.ok(freshSnapshot.serverTime >= freshNode.receivedAt);
+  const health = await raw(base, '/healthz', {headers: {'If-None-Match': '*'}});
+  assert.equal(health.status, 200); assert.equal(health.headers.etag, undefined);
+  const missingAsset = await raw(base, '/missing.js', {headers: {'If-None-Match': '*'}});
+  assert.equal(missingAsset.status, 404); assert.equal(missingAsset.headers.etag, undefined);
+
   assert.equal((await raw(base, '/api/missing')).status, 404);
   const oversized = await raw(base, '/api/report/node', {method: 'POST', headers: {'X-Status-Token': token, 'Content-Length': String(8 * 1024 * 1024 + 1)}, body: '{}'});
   assert.equal(oversized.status, 413);
@@ -93,4 +159,4 @@ try {
   const restarted = JSON.parse((await raw(`http://127.0.0.1:${server.address().port}`, '/api/snapshot')).body);
   assert.deepEqual(restarted.nodes, []); assert.equal(restarted.slurm, null); assert.deepEqual(restarted.history, []);
 } finally {await close(server);}
-console.log('PASS: required startup secret, HTTP authentication, node/Slurm/cloud reports, latest-only memory storage, gzip, HEAD/static assets, bounded uploads, and empty restart.');
+console.log('PASS: required startup secret, HTTP authentication, node/Slurm/cloud reports, latest-only memory storage, Brotli/gzip negotiation, immutable asset ETags/304, live API freshness, HEAD/static assets, bounded uploads, and empty restart.');

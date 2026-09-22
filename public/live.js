@@ -1,9 +1,9 @@
 'use strict';
 const demoData = {nodes: structuredClone(nodes), jobs: structuredClone(jobs), partitions: structuredClone(partitionMeta)};
 const demoRender = {nodes: renderNodes, node: showNode, job: showJob, dataInfo: showDataInfo};
-const REFRESH_INTERVAL_MS = 30000, FRESHNESS_MS = 90000, QUOTA_RETRY_MS = 300000;
-const liveState = {mode: 'live', snapshot: null, error: null, errorKind: null, retryAt: null, loading: false, page: 1, lastRead: 0, nextAttemptAt: 0, failureCount: 0};
-let refreshTimer;
+const REFRESH_INTERVAL_MS = 120000, FRESHNESS_MS = 180000, QUOTA_RETRY_MS = 300000, MANUAL_COOLDOWN_MS = 5000;
+const liveState = {mode: 'live', snapshot: null, error: null, errorKind: null, retryAt: null, loading: false, page: 1, lastRead: 0, lastAttemptAt: null, nextAttemptAt: 0, failureCount: 0};
+let refreshTimer, refreshControlTimer, activeRequest;
 const fresh = at => !liveState.error && Number.isFinite(at) && Date.now() - at < FRESHNESS_MS;
 const validNumber = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const stateNames = {R: 'RUNNING', PD: 'PENDING', CG: 'COMPLETING', S: 'SUSPENDED', CF: 'CONFIGURING', CD: 'COMPLETED', F: 'FAILED', CA: 'CANCELLED', TO: 'TIMEOUT'};
@@ -34,9 +34,10 @@ currentNodes = () => liveState.mode === 'demo' ? nodes.filter(n => state.partiti
 const sampleNote = $('.sample-note');
 function renderConnection() {
   const demo = liveState.mode === 'demo', snap = liveState.snapshot, hasData = !!(snap?.slurm || snap?.nodes?.length), staleNodes = nodes.filter(n => n.stale).length;
-  const message = demo ? 'Sample cluster. All values and names are fictional.' : liveState.error ? `${liveState.error} ${hasData ? 'Showing last received data; live status is unavailable.' : 'Live data is unavailable.'}${liveState.errorKind === 'quota' ? ' Automatic retry within 5 minutes, or use Refresh now.' : ''}` : !hasData ? 'Waiting for collectors. This dashboard checks for reports every 30 seconds.' : `Slurm: ${ageText(snap.slurm?.receivedAt)} · ${snap.nodes.length}/${nodes.length} nodes reporting${staleNodes ? ` · ${staleNodes} stale or missing` : ''}`;
+  const message = demo ? 'Sample cluster. All values and names are fictional.' : liveState.error ? `${liveState.error} ${hasData ? 'Showing last received data; live status is unavailable.' : 'Live data is unavailable.'}${liveState.errorKind === 'quota' ? ' Automatic retry within 5 minutes, or use Refresh now.' : ''}` : !hasData ? 'Waiting for collectors. This dashboard checks for reports every 2 minutes.' : `Slurm: ${ageText(snap.slurm?.receivedAt)} · ${snap.nodes.length}/${nodes.length} nodes reporting · Auto-refresh every 2 minutes${staleNodes ? ` · ${staleNodes} stale or missing` : ''}`;
   sampleNote.innerHTML = `${icon(demo ? 'flask' : liveState.error ? 'info' : 'activity')}<span>${esc(message)}</span><button id="retry-live">${demo ? 'Data source' : 'Refresh now'} ↗</button>`;
   $('#retry-live').onclick = () => demo ? showDataInfo() : loadSnapshot({force: true});
+  renderRefreshControl();
   const times = demo ? [] : [snap?.slurm?.receivedAt, ...(snap?.nodes || []).map(n => n.receivedAt)].filter(Number.isFinite);
   $('.snapshot').innerHTML = `${icon('clock')}<span>${demo ? 'Sep 22, 10:40 KST · Sample' : times.length ? clockText(Math.max(...times)) : 'No reports received'}</span>`;
   const selected = state.partition;
@@ -45,6 +46,16 @@ function renderConnection() {
   $('#partition-filter').value = state.partition;
   $('.node-key').innerHTML = demo ? '<span><i class="green-dot"></i>Healthy</span><span><i class="amber-dot"></i>Maintenance</span>' : '<span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Stale / missing</span>';
   $('.table-footer>span:last-child').textContent = demo ? 'Slurm · Sample snapshot' : `Slurm: ${ageText(snap?.slurm?.receivedAt)}`;
+}
+function renderRefreshControl() {
+  clearTimeout(refreshControlTimer);
+  const button = $('#retry-live');
+  if (!button || liveState.mode === 'demo') return;
+  const remaining = liveState.lastAttemptAt === null ? 0 : Math.max(0, liveState.lastAttemptAt + MANUAL_COOLDOWN_MS - Date.now());
+  button.disabled = liveState.loading || remaining > 0;
+  button.textContent = liveState.loading ? 'Refreshing…' : remaining > 0 ? `Refresh in ${Math.ceil(remaining / 1000)}s` : 'Refresh now ↗';
+  button.title = liveState.loading ? 'A refresh is in progress.' : remaining > 0 ? 'Please wait 5 seconds between refreshes.' : 'Fetch the latest reports now.';
+  if (!document.hidden && !liveState.loading && remaining > 0) refreshControlTimer = setTimeout(renderRefreshControl, Math.min(1000, remaining));
 }
 // GPU indices from Slurm GRES do not necessarily match NVML device indices.
 // Only process-reported Slurm IDs establish a GPU-to-job relationship.
@@ -122,9 +133,9 @@ showNode = function(id) {
   const context = n.isCloud ? 'Standalone cloud node · no Slurm' : `${n.state}${n.slurmFresh ? '' : ' · Slurm data stale'}`;
   const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported');
   const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable.';
-  openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 90 seconds old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
+  openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 3 minutes old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
     <p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
-    <p class="dialog-note">${note} Reports older than 90 seconds, or shown during a failed refresh, are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
+    <p class="dialog-note">${note} Reports older than 3 minutes, or shown during a failed refresh, are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
 };
 showJob = function(id) {
   if (liveState.mode === 'demo') return demoRender.job(id);
@@ -135,17 +146,13 @@ showJob = function(id) {
   openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${esc(j.id)} · ${esc(j.user)}${slurmFresh ? '' : ' · Slurm data stale'}</p><dl class="detail-grid">${detailItem('State', stateLabels[j.state] || j.state)}${detailItem('Partition', j.partition)}${detailItem('Requested GPUs (reported)', j.gpus)}${detailItem('Elapsed', j.state === 'PENDING' ? 'Not started' : j.elapsed)}${detailItem(j.state === 'PENDING' ? 'Pending reason' : 'Assigned nodes', j.state === 'PENDING' ? j.target : displayNodeList(j.target))}${detailItem('Observed GPUs', slurmFresh ? observed.join(', ') || 'No current process match' : 'Unavailable while Slurm data is stale')}${detailItem('Requested CPUs', j.raw.req_cpus || 'Not reported')}${detailItem('Slurm report received at', clockText(liveState.snapshot?.slurm?.receivedAt))}</dl><p class="dialog-note">${j.state === 'PENDING' ? 'Submission time is not collected, so time pending is unavailable. ' : ''}Requested GPUs are shown as reported by the collector. GPUs with observed processes may differ from the reserved GPU list.</p>`, 'SLURM JOB · LIVE REPORTS');
 };
 showDataInfo = function() {
-  openDialog('<h2 id="dialog-title">Collector connection</h2><p class="dialog-subtitle">Live reports from your node and Slurm collectors.</p><div class="dialog-copy"><p>Node reports arrive at <code>POST /api/report/node</code> and Slurm reports at <code>POST /api/report/slurm</code>, authenticated with the collectors\' reporting token.</p><p>The dashboard refreshes every 30 seconds. Reports older than 90 seconds are marked stale. Failed refreshes retain the last received reports with stale status. Missing metrics are shown as unavailable rather than zero. During a daily database limit, automatic retries are spaced up to 5 minutes apart; Refresh now always checks immediately.</p><p>GPU jobs are matched using process Slurm IDs and exact job aliases. Job names come from the Slurm queue or the process report. GPUs without observed processes can still be reserved.</p><p>Standalone cloud nodes show GPU users and process counts independently of the lab Slurm queue.</p></div>', 'DATA SOURCE');
+  openDialog('<h2 id="dialog-title">Collector connection</h2><p class="dialog-subtitle">Live reports from your node and Slurm collectors.</p><div class="dialog-copy"><p>Node reports arrive at <code>POST /api/report/node</code> and Slurm reports at <code>POST /api/report/slurm</code>, authenticated with the collectors\' reporting token.</p><p>The dashboard updates every 2 minutes while this tab is visible. Background tabs pause updates and refresh on return. Reports older than 3 minutes are marked stale. Failed refreshes retain the last received reports with stale status. Missing metrics are shown as unavailable rather than zero. During a daily database limit, automatic retries are spaced up to 5 minutes apart; Refresh now checks immediately, with at least 5 seconds between requests.</p><p>GPU jobs are matched using process Slurm IDs and exact job aliases. Job names come from the Slurm queue or the process report. GPUs without observed processes can still be reserved.</p><p>Standalone cloud nodes show GPU users and process counts independently of the lab Slurm queue.</p></div>', 'DATA SOURCE');
 };
 render = function() {renderConnection(); renderNodes(); renderJobs();};
-function scheduleSnapshotRefresh() {
+function scheduleSnapshotRefresh(at = liveState.nextAttemptAt, resume = false) {
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => {
-    if (document.hidden) {
-      liveState.nextAttemptAt = Date.now() + REFRESH_INTERVAL_MS;
-      scheduleSnapshotRefresh();
-    } else loadSnapshot();
-  }, Math.max(0, liveState.nextAttemptAt - Date.now()));
+  if (document.hidden || liveState.mode !== 'live') return;
+  refreshTimer = setTimeout(() => loadSnapshot({resume}), Math.max(0, at - Date.now()));
 }
 function validSnapshot(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.nodes) || (snapshot.history !== undefined && !Array.isArray(snapshot.history))) return false;
@@ -160,15 +167,26 @@ function validSnapshot(snapshot) {
     && data.sinfo.every(node => node && (typeof node.name === 'string' || typeof node.hostname === 'string')
       && (node.state === undefined || node.state === null || typeof node.state === 'string'));
 }
-async function loadSnapshot({force = false} = {}) {
-  if (liveState.loading || liveState.mode !== 'live') return;
-  if (!force && Date.now() < liveState.nextAttemptAt) {scheduleSnapshotRefresh(); return;}
+async function loadSnapshot({force = false, resume = false} = {}) {
+  if (document.hidden || liveState.loading || liveState.mode !== 'live') return;
+  const cooldownUntil = liveState.lastAttemptAt === null ? 0 : liveState.lastAttemptAt + MANUAL_COOLDOWN_MS;
+  const allowedAt = Math.max(force || resume ? cooldownUntil : 0, !force && (!resume || liveState.error) ? liveState.nextAttemptAt : 0);
+  if (Date.now() < allowedAt) {
+    if (force) renderRefreshControl();
+    else scheduleSnapshotRefresh(allowedAt, resume);
+    return;
+  }
   clearTimeout(refreshTimer);
   liveState.loading = true;
-  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 10000);
+  liveState.lastAttemptAt = Date.now();
+  renderRefreshControl();
+  const request = {controller: new AbortController(), paused: false};
+  activeRequest = request;
+  const timer = setTimeout(() => request.controller.abort(), 10000);
   try {
-    const response = await fetch('/api/snapshot', {cache: 'no-store', signal: abort.signal});
+    const response = await fetch('/api/snapshot', {cache: 'no-store', signal: request.controller.signal});
     const snapshot = await response.json().catch(error => {if (error?.name === 'AbortError') throw error; return null;});
+    if (request.paused) return;
     if (!response.ok) {
       if (response.status === 503 && snapshot?.error === 'storage_quota_exceeded') {
         const now = Date.now(), nextUtcDay = Math.floor(now / 86400000) * 86400000 + 86400000;
@@ -188,20 +206,25 @@ async function loadSnapshot({force = false} = {}) {
     liveState.failureCount = 0;
     liveState.nextAttemptAt = Date.now() + REFRESH_INTERVAL_MS;
   } catch (error) {
-    if (liveState.mode === 'live') {
+    if (liveState.mode === 'live' && !request.paused) {
       liveState.error = error?.name === 'AbortError' ? 'No response within 10 seconds.' : error?.publicMessage || 'Unable to refresh. Please check your connection and try again.';
       liveState.errorKind = error?.kind === 'quota' ? 'quota' : 'request';
       liveState.retryAt = error?.kind === 'quota' ? error.retryAt : null;
       liveState.failureCount += 1;
-      const retryDelay = liveState.errorKind === 'quota' ? Math.min(QUOTA_RETRY_MS, Math.max(REFRESH_INTERVAL_MS, liveState.retryAt - Date.now())) : Math.min(60000, REFRESH_INTERVAL_MS * liveState.failureCount);
+      const retryDelay = liveState.errorKind === 'quota' ? Math.min(QUOTA_RETRY_MS, Math.max(REFRESH_INTERVAL_MS, liveState.retryAt - Date.now())) : Math.min(QUOTA_RETRY_MS, REFRESH_INTERVAL_MS * liveState.failureCount);
       liveState.nextAttemptAt = Date.now() + retryDelay;
       if (liveState.snapshot) normalizeSnapshot(liveState.snapshot);
       else {nodes = []; jobs = []; partitionMeta = {};}
     }
   } finally {
     clearTimeout(timer);
+    if (activeRequest === request) activeRequest = null;
     liveState.loading = false;
-    if (liveState.mode === 'live') {render(); scheduleSnapshotRefresh();}
+    if (liveState.mode === 'live') {
+      if (!document.hidden) render();
+      if (request.paused && !document.hidden) loadSnapshot({resume: true});
+      else scheduleSnapshotRefresh();
+    }
   }
 }
 $('#prev-page').onclick = () => {liveState.page = Math.max(1, liveState.page - 1); renderJobs();};
@@ -211,4 +234,14 @@ $('#partition-filter').addEventListener('change', () => {liveState.page = 1; ren
 document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => {liveState.page = 1; renderJobs();}));
 nodes = []; jobs = []; partitionMeta = {};
 render(); loadSnapshot();
-document.addEventListener('visibilitychange', () => {if (!document.hidden) loadSnapshot();});
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(refreshTimer);
+  clearTimeout(refreshControlTimer);
+  if (document.hidden) {
+    if (activeRequest) {activeRequest.paused = true; activeRequest.controller.abort();}
+    return;
+  }
+  if (liveState.snapshot) normalizeSnapshot(liveState.snapshot);
+  render();
+  loadSnapshot({resume: true});
+});
