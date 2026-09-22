@@ -46,14 +46,14 @@ rows = resolveGpuJobs([
   {pid: 22, slurm_job_ids: ['alternate', 'also-alternate'], slurm_job_name: 'Fallback'}
 ], []);
 assert.deepEqual(plain(rows), [
-  {jobId: 'missing', name: 'Reported name', job: null, processCount: 2},
-  {jobId: 'alternate', name: 'Fallback', job: null, processCount: 1}
+  {jobId: 'missing', name: 'Reported name', job: null, processCount: 2, users: []},
+  {jobId: 'alternate', name: 'Fallback', job: null, processCount: 1, users: []}
 ]);
 assert.deepEqual(plain(resolveGpuJobs([
   {pid: 30, username: 'same-user', slurm_job_name: 'Do not infer this job'},
   {pid: 31, gpu_index: '0', node: 'devbox'}
 ], [{...job('1'), user: 'same-user', target: 'devbox', raw: {gpu_index: '0'}}])), [
-  {jobId: null, name: null, job: null, processCount: 2}
+  {jobId: null, name: null, job: null, processCount: 2, users: ['same-user']}
 ]);
 
 // Aliases that collide cannot choose a job arbitrarily.
@@ -104,4 +104,46 @@ const unnamedQueueJob = {...job('1', 'Unnamed job'), raw: {name: '', job_id_alia
 assert.equal(resolveGpuJobs([{slurm_job_id: '1', slurm_job_name: 'Actual training job'}], [unnamedQueueJob])[0].name, 'Actual training job');
 assert.equal(resolveGpuJobs([{slurm_job_id: '1'}], [unnamedQueueJob])[0].name, null);
 
-console.log('PASS: exact GPU job identities, array aliases, SLUIDs, precedence, ambiguity, process deduplication, active states, literal names, and immutable inputs.');
+// A matched queue owner is authoritative even if GPU processes use another
+// account; a display placeholder must not obscure real process usernames.
+const ownedJob = {...job('1'), user: 'normalized-owner', raw: {user: 'queue-owner', job_id_aliases: []}};
+rows = resolveGpuJobs([
+  {pid: 1, slurm_job_id: '1', username: 'root'},
+  {pid: 2, slurm_job_id: '1', username: 'process-user'}
+], [ownedJob]);
+assert.deepEqual(plain(rows[0].users), ['queue-owner']);
+const normalizedOwnerJob = {...job('1'), user: 'known-owner'};
+assert.deepEqual(plain(resolveGpuJobs([{slurm_job_id: '1', username: 'root'}], [normalizedOwnerJob])[0].users), ['known-owner']);
+const ownerlessJob = {...job('1'), user: 'Unknown', raw: {user: '', job_id_aliases: []}};
+rows = resolveGpuJobs([
+  {pid: 1, slurm_job_id: '1', username: 'alice'},
+  {pid: 2, slurm_job_id: '1', username: 'alice'},
+  {pid: 3, slurm_job_id: '1', username: 'bob'}
+], [ownerlessJob]);
+assert.deepEqual(plain(rows[0].users), ['alice', 'bob']);
+
+// Unmatched jobs and processes without job IDs still retain deduplicated users.
+rows = resolveGpuJobs([
+  {pid: 1, slurm_job_id: 'unknown', username: 'alice'},
+  {pid: 2, slurm_job_id: 'unknown', username: 'alice'},
+  {pid: 3, slurm_job_id: 'unknown', username: 'bob'},
+  {pid: 4, username: 'charlie'}, {pid: 5, username: 'charlie'},
+  {pid: 6, username: 'dana'}
+], []);
+assert.deepEqual(plain(rows.map(({jobId, users}) => ({jobId, users}))), [
+  {jobId: 'unknown', users: ['alice', 'bob']}, {jobId: null, users: ['charlie', 'dana']}
+]);
+assert.deepEqual(plain(resolveGpuJobs([
+  {slurm_job_id: '1'}, {slurm_job_id: '1', username: null},
+  {slurm_job_id: '1', username: ''}, {slurm_job_id: '1', username: '   '},
+  {slurm_job_id: '1', username: {invalid: 'username'}}
+], [ownerlessJob])[0].users), []);
+
+// Usernames are data, not HTML, and stay literal for the renderer to escape.
+const hostileUser = '<img src=x onerror=alert(1)> & "user"';
+assert.deepEqual(plain(resolveGpuJobs([{username: hostileUser}], [])[0].users), [hostileUser]);
+const frozenOwnerJob = Object.freeze({...job('1'), raw: Object.freeze({user: hostileUser, job_id_aliases: Object.freeze([])})});
+const frozenProcesses = Object.freeze([Object.freeze({pid: 1, slurm_job_id: '1', username: 'root'})]);
+assert.deepEqual(plain(resolveGpuJobs(frozenProcesses, Object.freeze([frozenOwnerJob]))[0].users), [hostileUser]);
+
+console.log('PASS: exact GPU job identities, array aliases, SLUIDs, precedence, ambiguity, process deduplication, active states, queue-owner preference, fallback users, literal names, and immutable inputs.');

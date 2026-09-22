@@ -46,3 +46,9 @@
 @media(max-width:1200px){.node-summary{padding:14px}.gpu-jobs-summary{padding-inline:14px}}
 @media(max-width:740px){.node-summary{padding:13px 11px}.gpu-jobs-summary{padding-inline:11px}}
 @media(max-width:480px){.node-summary{padding:17px}.gpu-jobs-summary{padding-inline:17px}.gpu-jobs-caption,.gpu-job-empty{font-size:12px}.gpu-job-name{font-size:13px}.dialog-gpus.with-jobs{grid-template-columns:1fr}}
+
+.gpu-job-meta,.dialog-gpu .gpu-job-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 7px;min-width:0}
+.gpu-job-meta .gpu-job-id{min-width:0}
+.gpu-job-user,.dialog-gpu .gpu-job-user{font-size:11px;line-height:1.5;color:#74826d;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gpu-job-user::before{content:'·';margin-right:7px;color:#9baa92}
+@media(max-width:480px){.gpu-job-user,.dialog-gpu .gpu-job-user{font-size:12px}}

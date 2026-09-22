@@ -43,14 +43,21 @@ function resolveGpuJobs(processes, jobs) {
       ? matchedJob.raw.name : matchedJob?.name;
     const name = jobId === null ? null
       : typeof queueName === 'string' && queueName.length ? queueName : processName;
+    // Use the queue's real owner when available. An empty raw user field must
+    // not turn a normalized display placeholder into an apparent username.
+    const queueUser = matchedJob?.raw && Object.hasOwn(matchedJob.raw, 'user')
+      ? matchedJob.raw.user : matchedJob?.user;
+    const hasUser = value => typeof value === 'string' && value.trim().length > 0;
+    const user = hasUser(queueUser) ? queueUser : hasUser(process.username) ? process.username : null;
     const key = jobId === null ? 'unidentified' : `${matchedJob ? 'matched' : 'unknown'}:${jobId}`;
     let group = groups.get(key);
     if (!group) {
-      group = {record: {jobId, name, job: matchedJob, processCount: 0}, pids: new Set()};
+      group = {record: {jobId, name, job: matchedJob, processCount: 0, users: []}, pids: new Set()};
       groups.set(key, group);
     } else if (group.record.name === null && name !== null) {
       group.record.name = name;
     }
+    if (user !== null && !group.record.users.includes(user)) group.record.users.push(user);
 
     const pid = process.pid;
     const knownPid = typeof pid === 'number' && Number.isInteger(pid) && pid >= 0
