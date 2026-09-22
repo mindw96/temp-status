@@ -1,0 +1,23 @@
+# Dependencies and generated output
+node_modules/
+dist/
+
+# Local and platform state
+.sites-runtime/
+.wrangler/
+.openai/hosting.json
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Runtime secrets and collected data
+.env
+.env.*
+!.env.example
+config.json
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+logs/
