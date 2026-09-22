@@ -89,12 +89,12 @@ await hidden.visibility(false);
 assert.equal(hidden.requests.length, 1);
 assert.equal(hidden.state().error, null);
 
-// Visible pages use the 2-minute cadence. Hidden pages cancel both network and
+// Visible pages use the 30-second cadence. Hidden pages cancel both network and
 // cooldown timers, and a healthy return refreshes without waiting for that cadence.
 const healthy = browser();
 await flush();
 assert.equal(healthy.requests.length, 1);
-assert.match(healthy.element('.sample-note').innerHTML, /Auto-refresh every 2 minutes/);
+assert.match(healthy.element('.sample-note').innerHTML, /Auto-refresh every 30 seconds/);
 assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 5s');
 assert.equal(healthy.element('#retry-live').disabled, true);
 await healthy.advance(4000);
@@ -104,7 +104,7 @@ assert.equal(healthy.requests.length, 1);
 await healthy.advance(1000);
 assert.equal(healthy.element('#retry-live').textContent, 'Refresh now ↗');
 assert.equal(healthy.element('#retry-live').disabled, false);
-await healthy.advance(114999);
+await healthy.advance(24999);
 assert.equal(healthy.requests.length, 1);
 await healthy.advance(1);
 assert.equal(healthy.requests.length, 2);
@@ -194,8 +194,8 @@ failures.evaluate('liveState.error=null;');
 assert.equal(failures.evaluate('fresh(Date.now()-179000)'), true);
 assert.equal(failures.evaluate('fresh(Date.now()-180000)'), false);
 failures.evaluate('showDataInfo();');
-assert.match(failures.element('#dialog-content').innerHTML, /every 2 minutes/);
+assert.match(failures.element('#dialog-content').innerHTML, /every 30 seconds/);
 assert.match(failures.element('#dialog-content').innerHTML, /older than 3 minutes/);
 assert.match(failures.element('#dialog-content').innerHTML, /at least 5 seconds/);
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 2-minute cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, and 3-minute freshness.');
+console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, and 3-minute freshness.');

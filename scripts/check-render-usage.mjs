@@ -39,9 +39,9 @@ console.log(JSON.stringify({
   reportingNodes: snapshot.nodes.length,
   gpuCount: snapshot.nodes.reduce((sum, node) => sum + node.data.gpus.length, 0),
   slurmJobs: snapshot.slurm?.data.squeue.length ?? null,
-  assumptions: {viewers, days: 30, refreshSeconds: 120, constantPayloadSize: true},
-  snapshotBodyGBPerMonth: {eightHoursPerDay: monthlyGB(8, 120), allDay: monthlyGB(24, 120)},
-  previous30SecondPollingGBAllDay: monthlyGB(24, 30),
+  assumptions: {viewers, days: 30, refreshSeconds: 30, constantPayloadSize: true},
+  snapshotBodyGBPerMonth: {eightHoursPerDay: monthlyGB(8, 30), allDay: monthlyGB(24, 30)},
+  alternative120SecondPollingGBAllDay: monthlyGB(24, 120),
   billingUsageChecked: false,
   note: 'Estimate only. Add HTTP overhead, collector responses, assets, manual refreshes, bots, and other workspace services. Check Render Billing for actual usage.'
 }, null, 2));
