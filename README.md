@@ -16,6 +16,12 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 - 5초 조회, 30초 이상 지연된 GPU 계측을 현재 평균에서 제외
 - 노드 수신 시각과 Slurm 수신 시각을 별도로 표시
 
+## 화면 수정과 자동 배포
+
+화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
+
+수정 후 `pnpm run build`로 확인하고 변경 파일을 커밋해 `main`에 푸시하면 연결된 Cloudflare Workers Builds가 자동 배포합니다. Cloudflare 편집기에서 같은 코드를 별도로 수정하기보다 이 저장소를 기준으로 관리합니다.
+
 ## 데이터 계약
 
 `POST /api/report/node`와 `POST /api/report/slurm`는 기존 에이전트 JSON 형식을 받습니다. `X-Status-Token`은 Worker의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
