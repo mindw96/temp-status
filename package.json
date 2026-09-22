@@ -9,7 +9,9 @@
     "deploy:check": "wrangler deploy --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "start": "node scripts/render-server.mjs",
+    "test:render": "node scripts/build.mjs && node scripts/test-render-server.mjs"
   },
   "devDependencies": {
     "drizzle-kit": "0.31.10",

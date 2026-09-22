@@ -2,7 +2,16 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import worker from '../dist/server/index.js';
 import {localDB} from './local-db.mjs';
-const DB=localDB(),env={DB,STATUS_REPORT_TOKEN:'local-test-only'};
+const storage=localDB(),queries=[];
+// Any accidental history read or write fails the otherwise working report DB.
+const DB={...storage,prepare(sql){
+  if (/gpu_history/i.test(sql)) throw new Error('History storage is unavailable');
+  queries.push(sql);
+  return storage.prepare(sql);
+}},env={DB,STATUS_REPORT_TOKEN:'local-test-only'};
+// Preserve old data, including rows which the previous cleanup would delete.
+DB.raw.prepare('INSERT INTO gpu_history (key,node,minute,utilization,gpu_count) VALUES (?,?,?,?,?)').run('retained','old-node',0,42,1);
+const oldHistory=DB.raw.prepare('SELECT * FROM gpu_history').all();
 const call=(path,method='GET',body,headers={})=>worker.fetch(new Request('https://local.test'+path,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...headers},body:body?JSON.stringify(body):undefined}),env,{});
 const reportHeaders={'X-Status-Token':env.STATUS_REPORT_TOKEN};
 const directCloudflare=await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'forged-client-header'}}),{...env,SNAPSHOT_AUTH_MODE:'unconfigured'},{});
@@ -23,14 +32,14 @@ node.gpus[0].processes=[
 assert.equal((await call('/api/report/node','POST',node,reportHeaders)).status,200);
 assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:[],accounting:{jobs:[]}},reportHeaders)).status,200);
 let snapshot=await (await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
-assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,0);assert.equal(snapshot.nodes[0].data.gpus[1].gpu_utilization,null);assert.equal(snapshot.history[0].utilization,0);assert.equal(snapshot.history[0].gpu_count,1);
+assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,0);assert.equal(snapshot.nodes[0].data.gpus[1].gpu_utilization,null);assert.deepEqual(snapshot.history,[]);
 const storedProcesses=snapshot.nodes[0].data.gpus[0].processes;
 assert.equal(storedProcesses[0].slurm_job_name,'train <alpha> & evaluation');
 assert.deepEqual(storedProcesses[0].slurm_job_ids,['123_4','127']);
 assert.equal(storedProcesses[1].slurm_job_name,'x'.repeat(500));
 assert.equal(storedProcesses[2].slurm_job_name,'');
 assert.equal(storedProcesses[3].slurm_job_name,'');
-node.gpus[0].gpu_utilization=50;await call('/api/report/node','POST',node,reportHeaders);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.history.length,1);assert.equal(snapshot.history[0].utilization,50);
+node.gpus[0].gpu_utilization=50;await call('/api/report/node','POST',node,reportHeaders);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.nodes.length,1);assert.deepEqual(snapshot.history,[]);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,50);
 const publicEnv={...env,SNAPSHOT_AUTH_MODE:'public'};
 const publicSnapshot=await worker.fetch(new Request('https://local.test/api/snapshot'),publicEnv,{});
 assert.equal(publicSnapshot.status,200);assert.equal((await publicSnapshot.json()).nodes[0].data.server_name,'unit-node');
@@ -104,7 +113,40 @@ assert.equal(updatedCloud.cpu_count,null);
 assert.equal(updatedCloud.gpus[0].gpu_utilization,null);
 assert.equal(updatedCloud.gpus[0].vram_total_used_mb,null);
 assert.equal((await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'forged'}}),{...env,SNAPSHOT_AUTH_MODE:'unknown'},{})).status,503);
-const failure=await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'test'}}),{DB:{prepare(){throw new Error('simulated unavailable')}}},{});assert.equal(failure.status,503);
+const readRequest=()=>new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'test'}});
+const writeRequest=()=>new Request('https://local.test/api/report/node',{method:'POST',headers:reportHeaders,body:JSON.stringify(node)});
+const failingDB=error=>({prepare(){return{bind(){return this;},async all(){throw error;},async run(){throw error;}};}});
+for (const request of [readRequest,writeRequest]) {
+  const failure=await worker.fetch(request(),{...env,DB:failingDB(new Error('simulated unavailable: private detail'))},{});
+  assert.equal(failure.status,503);
+  assert.deepEqual(await failure.json(),{error:'storage_unavailable'});
+  assert.equal(failure.headers.get('Retry-After'),null);
+}
+const realReadError="D1_ERROR: Your account has exceeded D1's free tier daily row read limit. Upgrade to a paid plan or wait until tomorrow (midnight UTC) to continue. See https://developers.cloudflare.com/d1/platform/limits/ for more details.";
+const quotaMessages=[realReadError,realReadError.replace('row read limit','row write limit'),"D1_ERROR: Your account has exceeded D1's maximum account reads limit."];
+const originalNow=Date.now;
+try {
+  for (const instant of ['2026-09-22T23:59:59.500Z','2026-09-23T00:00:00.000Z']) {
+    const now=Date.parse(instant),nextReset=(Math.floor(now/86400000)+1)*86400000;
+    Date.now=()=>now;
+    for (const message of quotaMessages) for (const request of [readRequest,writeRequest]) {
+      const response=await worker.fetch(request(),{...env,DB:failingDB(new Error(message))},{});
+      assert.equal(response.status,503);
+      assert.deepEqual(await response.json(),{error:'storage_quota_exceeded',retry_at:nextReset});
+      assert.equal(Number(response.headers.get('Retry-After')),Math.ceil((nextReset-now)/1000));
+      assert.equal(response.headers.get('Cache-Control'),'no-store');
+    }
+  }
+} finally {Date.now=originalNow;}
+// A rate, size, or syntax error has no known daily reset and stays generic.
+for (const message of ['D1_ERROR: query exceeded execution time limit','D1_ERROR: no such table: reports','Daily row read limit reached in unrelated application']) {
+  const response=await worker.fetch(readRequest(),{...env,DB:failingDB(new Error(message))},{});
+  assert.deepEqual(await response.json(),{error:'storage_unavailable'});
+  assert.equal(response.headers.get('Retry-After'),null);
+}
+assert.deepEqual(DB.raw.prepare('SELECT * FROM gpu_history').all(),oldHistory);
+assert.ok(queries.every(sql=>/\breports\b/.test(sql)));
+
 if(process.argv[2]){const real=JSON.parse(readFileSync(process.argv[2],'utf8'));assert.equal((await call('/api/report/node','POST',real.node,reportHeaders)).status,200);assert.equal((await call('/api/report/slurm','POST',real.slurm,reportHeaders)).status,200);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.slurm.data.squeue.length,real.slurm.squeue.length);assert.equal(snapshot.nodes.find(n=>n.data.server_name===real.node.server_name).data.gpus.length,real.node.gpus.length);console.log('Real agent fixture: both reports accepted and retrieved.');}
 assert.equal((await call('/')).status,200);assert.equal((await call('/api/unknown')).status,404);
-console.log('PASS: authentication, input validation, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, minute history, failure handling, assets.');
+console.log('PASS: authentication, input validation, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, no history I/O, UTC quota recovery, failure handling, assets.');

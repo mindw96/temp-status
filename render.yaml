@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: temp-status
+    runtime: node
+    plan: free
+    region: singapore
+    numInstances: 1
+    buildCommand: node scripts/build.mjs
+    startCommand: node scripts/render-server.mjs
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: SNAPSHOT_AUTH_MODE
+        value: public
+      - key: STATUS_REPORT_TOKEN
+        sync: false

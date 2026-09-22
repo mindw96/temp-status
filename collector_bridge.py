@@ -6,11 +6,43 @@ This wrapper is opt-in; it does not install services or edit existing agents.
 import argparse
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import stat
 import sys
 from urllib.parse import urlparse
+
+
+def install_report_backoff(module, interval):
+    """Let the original agent loop slow down on failed or quota-limited posts."""
+    original_post = module.SESSION.post
+    failures = 0
+
+    def post(*args, **kwargs):
+        nonlocal failures
+        try:
+            response = original_post(*args, **kwargs)
+        except Exception:
+            failures += 1
+            module.REPORT_INTERVAL_SEC = min(300, interval * 2 ** min(failures, 8))
+            raise
+        if 200 <= response.status_code < 300:
+            failures = 0
+            module.REPORT_INTERVAL_SEC = interval
+        else:
+            failures += 1
+            try:
+                retry_after = float(getattr(response, 'headers', {}).get('Retry-After', 0))
+            except (TypeError, ValueError):
+                retry_after = 0
+            if not math.isfinite(retry_after):
+                retry_after = 0
+            module.REPORT_INTERVAL_SEC = max(interval, min(300, max(
+                retry_after, interval * 2 ** min(failures, 8))))
+        return response
+
+    module.SESSION.post = post
 
 
 def main():
@@ -35,6 +67,11 @@ def main():
     for key in required_keys:
         if not isinstance(config.get(key), str) or not config[key]:
             parser.error(f"Missing {key}")
+    interval = config.get('report_interval_sec', 15 if auth_mode == 'cloudflare' else 5)
+    if (isinstance(interval, bool) or not isinstance(interval, (int, float))
+            or not math.isfinite(interval) or not 1 <= interval <= 300):
+        parser.error('report_interval_sec must be a number from 1 to 300')
+    os.environ['REPORT_INTERVAL_SEC'] = str(interval)
     os.environ["DASHBOARD_URL"] = base_url + "/api/report/" + args.kind
     for key in ("NODE_REPORT_TOKEN", "SLURM_REPORT_TOKEN", "STATUS_REPORT_TOKEN"):
         os.environ[key] = config["report_token"]
@@ -66,6 +103,7 @@ def main():
             accepted = False
         print(json.dumps({"kind": args.kind, "http_status": result.status_code, "accepted": accepted}))
         return 0 if accepted else 1
+    install_report_backoff(module, interval)
     module.main()
     return 0
 

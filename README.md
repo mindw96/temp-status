@@ -2,6 +2,8 @@
 
 연구실 GPU·Slurm 대시보드의 소스 저장소입니다. [Cloudflare 대시보드](https://temp-status.mindw96-3c8.workers.dev/)는 공개 열람 방식입니다. 배포 이후 처음 연결하시는 경우 [단계별 설정 안내](SETUP.md)를 따라 데이터베이스와 서버 수집기를 연결하세요. [기존 Sites 대시보드](https://lattice-lab-gpu.mindw96.chatgpt.site/)는 별도의 비공개 배포로 유지됩니다.
 
+Cloudflare D1 한도로 서비스가 중단된 경우 [Render 무료 임시 배포 안내](RENDER_SETUP.md)를 사용할 수 있습니다. Render에서는 동일한 화면과 API를 Node 서버로 실행하며 최신 보고만 메모리에 보관합니다. 배포 후 수집기 목적지를 새 주소로 연결해야 데이터가 표시됩니다.
+
 GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 브리지를 포함합니다. 인증 토큰, 실제 보고 데이터, 배포 빌드, Sites 프로젝트 식별 파일은 포함하지 않습니다.
 
 기존 `status_agent/agent.py`와 `slurm_agent.py`가 전송하는 JSON을 받는 연구실 대시보드입니다. 기존 운영 사이트는 Sites의 Cloudflare Worker와 D1, 소유자 전용 접근 정책을 사용합니다. 이 저장소의 루트 배포 설정은 별도 Cloudflare 계정의 `temp-status` Worker를 대상으로 합니다.
@@ -12,8 +14,8 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 - Server1~4의 GPU별 Job ID·사용자·작업명과 Baro의 GPU별 사용자·프로세스 수
 - 노드별 GPU 연산, 전체 VRAM 점유, CPU 및 RAM
 - 작업명·사용자·ID 검색, 파티션/상태 필터, 12행 페이지 이동, 상세 정보
-- GPU 사용 추이 및 파티션 현황 패널은 표시하지 않음. 기존 서버의 1분 단위 기록 저장은 유지.
-- 5초 조회, 30초 이상 지연된 GPU 계측을 현재 평균에서 제외
+- GPU 사용 추이 및 파티션 현황 패널은 표시하지 않으며 이력 저장·조회도 수행하지 않음
+- 수집기 15초 전송, 화면 30초 조회. 90초 이상 지연되거나 조회 실패한 계측은 현재 값으로 표시하지 않음
 - 노드 수신 시각과 Slurm 수신 시각을 별도로 표시
 
 ## 화면 수정과 자동 배포
@@ -26,7 +28,7 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 
 `POST /api/report/node`와 `POST /api/report/slurm`는 기존 연구실 에이전트 JSON 형식을 받습니다. `POST /api/report/cloud-gpu`는 Baro의 `cloud_gpu_agent.py`가 보내는 `server`, `system`, `gpus` 형식을 받아 독립 클라우드 노드로 저장합니다. `X-Status-Token`은 Worker의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
 
-`GET /api/snapshot`은 최신 보고와 시계열을 반환합니다. 현재 Cloudflare 설정은 `SNAPSHOT_AUTH_MODE=public`으로 로그인 없이 조회할 수 있습니다. 기존 Sites 모드는 플랫폼 사용자 인증을 유지합니다. 보고 원문 중 UI에 필요한 필드만 저장하고 서버가 생성한 수신 시각을 사용합니다. 기존 에이전트는 실제 수집 시각을 포함하지 않으므로 수신 시각과 수집 시각은 동일하지 않습니다.
+`GET /api/snapshot`은 최신 보고만 반환합니다. 호환성을 위해 `history`는 빈 배열로 반환하며 기존 이력 테이블과 데이터는 삭제하지 않습니다. 현재 Cloudflare 설정은 `SNAPSHOT_AUTH_MODE=public`으로 로그인 없이 조회할 수 있습니다. 기존 Sites 모드는 플랫폼 사용자 인증을 유지합니다. 보고 원문 중 UI에 필요한 필드만 저장하고 서버가 생성한 수신 시각을 사용합니다. 기존 에이전트는 실제 수집 시각을 포함하지 않으므로 수신 시각과 수집 시각은 동일하지 않습니다.
 
 GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아닙니다. 화면은 `vram_total_used_mb / vram_total_mb`를 사용합니다. 저장·표시 단위는 원래 바이트 계산에 맞춰 MiB/GiB로 해석합니다. `vram_utilization`을 메모리 용량 점유율로 쓰지 않습니다.
 
@@ -48,6 +50,8 @@ python collector_bridge.py slurm --config /secure/path/lattice.json --once
 ```
 
 `--once`는 JSON 성공 응답까지 검증합니다. 상시 실행할 때만 해당 옵션을 제거합니다. 다른 환경에 설치할 때는 대상 서버의 실제 사용자 홈과 서비스 관리 방식을 확인한 뒤 자동 시작을 등록합니다. 롤백은 새로 추가한 Lattice 수집 프로세스만 중지하면 됩니다.
+
+Cloudflare 방식의 기본 전송 주기는 15초이며 설정 파일의 `report_interval_sec`로 1~300초 범위에서 변경할 수 있습니다. 실패 시 재시도 간격을 최대 5분까지 늘리고, 성공하면 기본 주기로 돌아갑니다. 화면은 정상 상태에서 30초마다 조회하고 D1 일일 한도 초과 시 재설정 시각을 표시합니다. 이미 소진된 일일 한도는 코드 배포로 초기화되지 않으며 UTC 자정(한국 시간 오전 9시)에 초기화됩니다. [D1 요금제와 한도](https://developers.cloudflare.com/d1/platform/pricing/)
 
 기존 Sites용 설정은 `auth_mode` 생략 또는 `sites`를 사용하며 `sites_bypass_token`도 필요합니다. Cloudflare 설치 도구 `scripts/install-collectors.py`는 기존 Lattice 서비스와 원본 에이전트를 유지하고 별도 서비스를 등록합니다.
 
@@ -89,7 +93,7 @@ node scripts/preview.mjs
 
 마이그레이션은 `drizzle/`에서 Sites 배포 전에 적용됩니다. 로컬 미리보기는 127.0.0.1:4173의 메모리 SQLite를 사용하며 로그인 사용자를 모의합니다. 로컬 수신용 토큰은 `preview-local-only`이고 배포 코드에는 포함되지 않습니다. 운영 DB는 별도의 영구 D1입니다.
 
-검증: 인증 없는 POST/GET 거부, 입력 오류, 빈 작업 목록, 0과 null의 구분, 업데이트/분 단위 이력, 저장 실패 응답, 실제 에이전트의 GPU 8개/Slurm 작업 89개 스냅샷 호환성을 확인했습니다. 이 수치는 테스트 당시의 일회성 관측이며 현재 클러스터 값이 아닙니다.
+검증: 전송 인증, 공개/비공개 조회 정책, 입력 오류, 빈 작업 목록, 0과 null의 구분, 최신 보고 덮어쓰기, 이력 접근 제거, 한도 초과 응답과 UTC 재설정 경계, 수집기 재시도 간격을 검사합니다. 브라우저에서는 한도 안내, 수동 재시도, 30초 조회/90초 유효 기간, 이전 데이터의 지연 표시와 모바일 레이아웃을 확인합니다.
 
 ## Cloudflare Workers 배포
 

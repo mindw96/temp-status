@@ -110,7 +110,7 @@ SSH 비밀번호 없이 접속 가능한 기존 키를 사용합니다. `Permiss
 
 ## 7. 사이트 확인·공유
 
-브라우저에서 대상 사이트를 새로고침하고 5~10초 정도 기다립니다.
+브라우저에서 대상 사이트를 새로고침하고 최대 30초 정도 기다립니다. 수집기는 기본 15초마다 전송하고 화면은 30초마다 조회합니다.
 
 - 데이터 모드는 **실시간**으로 둡니다.
 - GPU 노드 보고가 4개 들어오는지 확인합니다.
@@ -137,6 +137,7 @@ ssh Server4 'systemctl --user status cloudflare-status-node.service --no-pager'
 | `command not found: node` 또는 `pnpm` | 1단계 PATH 명령을 같은 터미널 창에서 다시 실행 |
 | D1을 찾을 수 없음 | 3단계 Cloudflare 계정과 4단계 실제 DB 바인딩 확인 |
 | `storage_unavailable` / HTTP 503 | 4단계 테이블 생성과 DB 연결 확인 |
+| `storage_quota_exceeded` / Daily database limit reached | D1 일일 한도 소진. 한국 시간 다음 오전 9시 초기화 후 자동 재시도하며, 새 DB 생성이나 재배포로 계정 한도가 초기화되지는 않음 |
 | `access_not_configured` | 최신 main 커밋의 Cloudflare 빌드 성공 여부 확인 |
 | 단발 전송 HTTP 401 | 5단계 Secret과 6단계에서 읽는 토큰 파일이 같은지 확인 |
 | SSH 실패 | 해당 서버 별칭으로 직접 SSH 접속 확인 |

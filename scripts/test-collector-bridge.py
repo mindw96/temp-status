@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import importlib.util
+from types import SimpleNamespace
 
 BRIDGE = Path(__file__).resolve().parents[1] / 'collector_bridge.py'
 FAKE_AGENT = '''
@@ -20,6 +22,7 @@ class Session:
         assert headers == {'X-Status-Token': 'fake-test-credential'}
         assert json == {'test_payload': True}
         assert os.environ['REQUIRE_REPORT_TOKEN'] == '1'
+        assert float(os.environ['REPORT_INTERVAL_SEC']) == 15
         assert os.environ['ENABLE_SACCT'] == '0'
         assert os.environ['SERVER_NAME'] == 'baro-1'
         if os.environ['EXPECTED_KIND'] == 'cloud-gpu':
@@ -49,4 +52,30 @@ with tempfile.TemporaryDirectory() as directory:
     result = subprocess.run([sys.executable, str(BRIDGE), 'cloud-gpu', '--config', str(config),
                              '--agent-dir', str(root), '--once'], capture_output=True, text=True)
     assert result.returncode != 0 and 'mode 600' in result.stderr
-print('PASS: node, Slurm and cloud agents use expected endpoints, credentials and settings; config permissions enforced.')
+spec = importlib.util.spec_from_file_location('bridge', BRIDGE)
+bridge = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bridge)
+responses = iter([
+    SimpleNamespace(status_code=503, headers={}),
+    SimpleNamespace(status_code=503, headers={'Retry-After': '50000'}),
+    SimpleNamespace(status_code=200, headers={}),
+    RuntimeError('network unavailable'),
+    SimpleNamespace(status_code=503, headers={'Retry-After': 'NaN'}),
+    SimpleNamespace(status_code=200, headers={}),
+])
+def fake_post(*args, **kwargs):
+    value = next(responses)
+    if isinstance(value, Exception): raise value
+    return value
+module = SimpleNamespace(SESSION=SimpleNamespace(post=fake_post), REPORT_INTERVAL_SEC=15)
+bridge.install_report_backoff(module, 15)
+module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 30
+module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 300
+module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
+try: module.SESSION.post()
+except RuntimeError: pass
+else: raise AssertionError('Network error must propagate')
+assert module.REPORT_INTERVAL_SEC == 30
+module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
+module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
+print('PASS: all collector kinds use 15-second reports; failed requests back off, quota Retry-After is bounded, success resumes normal cadence; credentials stay private.')
