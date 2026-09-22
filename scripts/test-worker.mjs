@@ -5,6 +5,8 @@ import {localDB} from './local-db.mjs';
 const DB=localDB(),env={DB,STATUS_REPORT_TOKEN:'local-test-only'};
 const call=(path,method='GET',body,headers={})=>worker.fetch(new Request('https://local.test'+path,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...headers},body:body?JSON.stringify(body):undefined}),env,{});
 const reportHeaders={'X-Status-Token':env.STATUS_REPORT_TOKEN};
+const directCloudflare=await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'forged-client-header'}}),{...env,SNAPSHOT_AUTH_MODE:'unconfigured'},{});
+assert.equal(directCloudflare.status,503);assert.equal((await directCloudflare.json()).error,'access_not_configured');
 assert.equal((await call('/api/snapshot')).status,401);
 assert.equal((await call('/api/report/node','POST',{server_name:'test',gpus:[]})).status,401);
 assert.equal((await call('/api/report/node','POST',{},reportHeaders)).status,400);

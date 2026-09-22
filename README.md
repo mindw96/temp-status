@@ -4,7 +4,7 @@
 
 GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 브리지를 포함합니다. 인증 토큰, 실제 보고 데이터, 배포 빌드, Sites 프로젝트 식별 파일은 포함하지 않습니다.
 
-기존 `status_agent/agent.py`와 `slurm_agent.py`가 전송하는 JSON을 받는 연구실 대시보드입니다. Cloudflare Worker와 Sites D1을 사용합니다. 브라우저 화면과 API는 기본적으로 소유자 전용 Sites 접근 정책을 따릅니다.
+기존 `status_agent/agent.py`와 `slurm_agent.py`가 전송하는 JSON을 받는 연구실 대시보드입니다. 기존 운영 사이트는 Sites의 Cloudflare Worker와 D1, 소유자 전용 접근 정책을 사용합니다. 이 저장소의 루트 배포 설정은 별도 Cloudflare 계정의 `temp-status` Worker를 대상으로 합니다.
 
 ## 화면
 
@@ -52,6 +52,7 @@ pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm build
 node scripts/test-worker.mjs
+pnpm deploy:check
 node scripts/preview.mjs
 ```
 
@@ -59,15 +60,34 @@ node scripts/preview.mjs
 
 검증: 인증 없는 POST/GET 거부, 입력 오류, 빈 작업 목록, 0과 null의 구분, 업데이트/분 단위 이력, 저장 실패 응답, 실제 에이전트의 GPU 8개/Slurm 작업 89개 스냅샷 호환성을 확인했습니다. 이 수치는 테스트 당시의 일회성 관측이며 현재 클러스터 값이 아닙니다.
 
-## Cloudflare 계정으로 직접 이전하기
+## Cloudflare Workers 배포
 
-현재 운영 배포는 Sites가 관리하는 Cloudflare 환경입니다. 이 저장소를 GitHub에 올리는 것만으로 Cloudflare 또는 GitHub Pages 배포가 시작되지는 않습니다.
+Cloudflare에서 이 저장소의 `main` 브랜치를 연결한 뒤, Worker의 **Settings → Build**에서 아래 값을 사용합니다.
 
-독립 배포 시 다음을 준비해야 합니다.
+| 설정 | 값 |
+| --- | --- |
+| Worker 이름 | `temp-status` |
+| Root directory | 저장소 루트 |
+| Build command | `pnpm run build` |
+| Deploy command | `pnpm run deploy` |
 
-1. Cloudflare Workers와 D1을 만들고 `DB` 바인딩을 연결합니다. `scripts/build.mjs`가 생성하는 데이터베이스 ID는 로컬용 자리표시자이므로 실제 배포 설정이 필요합니다.
-2. D1 스키마 마이그레이션을 적용하고 `STATUS_REPORT_TOKEN`을 비밀 환경 변수로 설정합니다.
-3. `src/worker.js`의 Sites 사용자 헤더 인증과 수집기의 Sites 전용 접근 인증을 새 환경의 인증 방식으로 변경합니다.
-4. 노드 수집기의 전송 주소와 인증 정보를 새 환경에 맞게 설정합니다.
+기존 `npx wrangler deploy` 명령도 저장소에 고정한 Wrangler와 루트 설정을 사용하므로 그대로 실행할 수 있습니다. `pnpm deploy:check`는 실제 게시 없이 번들·설정을 검사합니다.
+
+`wrangler.jsonc`의 `main`은 화면과 API를 함께 제공하는 `dist/server/index.js`입니다. `dist/`를 static assets 디렉터리로 설정하지 않습니다. 이 폴더에는 서버 코드도 포함되어 있습니다. 빌드 시 Sites용 Wrangler 설정이나 가짜 데이터베이스 ID를 생성하지 않습니다.
+
+Wrangler는 `package.json`과 lockfile에 고정되어 있으며, `pnpm-workspace.yaml`은 `esbuild`와 `workerd`에만 설치 스크립트 실행을 허용합니다. `ERR_PNPM_IGNORED_BUILDS`를 피하기 위해 CI에서 대화형 `pnpm approve-builds`를 실행하거나 전체 패키지에 스크립트 실행을 허용할 필요가 없습니다.
+
+루트 설정의 `DB`는 첫 배포 시 Wrangler가 D1을 자동 생성·연결하는 바인딩입니다. Workers Builds용 API 토큰에 계정의 **D1 Edit** 권한이 필요합니다. 권한이 없다는 오류가 발생하면 Cloudflare의 **My Profile → API Tokens**에서 해당 빌드 토큰을 수정하거나 필요한 권한을 가진 토큰을 Build 설정에 지정합니다. 기존 데이터베이스를 연결하려면 `wrangler.jsonc`의 `DB` 항목에 실제 `database_name`과 `database_id`를 추가합니다.
+
+[Workers Builds 설정](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/), [D1 자동 생성](https://developers.cloudflare.com/changelog/post/2025-10-24-automatic-resource-provisioning/), [pnpm 패키지 실행 정책](https://pnpm.io/settings#allowbuilds)
+
+## 실시간 데이터 이전에 남은 설정
+
+Worker 배포와 실제 클러스터 데이터 이전은 별도 단계입니다. 기존 Sites와 Server1~4 수집기는 기존 목적지를 계속 사용합니다.
+
+1. 첫 배포 후 Cloudflare에서 생성된 D1의 이름·ID를 확인해 루트 설정의 `DB` 항목에 기록하고, `pnpm db:migrate:remote`로 테이블을 생성합니다. 로컬 검증에는 `pnpm db:migrate:local`을 사용합니다.
+2. Workers의 **Settings → Variables & Secrets**에서 런타임 Secret `STATUS_REPORT_TOKEN`을 설정합니다. Build 전용 변수에만 넣으면 런타임에서 사용할 수 없습니다.
+3. 브라우저의 실시간 조회 인증을 Cloudflare Access 등 새 환경의 인증 방식으로 구현합니다. 독립 Worker는 Sites 사용자 헤더를 신뢰할 수 없으므로 현재 루트 설정은 `SNAPSHOT_AUTH_MODE=unconfigured`로 실시간 조회를 차단합니다(`503 access_not_configured`). 해당 값을 제거하거나 `oai-authenticated-user-id` 헤더를 임의로 추가하는 방식으로 우회하지 않습니다. 로컬 미리보기의 Sites 사용자 모의와 기존 운영 Sites 인증은 별개입니다.
+4. `collector_bridge.py`의 Sites 전용 토큰 처리와 각 서버의 전송 URL·인증 정보를 새 환경에 맞게 변경한 뒤, 실제 수신을 확인합니다. 현재 브리지는 기존 Sites 연결용입니다.
 
 화면과 API를 함께 실행하는 Cloudflare Workers + D1 구성이 현재 코드와 맞습니다. GitHub Pages는 정적 화면만 제공하므로 별도 백엔드가 필요합니다.

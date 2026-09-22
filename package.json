@@ -5,11 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "deploy": "wrangler deploy",
+    "deploy:check": "wrangler deploy --dry-run",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:generate": "drizzle-kit generate"
   },
   "devDependencies": {
     "drizzle-kit": "0.31.10",
-    "drizzle-orm": "0.45.2"
+    "drizzle-orm": "0.45.2",
+    "wrangler": "4.135.0"
   },
   "packageManager": "pnpm@11.19.0"
 }

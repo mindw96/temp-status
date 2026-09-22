@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "temp-status",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-09-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "vars": {
+    "SNAPSHOT_AUTH_MODE": "unconfigured"
+  }
+}
