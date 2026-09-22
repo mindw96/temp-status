@@ -148,6 +148,16 @@ await inFlight.visibility(false);
 assert.equal(inFlight.requests.length, 2);
 assert.equal(inFlight.state().snapshot.nodes.length, 1);
 
+// A tab can become visible before the aborted fetch has settled. Its completion
+// must still resume exactly once instead of losing the visibility event.
+const rapidReturn = browser({holdRequest: true});
+await flush(); await rapidReturn.advance(5000);
+await Promise.all([rapidReturn.visibility(true), rapidReturn.visibility(false)]);
+await flush();
+assert.equal(rapidReturn.requests.length, 2);
+assert.equal(rapidReturn.state().error, null);
+assert.equal(rapidReturn.state().loading, false);
+
 // Quota and request backoff survive visibility changes; explicit manual refresh
 // can recover immediately once its 5-second cooldown has elapsed.
 const failures = browser();
