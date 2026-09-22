@@ -14,3 +14,35 @@
 
 /* Use the space freed by the navigation for the four live server cards. */
 @media(min-width:1280px){.node-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* GPU job details stay visible while the node summary opens host metrics. */
+.live-node{min-width:0;padding:0;overflow:hidden;align-self:start}
+.node-summary{display:block;width:100%;padding:16px 18px;text-align:left;border-radius:8px 8px 0 0}
+.node-summary:hover{background:#f7faf6}
+.node-summary:focus-visible{outline-offset:-4px}
+.gpu-jobs-summary{border-top:1px solid #e7ede5;padding:12px 18px 14px}
+.gpu-jobs-caption{font-size:11px;color:#74856e;line-height:1.5;margin-bottom:10px}
+.gpu-jobs-caption.is-stale{color:#a18143}
+.gpu-jobs-heading,.gpu-job-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px}
+.gpu-jobs-heading{font-size:10px;color:#85937f;letter-spacing:.2px;padding-bottom:5px}
+.gpu-job-row{align-items:start;border-top:1px solid #edf1ea;padding:7px 0}
+.gpu-job-row:last-child{padding-bottom:0}
+.gpu-job-index{display:grid;place-items:center;width:25px;height:25px;margin-top:2px;border:1px solid #e0e8db;background:#f3f7ef;border-radius:4px;font:11px var(--mono);color:#6d8463}
+.gpu-job-items{min-width:0;display:grid;gap:6px}
+.gpu-job-link,.gpu-job-unlinked{display:block;text-align:left;min-width:0;width:100%;padding:0;line-height:1.5}
+.gpu-job-id{display:block;font:500 11px/1.5 var(--mono);color:#3b7153;overflow-wrap:anywhere}
+.gpu-job-name{display:block;font-size:12px;color:#53664b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpu-job-link:hover .gpu-job-name{text-decoration:underline;color:#258262}
+.gpu-job-empty{display:block;font-size:11px;line-height:25px;color:#8a9685}
+.gpu-job-unlinked .gpu-job-id,.gpu-job-unlinked .gpu-job-name{color:#8c907d}
+.dialog-gpus.with-jobs{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px}
+.with-jobs .dialog-gpu{padding:14px;text-align:left;min-width:0}
+.with-jobs .gpu-users{overflow-wrap:anywhere}
+.dialog-gpu-jobs{border-top:1px solid #dfe7d8;margin-top:9px;padding-top:9px;display:grid;gap:7px}
+.dialog-gpu .gpu-jobs-label{font-size:10px;color:#819176}
+.dialog-gpu .gpu-job-id{color:#3b7153}
+.dialog-gpu .gpu-job-name{color:#53664b;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+@media(min-width:1500px){.node-summary{padding:20px 22px}.gpu-jobs-summary{padding-inline:22px}}
+@media(max-width:1200px){.node-summary{padding:14px}.gpu-jobs-summary{padding-inline:14px}}
+@media(max-width:740px){.node-summary{padding:13px 11px}.gpu-jobs-summary{padding-inline:11px}}
+@media(max-width:480px){.node-summary{padding:17px}.gpu-jobs-summary{padding-inline:17px}.gpu-jobs-caption,.gpu-job-empty{font-size:12px}.gpu-job-name{font-size:13px}.dialog-gpus.with-jobs{grid-template-columns:1fr}}

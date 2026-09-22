@@ -1,34 +1,162 @@
 'use strict';
-const demoData={nodes:structuredClone(nodes),jobs:structuredClone(jobs),partitions:structuredClone(partitionMeta)};
-const demoRender={metrics:renderMetrics,nodes:renderNodes,node:showNode,job:showJob,dataInfo:showDataInfo};
-const liveState={mode:'live',snapshot:null,error:null,loading:false,page:1,lastRead:0};
-const fresh=at=>Number.isFinite(at)&&Date.now()-at<30000;
-const validNumber=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
-const stateNames={R:'RUNNING',PD:'PENDING',CG:'COMPLETING',S:'SUSPENDED',CF:'CONFIGURING',CD:'COMPLETED',F:'FAILED',CA:'CANCELLED',TO:'TIMEOUT'};
-const stateLabels={RUNNING:'실행 중',PENDING:'대기 중',COMPLETING:'종료 처리',SUSPENDED:'일시 정지',CONFIGURING:'준비 중',COMPLETED:'완료',FAILED:'실패',CANCELLED:'취소',TIMEOUT:'시간 초과'};
-Object.assign(reasons,{ReqNodeNotAvail:'요청 노드 사용 불가',QOSMaxGRESPerUser:'사용자 GPU 한도',JobHeldUser:'사용자 보류',DependencyNeverSatisfied:'선행 조건 충족 불가',BeginTime:'예약 시작 대기'});
-const clockText=at=>Number.isFinite(at)?new Intl.DateTimeFormat('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'Asia/Seoul'}).format(at)+' KST':'미수신';
-function ageText(at){if(!at)return'미수신';const seconds=Math.max(0,Math.floor((Date.now()-at)/1000));return seconds<60?`${seconds}초 전 수신`:seconds<3600?`${Math.floor(seconds/60)}분 전 수신`:`${Math.floor(seconds/3600)}시간 전 수신`;}
-function normalizeSnapshot(snapshot){jobs=(snapshot.slurm?.data.squeue||[]).map(j=>({id:String(j.job_id),name:j.name||'이름 없음',user:j.user||'확인 불가',state:stateNames[j.job_state]||j.job_state||'UNKNOWN',partition:j.partition||'미수집',gpus:j.req_gpus||'—',elapsed:j.time||'—',target:j.node_list_or_reason||j.reason||'—',indices:[],raw:j}));partitionMeta=Object.fromEntries([...new Set(jobs.map(j=>j.partition))].map(p=>[p,{label:'Slurm 작업 파티션',model:p}]));const reported=new Map(snapshot.nodes.map(n=>[n.data.server_name,n]));const sinfo=snapshot.slurm?.data.sinfo||[];const names=new Set([...sinfo.map(n=>n.name||n.hostname),...reported.keys()]);nodes=[...names].map(id=>{const report=reported.get(id),raw=report?.data,s=sinfo.find(n=>(n.name||n.hostname)===id),stale=!fresh(report?.receivedAt),gpus=(raw?.gpus||[]).map(g=>{const util=validNumber(g.gpu_utilization),memory=validNumber(g.vram_total_mb),memoryUsed=validNumber(g.vram_total_used_mb);return{index:g.id,uuid:g.uuid,model:g.gpu_name||'모델 미수집',util:!stale&&!g.collection_error&&util!==null&&util>=0&&util<=100?util:null,memory:memory!==null&&memory>0?memory/1024:null,memoryUsed:memoryUsed!==null&&memoryUsed>=0?memoryUsed/1024:null,temp:null,allocated:(g.processes||[]).length>0,processes:g.processes||[],error:g.collection_error};});return{id,total:gpus.length,allocated:gpus.filter(g=>g.allocated).length,state:s?.state?.toUpperCase()||'미수집',gpus,cpu:s?.cpus??null,cpuAllocated:s?.alloc_cpus??null,receivedAt:report?.receivedAt,stale,raw,partitions:[],slurmFresh:fresh(snapshot.slurm?.receivedAt)};}).sort((a,b)=>nodeOrder(a.id)-nodeOrder(b.id));}
-currentNodes=()=>liveState.mode==='demo'?nodes.filter(n=>state.partition==='all'||n.partition===state.partition):nodes;
-const sampleNote=$('.sample-note');
-function renderConnection(){const demo=liveState.mode==='demo',snap=liveState.snapshot,hasData=!!(snap?.slurm||snap?.nodes?.length),staleSlurm=!fresh(snap?.slurm?.receivedAt),staleNodes=nodes.filter(n=>n.stale).length;
-const message=demo?'예시 클러스터입니다. 화면의 모든 수치와 이름은 가상 데이터입니다.':liveState.error?`데이터 조회 실패 · ${liveState.error} 마지막 수신 데이터는 시각과 함께 표시됩니다.`:!hasData?'수집기 연결을 기다리고 있습니다. 데이터가 도착하면 이 화면이 자동으로 갱신됩니다.':`Slurm ${ageText(snap.slurm?.receivedAt)} · 노드 ${snap.nodes.length}/${nodes.length}개 보고${staleNodes?` · ${staleNodes}개 계측 지연 또는 미수신`:''}`;
-sampleNote.innerHTML=`${icon(demo?'flask':liveState.error?'info':'activity')}<span>${esc(message)}</span><button id="retry-live">${demo?'연결 안내':'지금 새로고침'} ↗</button>`;$('#retry-live').onclick=()=>demo?showDataInfo():loadSnapshot();
-const times=demo?[]:[snap?.slurm?.receivedAt,...(snap?.nodes||[]).map(n=>n.receivedAt)].filter(Number.isFinite);$('.snapshot').innerHTML=`${icon('clock')}<span>${demo?'09.22 10:40 KST 예시':times.length?clockText(Math.max(...times)):'수신 기록 없음'}</span>`;
-const selected=state.partition;const options='<option value="all">모든 작업 파티션</option>'+Object.keys(partitionMeta).map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');$('#partition-filter').innerHTML=options;state.partition=Object.hasOwn(partitionMeta,selected)?selected:'all';$('#partition-filter').value=state.partition;
-$('.node-key').innerHTML=demo?'<span><i class="green-dot"></i>정상</span><span><i class="amber-dot"></i>점검 중</span>':'<span><i class="green-dot"></i>계측 수신</span><span><i class="amber-dot"></i>지연 / 미수신</span>';
-$('.table-footer>span:last-child').textContent=demo?'Slurm · 예시 스냅샷':`Slurm ${ageText(snap?.slurm?.receivedAt)}`;
+const demoData = {nodes: structuredClone(nodes), jobs: structuredClone(jobs), partitions: structuredClone(partitionMeta)};
+const demoRender = {metrics: renderMetrics, nodes: renderNodes, node: showNode, job: showJob, dataInfo: showDataInfo};
+const liveState = {mode: 'live', snapshot: null, error: null, loading: false, page: 1, lastRead: 0};
+const fresh = at => Number.isFinite(at) && Date.now() - at < 30000;
+const validNumber = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+const stateNames = {R: 'RUNNING', PD: 'PENDING', CG: 'COMPLETING', S: 'SUSPENDED', CF: 'CONFIGURING', CD: 'COMPLETED', F: 'FAILED', CA: 'CANCELLED', TO: 'TIMEOUT'};
+const stateLabels = {RUNNING: 'Running', PENDING: 'Pending', COMPLETING: 'Completing', SUSPENDED: 'Suspended', CONFIGURING: 'Configuring', COMPLETED: 'Completed', FAILED: 'Failed', CANCELLED: 'Cancelled', TIMEOUT: 'Timed out'};
+Object.assign(reasons, {ReqNodeNotAvail: 'Requested node unavailable', QOSMaxGRESPerUser: 'User GPU limit', JobHeldUser: 'Held by user', DependencyNeverSatisfied: 'Dependency cannot be satisfied', BeginTime: 'Waiting for scheduled start'});
+const clockText = at => Number.isFinite(at) ? new Intl.DateTimeFormat('en-GB', {month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Seoul'}).format(at) + ' KST' : 'Not received';
+function ageText(at) {
+  if (!Number.isFinite(at)) return 'Not received';
+  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
+  return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : `${Math.floor(seconds / 3600)}h ago`;
 }
-renderMetrics=function(){if(liveState.mode==='demo')return demoRender.metrics();const valid=nodes.flatMap(n=>n.gpus).filter(g=>g.util!==null),js=currentJobs(),ready=!!liveState.snapshot?.slurm,reported=nodes.filter(n=>n.receivedAt).length;const cards=[{label:'수신 GPU',icon:'chip',value:nodes.length?nodes.reduce((s,n)=>s+n.total,0):'—',unit:'GPUs',badge:`${reported} / ${nodes.length}개 노드`,note:'보고된 장치 수',featured:true},{label:'GPU 연산 사용률',icon:'activity',value:valid.length?Math.round(average(valid.map(g=>g.util))):'—',unit:'%',badge:`최신 GPU ${valid.length}개`,note:'유효한 계측만 평균'},{label:'실행 중인 작업',icon:'play',value:ready?js.filter(j=>j.state==='RUNNING').length:'—',unit:'jobs',badge:fresh(liveState.snapshot?.slurm?.receivedAt)?'최신 수신':'수신 시각 확인',note:'Slurm RUNNING'},{label:'대기 중인 작업',icon:'clock',value:ready?js.filter(j=>j.state==='PENDING').length:'—',unit:'jobs',badge:'스케줄링 대기',note:'Slurm PENDING',amber:true}];$('#metrics').innerHTML=cards.map(m=>`<div class="metric ${m.featured?'metric-featured':''}"><div class="metric-top"><span>${m.label}</span><span class="metric-icon">${icon(m.icon)}</span></div><div class="metric-value">${m.value}<small>${m.unit}</small></div><div class="metric-bottom"><strong class="${m.amber?'amber':''}">${m.badge}</strong><span>${m.note}</span></div></div>`).join('');};
-renderNodes=function(){if(liveState.mode==='demo')return demoRender.nodes();$('#node-count').textContent=nodes.length;$('#node-grid').innerHTML=nodes.length?nodes.map(n=>{const valid=n.gpus.filter(g=>g.util!==null),memory=n.gpus.filter(g=>g.memory!==null&&g.memoryUsed!==null),util=valid.length?average(valid.map(g=>g.util)):null,mem=!n.stale&&memory.length?100*memory.reduce((s,g)=>s+g.memoryUsed,0)/memory.reduce((s,g)=>s+g.memory,0):null,models=[...new Set(n.gpus.map(g=>g.model))].join(' / ');return`<button class="node ${n.stale?'drain-node':''}" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} 상세"><div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.stale?'drain':'mixed'}">${esc(n.state)}${n.slurmFresh?'':' · 이전'}</span></div><div class="node-model">${esc(models||'GPU 정보 미수신')}${n.gpus.length?` × ${n.gpus.length}`:''}</div><div class="gpu-blocks">${n.gpus.length?n.gpus.map(g=>`<span class="gpu-block ${g.util===null?'unavailable':g.allocated?'occupied':''}" title="${g.util===null?'계측 없음':g.allocated?'프로세스 관측':'프로세스 미관측'}">${esc(g.index)}</span>`).join(''):'<span class="node-no-gpu">노드 에이전트의 보고가 필요합니다</span>'}</div><div class="node-stats"><span>연산 <strong>${percent(util)}</strong></span><span>VRAM <strong>${percent(mem)}</strong></span><span>CPU <strong>${!n.stale&&n.raw?.cpu_percent!==null&&n.raw?.cpu_percent!==undefined?Math.round(n.raw.cpu_percent)+'%':'—'}</strong></span></div><div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale?'계측 미수신 / 지연':'프로세스 관측 '+n.allocated+' GPUs'}</span></div></button>`;}).join(''):'<div class="waiting-nodes"><span class="small-icon">'+icon('server')+'</span><h3>클러스터가 연결될 준비를 마쳤습니다.</h3><p>노드 에이전트와 Slurm 에이전트가 보고를 보내면 자동으로 표시됩니다.</p><button id="waiting-help">수집기 연결 안내 ↗</button></div>';$('#waiting-help')?.addEventListener('click',showDataInfo);};
-renderJobs=function(){const all=currentJobs(),rows=filteredJobs(),pages=Math.max(1,Math.ceil(rows.length/12));liveState.page=Math.min(liveState.page,pages);const visible=rows.slice((liveState.page-1)*12,liveState.page*12);$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=visible.length?visible.map((j,i)=>`<tr><td class="mono">${esc(j.id)}</td><td><button class="job-name" data-job="${esc(j.id)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i%3===0?'lilac':i%3===1?'blue':''}" aria-hidden="true">${esc(j.user.slice(0,1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state==='PENDING'?'pending':''}">${esc(stateLabels[j.state]||j.state)}</span></td><td><span class="partition-chip">${esc(j.partition)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="mono">${j.state==='PENDING'?'—':esc(j.elapsed)}</td><td class="${j.state==='PENDING'?'pending-reason':'mono'}"><span title="${esc(j.state==='PENDING'?j.target:displayNodeList(j.target))}">${esc(j.state==='PENDING'?reasons[j.target.replace(/^\(|\)$/g,'')]||j.target:displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="작업 ${esc(j.id)} 상세">${icon('arrow')}</button></td></tr>`).join(''):`<tr><td colspan="9" class="empty-state">${liveState.mode==='live'&&!liveState.snapshot?.slurm?'Slurm 보고를 기다리고 있습니다.':rows.length===0&&all.length===0?'현재 보고된 작업이 없습니다.':'조건에 맞는 작업이 없습니다. 검색어나 필터를 바꿔보세요.'}</td></tr>`;$('#result-count').textContent=`${rows.length}개 작업 · ${visible.length?((liveState.page-1)*12+1)+'–'+Math.min(liveState.page*12,rows.length):0} 표시`;$('#page-number').textContent=`${liveState.page} / ${pages}`;$('#prev-page').disabled=liveState.page===1;$('#next-page').disabled=liveState.page===pages;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});};
-showNode=function(id){if(liveState.mode==='demo')return demoRender.node(id);const n=nodes.find(n=>n.id===id);if(!n)return;const memory=n.raw;openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(n.state)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU 계측',n.stale?'미수신 또는 30초 이상 지연':'최신 보고')}${detailItem('Slurm CPU 할당',n.cpu!==null?`${n.cpuAllocated} / ${n.cpu}`:'미수집')}${detailItem('호스트 RAM',memory?.ram_used_gb!==null&&memory?.ram_used_gb!==undefined?`${memory.ram_used_gb} / ${memory.ram_total_gb} GiB`:'미수집')}${detailItem('보고 수신 시각',clockText(n.receivedAt))}</dl><div class="dialog-gpus">${n.gpus.map(g=>`<div class="dialog-gpu ${g.util===null?'gpu-offline':''}"><strong>GPU ${esc(g.index)}</strong>${g.util===null?'계측 없음':g.allocated?'프로세스 관측':'프로세스 미관측'}<span>연산 ${percent(g.util)}</span><span>${g.memoryUsed===null||g.memory===null||n.stale?'VRAM —':`${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><span>${g.processes.map(p=>esc(p.username)).filter((v,i,a)=>a.indexOf(v)===i).join(', ')||'사용자 미관측'}</span></div>`).join('')}</div><p class="dialog-note">진한 GPU 칸은 프로세스 관측 여부를 표시합니다. 정확한 GPU 할당량, 온도, 전력은 기존 에이전트가 보고하지 않습니다. 오래된 계측은 현재 사용률 평균에서 제외합니다.</p>`,'GPU NODE · 실제 수신 데이터');};
-showJob=function(id){if(liveState.mode==='demo')return demoRender.job(id);const j=jobs.find(j=>j.id===id);if(!j)return;const aliases=new Set([j.id,...(j.raw.job_id_aliases||[])]),observed=nodes.flatMap(n=>n.gpus.filter(g=>!n.stale&&g.processes.some(p=>[p.slurm_job_id,...(p.slurm_job_ids||[])].some(alias=>aliases.has(alias)))).map(g=>`${displayNodeName(n.id)} / GPU ${g.index}`));openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${esc(j.id)} · ${esc(j.user)}</p><dl class="detail-grid">${detailItem('상태',j.state)}${detailItem('파티션',j.partition)}${detailItem('요청 GPU (에이전트 보고)',j.gpus)}${detailItem('실행 경과',j.state==='PENDING'?'아직 시작하지 않음':j.elapsed)}${detailItem(j.state==='PENDING'?'주요 대기 사유':'할당 노드',j.state==='PENDING'?j.target:displayNodeList(j.target))}${detailItem('프로세스 관측 GPU',observed.join(', ')||'연결 정보 없음')}${detailItem('요청 CPU',j.raw.req_cpus||'미수집')}${detailItem('Slurm 수신 시각',clockText(liveState.snapshot?.slurm?.receivedAt))}</dl><p class="dialog-note">${j.state==='PENDING'?'대기 작업의 제출 시각은 수집되지 않아 대기시간을 표시하지 않습니다. ':''}요청 GPU는 에이전트가 보고한 원문입니다. 프로세스가 관측된 GPU는 자원 할당 목록과 다를 수 있습니다.</p>`,'SLURM JOB · 실제 수신 데이터');};
-showDataInfo=function(){openDialog('<h2 id="dialog-title">수집기 연결</h2><p class="dialog-subtitle">기존 에이전트의 JSON 전송 형식을 지원합니다.</p><div class="dialog-copy"><p>노드 보고는 <code>POST /api/report/node</code>, Slurm 보고는 <code>POST /api/report/slurm</code>로 수신합니다.</p><p>서버의 전송용 토큰으로 보고를 인증합니다. 수집기 연결을 마치면 5초마다 도착한 보고를 이 화면에서 확인할 수 있습니다.</p><p>30초 이상 지난 GPU 계측은 현재 평균에서 제외합니다. Slurm 보고와 노드 보고의 수신 시각은 따로 관리하며, 누락된 정보를 0으로 표시하지 않습니다.</p><p>기존 주소 <code>status.nlp.io.kr</code>는 연결 시간 초과가 확인되었습니다. 이 대시보드는 새 주소로 전송된 데이터만 표시합니다.</p></div>','DATA SOURCE');};
-render=function(){renderConnection();renderMetrics();renderNodes();renderJobs();};
-async function loadSnapshot(){if(liveState.loading||liveState.mode!=='live')return;liveState.loading=true;const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),10000);try{const r=await fetch('/api/snapshot',{cache:'no-store',signal:abort.signal});if(!r.ok)throw new Error(r.status===401?'로그인 세션을 확인해주세요.':`서버 응답 ${r.status}`);const s=await r.json();if(!Array.isArray(s.nodes)||!Array.isArray(s.history))throw new Error('응답 형식을 확인할 수 없습니다.');if(liveState.mode!=='live')return;liveState.snapshot=s;liveState.error=null;liveState.lastRead=Date.now();normalizeSnapshot(s);}catch(error){if(liveState.mode==='live'){liveState.error=error.name==='AbortError'?'10초 동안 응답이 없습니다.':error.message;if(liveState.snapshot)normalizeSnapshot(liveState.snapshot);}}finally{clearTimeout(timer);liveState.loading=false;if(liveState.mode==='live')render();}}
-$('#prev-page').onclick=()=>{liveState.page=Math.max(1,liveState.page-1);renderJobs();};$('#next-page').onclick=()=>{liveState.page++;renderJobs();};
-$('#job-search').addEventListener('input',()=>{liveState.page=1;renderJobs();});$('#partition-filter').addEventListener('change',()=>{liveState.page=1;renderJobs();});document.querySelectorAll('[data-state]').forEach(b=>b.addEventListener('click',()=>{liveState.page=1;renderJobs();}));
-nodes=[];jobs=[];partitionMeta={};render();loadSnapshot();setInterval(()=>{if(!document.hidden)loadSnapshot();},5000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadSnapshot();});
+function normalizeSnapshot(snapshot) {
+  jobs = (snapshot.slurm?.data.squeue || []).map(j => ({id: String(j.job_id), name: j.name || 'Unnamed job', user: j.user || 'Unknown', state: stateNames[j.job_state] || j.job_state || 'UNKNOWN', partition: j.partition || 'Unknown', gpus: j.req_gpus || '—', elapsed: j.time || '—', target: j.node_list_or_reason || j.reason || '—', indices: [], raw: j}));
+  partitionMeta = Object.fromEntries([...new Set(jobs.map(j => j.partition))].map(p => [p, {label: 'Slurm job partition', model: p}]));
+  const reported = new Map(snapshot.nodes.map(n => [n.data.server_name, n]));
+  const sinfo = snapshot.slurm?.data.sinfo || [];
+  const names = new Set([...sinfo.map(n => n.name || n.hostname), ...reported.keys()]);
+  nodes = [...names].map(id => {
+    const report = reported.get(id), raw = report?.data, s = sinfo.find(n => (n.name || n.hostname) === id), stale = !fresh(report?.receivedAt);
+    const gpus = (raw?.gpus || []).map(g => {
+      const util = validNumber(g.gpu_utilization), memory = validNumber(g.vram_total_mb), memoryUsed = validNumber(g.vram_total_used_mb), processes = g.processes || [];
+      return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: resolveGpuJobs(processes, jobs)};
+    });
+    return {id, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: fresh(snapshot.slurm?.receivedAt)};
+  }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
+}
+currentNodes = () => liveState.mode === 'demo' ? nodes.filter(n => state.partition === 'all' || n.partition === state.partition) : nodes;
+const sampleNote = $('.sample-note');
+function renderConnection() {
+  const demo = liveState.mode === 'demo', snap = liveState.snapshot, hasData = !!(snap?.slurm || snap?.nodes?.length), staleNodes = nodes.filter(n => n.stale).length;
+  const message = demo ? 'Sample cluster. All values and names are fictional.' : liveState.error ? `Unable to refresh · ${liveState.error} Last received data is shown with its timestamp.` : !hasData ? 'Waiting for collectors. This dashboard updates automatically when reports arrive.' : `Slurm: ${ageText(snap.slurm?.receivedAt)} · ${snap.nodes.length}/${nodes.length} nodes reporting${staleNodes ? ` · ${staleNodes} stale or missing` : ''}`;
+  sampleNote.innerHTML = `${icon(demo ? 'flask' : liveState.error ? 'info' : 'activity')}<span>${esc(message)}</span><button id="retry-live">${demo ? 'Data source' : 'Refresh now'} ↗</button>`;
+  $('#retry-live').onclick = () => demo ? showDataInfo() : loadSnapshot();
+  const times = demo ? [] : [snap?.slurm?.receivedAt, ...(snap?.nodes || []).map(n => n.receivedAt)].filter(Number.isFinite);
+  $('.snapshot').innerHTML = `${icon('clock')}<span>${demo ? 'Sep 22, 10:40 KST · Sample' : times.length ? clockText(Math.max(...times)) : 'No reports received'}</span>`;
+  const selected = state.partition;
+  $('#partition-filter').innerHTML = '<option value="all">All job partitions</option>' + Object.keys(partitionMeta).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  state.partition = Object.hasOwn(partitionMeta, selected) ? selected : 'all';
+  $('#partition-filter').value = state.partition;
+  $('.node-key').innerHTML = demo ? '<span><i class="green-dot"></i>Healthy</span><span><i class="amber-dot"></i>Maintenance</span>' : '<span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Stale / missing</span>';
+  $('.table-footer>span:last-child').textContent = demo ? 'Slurm · Sample snapshot' : `Slurm: ${ageText(snap?.slurm?.receivedAt)}`;
+}
+renderMetrics = function() {
+  if (liveState.mode === 'demo') return demoRender.metrics();
+  const valid = nodes.flatMap(n => n.gpus).filter(g => g.util !== null), js = currentJobs(), ready = !!liveState.snapshot?.slurm, reported = nodes.filter(n => n.receivedAt).length;
+  const cards = [
+    {label: 'Reported GPUs', icon: 'chip', value: nodes.length ? nodes.reduce((sum, n) => sum + n.total, 0) : '—', unit: 'GPUs', badge: `${reported} / ${nodes.length} nodes`, note: 'Reported devices', featured: true},
+    {label: 'GPU utilization', icon: 'activity', value: valid.length ? Math.round(average(valid.map(g => g.util))) : '—', unit: '%', badge: `${valid.length} fresh GPUs`, note: 'Valid metrics only'},
+    {label: 'Running jobs', icon: 'play', value: ready ? js.filter(j => j.state === 'RUNNING').length : '—', unit: 'jobs', badge: fresh(liveState.snapshot?.slurm?.receivedAt) ? 'Fresh report' : 'Check report time', note: 'Slurm RUNNING'},
+    {label: 'Pending jobs', icon: 'clock', value: ready ? js.filter(j => j.state === 'PENDING').length : '—', unit: 'jobs', badge: 'Awaiting scheduling', note: 'Slurm PENDING', amber: true}
+  ];
+  $('#metrics').innerHTML = cards.map(m => `<div class="metric ${m.featured ? 'metric-featured' : ''}"><div class="metric-top"><span>${m.label}</span><span class="metric-icon">${icon(m.icon)}</span></div><div class="metric-value">${m.value}<small>${m.unit}</small></div><div class="metric-bottom"><strong class="${m.amber ? 'amber' : ''}">${m.badge}</strong><span>${m.note}</span></div></div>`).join('');
+};
+// GPU indices from Slurm GRES do not necessarily match NVML device indices.
+// Only process-reported Slurm IDs establish a GPU-to-job relationship.
+function gpuJobsMarkup(n, g) {
+  if (g.error) return '<span class="gpu-job-empty">GPU report unavailable</span>';
+  if (!g.jobRecords.length) return `<span class="gpu-job-empty">${n.stale ? 'No process in last report' : 'No process observed'}</span>`;
+  return g.jobRecords.map(record => {
+    const content = `<span class="gpu-job-id">${record.jobId ? `#${esc(record.jobId)}` : 'Job ID unavailable'}</span><span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
+    return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" title="Job ${esc(record.jobId)} · ${esc(record.name)}" aria-label="Job ${esc(record.jobId)}: ${esc(record.name)} details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
+  }).join('');
+}
+function gpuJobsCaption(n) {
+  if (n.stale) return 'Last observed · GPU data stale';
+  if (!n.slurmFresh) return 'Observed processes · Slurm data stale';
+  return 'Jobs observed on each GPU';
+}
+renderNodes = function() {
+  if (liveState.mode === 'demo') return demoRender.nodes();
+  $('#node-count').textContent = nodes.length;
+  $('#node-grid').innerHTML = nodes.length ? nodes.map(n => {
+    const valid = n.gpus.filter(g => g.util !== null), memory = n.gpus.filter(g => !g.error && g.memory !== null && g.memoryUsed !== null);
+    const util = valid.length ? average(valid.map(g => g.util)) : null, mem = !n.stale && memory.length ? 100 * memory.reduce((sum, g) => sum + g.memoryUsed, 0) / memory.reduce((sum, g) => sum + g.memory, 0) : null;
+    const models = [...new Set(n.gpus.map(g => g.model))].join(' / ');
+    return `<article class="node live-node ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
+      <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
+        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.stale ? 'drain' : 'mixed'}">${esc(n.state)}${n.slurmFresh ? '' : ' · stale'}</span></div>
+        <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
+        <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-block ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
+        <div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${percent(mem)}</strong></span><span>CPU <strong>${!n.stale && validNumber(n.raw?.cpu_percent) !== null ? Math.round(n.raw.cpu_percent) + '%' : '—'}</strong></span></div>
+        <div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale ? 'Stale / missing' : `${n.allocated} GPUs with processes`}</span></div>
+      </button>
+      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || !n.slurmFresh ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="gpu-jobs-heading"><span>GPU</span><span>Job ID / Job name</span></div>${n.gpus.map(g => `<div class="gpu-job-row" data-gpu-index="${esc(g.index)}"><span class="gpu-job-index">${esc(g.index)}</span><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>` : ''}
+    </article>`;
+  }).join('') : `<div class="waiting-nodes"><span class="small-icon">${icon('server')}</span><h3>Ready to connect your cluster</h3><p>Node and Slurm reports will appear here automatically.</p><button id="waiting-help">Collector setup ↗</button></div>`;
+  $('#waiting-help')?.addEventListener('click', showDataInfo);
+};
+renderJobs = function() {
+  const all = currentJobs(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / 12));
+  liveState.page = Math.min(liveState.page, pages);
+  const visible = rows.slice((liveState.page - 1) * 12, liveState.page * 12);
+  $('#job-count').textContent = all.length;
+  $('#total-jobs').textContent = all.length;
+  $('#running-jobs').textContent = all.filter(j => j.state === 'RUNNING').length;
+  $('#pending-jobs').textContent = all.filter(j => j.state === 'PENDING').length;
+  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td><button class="job-name" data-job="${esc(j.id)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state === 'PENDING' ? 'pending' : ''}">${esc(stateLabels[j.state] || j.state)}</span></td><td><span class="partition-chip">${esc(j.partition)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="mono">${j.state === 'PENDING' ? '—' : esc(j.elapsed)}</td><td class="${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="9" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? 'Waiting for Slurm reports.' : all.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
+  $('#result-count').textContent = `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * 12 + 1) + '–' + Math.min(liveState.page * 12, rows.length) : 0}`;
+  $('#page-number').textContent = `${liveState.page} / ${pages}`;
+  $('#prev-page').disabled = liveState.page === 1;
+  $('#next-page').disabled = liveState.page === pages;
+  document.querySelectorAll('[data-state]').forEach(b => {b.classList.toggle('active', b.dataset.state === state.jobState); b.setAttribute('aria-pressed', String(b.dataset.state === state.jobState));});
+};
+showNode = function(id) {
+  if (liveState.mode === 'demo') return demoRender.node(id);
+  const n = nodes.find(n => n.id === id);
+  if (!n) return;
+  const memory = n.raw;
+  openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(n.state)}${n.slurmFresh ? '' : ' · Slurm data stale'} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? 'Missing or over 30 seconds old' : 'Fresh report')}${detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported')}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
+    <p class="gpu-jobs-caption ${n.stale || !n.slurmFresh ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><span class="gpu-users">${[...new Set(g.processes.map(p => p.username).filter(Boolean))].map(esc).join(', ') || 'No user observed'}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">Job ID / Job name</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
+    <p class="dialog-note">Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable. Reports older than 30 seconds are marked stale and excluded from current utilization.</p>`, 'GPU NODE · LIVE REPORTS');
+};
+showJob = function(id) {
+  if (liveState.mode === 'demo') return demoRender.job(id);
+  const j = jobs.find(j => j.id === id);
+  if (!j) return;
+  const slurmFresh = fresh(liveState.snapshot?.slurm?.receivedAt);
+  const observed = slurmFresh ? nodes.flatMap(n => n.gpus.filter(g => !n.stale && !g.error && g.jobRecords.some(record => record.job?.id === j.id)).map(g => `${displayNodeName(n.id)} / GPU ${g.index}`)) : [];
+  openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${esc(j.id)} · ${esc(j.user)}${slurmFresh ? '' : ' · Slurm data stale'}</p><dl class="detail-grid">${detailItem('State', stateLabels[j.state] || j.state)}${detailItem('Partition', j.partition)}${detailItem('Requested GPUs (reported)', j.gpus)}${detailItem('Elapsed', j.state === 'PENDING' ? 'Not started' : j.elapsed)}${detailItem(j.state === 'PENDING' ? 'Pending reason' : 'Assigned nodes', j.state === 'PENDING' ? j.target : displayNodeList(j.target))}${detailItem('Observed GPUs', slurmFresh ? observed.join(', ') || 'No current process match' : 'Unavailable while Slurm data is stale')}${detailItem('Requested CPUs', j.raw.req_cpus || 'Not reported')}${detailItem('Slurm report received at', clockText(liveState.snapshot?.slurm?.receivedAt))}</dl><p class="dialog-note">${j.state === 'PENDING' ? 'Submission time is not collected, so time pending is unavailable. ' : ''}Requested GPUs are shown as reported by the collector. GPUs with observed processes may differ from the reserved GPU list.</p>`, 'SLURM JOB · LIVE REPORTS');
+};
+showDataInfo = function() {
+  openDialog('<h2 id="dialog-title">Collector connection</h2><p class="dialog-subtitle">Live reports from your node and Slurm collectors.</p><div class="dialog-copy"><p>Node reports arrive at <code>POST /api/report/node</code> and Slurm reports at <code>POST /api/report/slurm</code>, authenticated with the collectors\' reporting token.</p><p>The dashboard refreshes every 5 seconds. Reports older than 30 seconds are marked stale. Missing metrics are shown as unavailable rather than zero.</p><p>GPU jobs are matched using process Slurm IDs and exact job aliases. Job names come from the Slurm queue or the process report. GPUs without observed processes can still be reserved.</p></div>', 'DATA SOURCE');
+};
+render = function() {renderConnection(); renderMetrics(); renderNodes(); renderJobs();};
+async function loadSnapshot() {
+  if (liveState.loading || liveState.mode !== 'live') return;
+  liveState.loading = true;
+  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 10000);
+  try {
+    const response = await fetch('/api/snapshot', {cache: 'no-store', signal: abort.signal});
+    if (!response.ok) throw new Error(response.status === 401 ? 'Authentication required.' : `Server returned ${response.status}.`);
+    const snapshot = await response.json();
+    if (!Array.isArray(snapshot.nodes) || !Array.isArray(snapshot.history)) throw new Error('Unexpected report format.');
+    if (liveState.mode !== 'live') return;
+    liveState.snapshot = snapshot;
+    liveState.error = null;
+    liveState.lastRead = Date.now();
+    normalizeSnapshot(snapshot);
+  } catch (error) {
+    if (liveState.mode === 'live') {
+      liveState.error = error.name === 'AbortError' ? 'No response within 10 seconds.' : error.message;
+      if (liveState.snapshot) normalizeSnapshot(liveState.snapshot);
+    }
+  } finally {
+    clearTimeout(timer);
+    liveState.loading = false;
+    if (liveState.mode === 'live') render();
+  }
+}
+$('#prev-page').onclick = () => {liveState.page = Math.max(1, liveState.page - 1); renderJobs();};
+$('#next-page').onclick = () => {liveState.page++; renderJobs();};
+$('#job-search').addEventListener('input', () => {liveState.page = 1; renderJobs();});
+$('#partition-filter').addEventListener('change', () => {liveState.page = 1; renderJobs();});
+document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => {liveState.page = 1; renderJobs();}));
+nodes = []; jobs = []; partitionMeta = {};
+render(); loadSnapshot();
+setInterval(() => {if (!document.hidden) loadSnapshot();}, 5000);
+document.addEventListener('visibilitychange', () => {if (!document.hidden) loadSnapshot();});
