@@ -5,6 +5,8 @@ function mountIcons(root=document){root.querySelectorAll('[data-icon]').forEach(
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Display aliases only: collection identifiers and Slurm node keys stay unchanged.
 const nodeDisplayNames=Object.freeze({devbox:'Server1',server2:'Server2',ubuntu:'Server3',server4:'Server4'});
+const nodeDisplayOrder=Object.keys(nodeDisplayNames);
+const nodeOrder=id=>{const index=nodeDisplayOrder.indexOf(id);return index<0?nodeDisplayOrder.length:index;};
 const displayNodeName=name=>Object.hasOwn(nodeDisplayNames,name)?nodeDisplayNames[name]:name;
 const displayNodeList=value=>String(value).replace(/(^|[,\s])([A-Za-z0-9_.-]+)(?=$|[,\s])/g,(_,separator,name)=>separator+displayNodeName(name));
 let partitionMeta={accelerated:{model:'NVIDIA H100',label:'H100 · 80 GB'},compute:{model:'NVIDIA A100',label:'A100 · 80 GB'},interactive:{model:'NVIDIA RTX 4090',label:'RTX 4090 · 24 GB'}};
@@ -36,8 +38,7 @@ document.querySelectorAll('[data-state]').forEach(b=>b.addEventListener('click',
 document.addEventListener('click',e=>{const node=e.target.closest('[data-node]'),job=e.target.closest('[data-job]');if(node)showNode(node.dataset.node);if(job)showJob(job.dataset.job);});
 $('#close-dialog').addEventListener('click',()=>$('#detail-dialog').close());
 $('#detail-dialog').addEventListener('click',e=>{if(e.target===$('#detail-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
-$('#data-info').addEventListener('click',showDataInfo);$('#sample-details').addEventListener('click',showDataInfo);
-document.querySelectorAll('.nav-item').forEach(a=>a.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n===a));}));
+$('#sample-details').addEventListener('click',showDataInfo);
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#detail-dialog').open){e.preventDefault();$('#job-search').focus();$('#jobs').scrollIntoView({behavior:'smooth'});}});
 mountIcons();render();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{Promise.resolve(document.modelContext.registerTool({name:'filter_cluster_dashboard',title:'클러스터 대시보드 필터',description:'화면에서 파티션과 Slurm 작업 상태, 검색어를 선택합니다. 현재 표시 모드의 데이터를 검색합니다.',inputSchema:{type:'object',properties:{partition:{type:'string',maxLength:128},jobState:{type:'string',enum:['all','RUNNING','PENDING']},search:{type:'string',maxLength:100}},additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['partition','jobState','search'].includes(k))||(input.partition!==undefined&&!['all',...Object.keys(partitionMeta)].includes(input.partition))||(input.jobState!==undefined&&!['all','RUNNING','PENDING'].includes(input.jobState))||(input.search!==undefined&&(typeof input.search!=='string'||input.search.length>100)))throw new Error('지원하지 않는 필터입니다.');Object.assign(state,input);$('#partition-filter').value=state.partition;$('#job-search').value=state.search;render();return{isSample:typeof liveState==='undefined'||liveState.mode==='demo',filters:{...state},metrics:getMetrics(),visibleJobIds:filteredJobs().map(j=>j.id)};}},{signal:lifecycle.signal})).catch(()=>{});}catch{}}

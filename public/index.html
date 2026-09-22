@@ -11,19 +11,6 @@
 </head>
 <body>
   <a class="skip" href="#main">본문으로 이동</a>
-  <aside class="sidebar">
-    <a class="brand" href="#overview" aria-label="Lattice 개요"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Lattice<span class="brand-dot">.</span></a>
-    <div class="workspace"><div class="workspace-icon" data-icon="layers"></div><div><strong>Research Lab</strong><span>GPU workspace</span></div><span class="workspace-tag">LAB</span></div>
-    <span class="nav-label">WORKSPACE</span>
-    <nav aria-label="주 메뉴">
-      <a class="nav-item active" href="#overview" data-section="overview"><span data-icon="grid"></span>클러스터 개요</a>
-      <a class="nav-item" href="#nodes" data-section="nodes"><span data-icon="server"></span>GPU 노드<span class="nav-count">6</span></a>
-      <a class="nav-item" href="#jobs" data-section="jobs"><span data-icon="queue"></span>Slurm 작업<span class="nav-count">12</span></a>
-    </nav>
-    <div class="sidebar-bottom"><div class="cluster-box"><span class="eyebrow">CLUSTER SNAPSHOT</span><strong><span class="status-dot"></span>lab-cluster</strong><p>6 nodes <span>·</span> 32 GPUs</p><div class="cluster-mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i class="muted"></i></div></div><button class="help-button" id="data-info"><span data-icon="info"></span>데이터 연결 안내<span data-icon="arrow"></span></button><div class="profile"><div class="avatar">RL</div><div><strong>Research Lab</strong><span>클러스터 모니터링</span></div><span class="version">v1.0</span></div></div>
-  </aside>
-  <div class="app">
-    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>클러스터 개요</strong></div><div class="topbar-right"><span class="read-only"><span data-icon="eye"></span>읽기 전용</span><label class="source-select"><span class="sr-only">데이터 모드</span><select id="data-mode"><option value="live">실시간 데이터</option><option value="demo">예시 데이터</option></select></label><span class="demo-badge" id="connection-badge">연결 확인 중</span><div class="top-avatar">RL</div></div></header>
     <main id="main">
       <section id="overview" aria-labelledby="page-title">
         <div class="page-heading"><div><div class="eyebrow heading-eyebrow">COMPUTE, AT A GLANCE</div><h1 id="page-title">클러스터 개요<span class="heading-period">.</span></h1><p>실험을 위한 자원, 한눈에 확인하세요.</p></div><div class="heading-controls"><span class="snapshot"><span data-icon="clock"></span>09.22 10:40 KST 스냅샷</span><label class="select-wrap"><span data-icon="layers"></span><select id="partition-filter" aria-label="작업 파티션 필터"><option value="all">모든 파티션</option><option value="accelerated">accelerated · H100</option><option value="compute">compute · A100</option><option value="interactive">interactive · RTX 4090</option></select></label></div></div>
@@ -34,7 +21,6 @@
       <section id="jobs" class="panel jobs-panel" aria-labelledby="jobs-title"><div class="jobs-header"><div class="title-row"><h2 id="jobs-title">Slurm 작업</h2><span class="count-chip" id="job-count">12</span></div><label class="search"><span data-icon="search"></span><input id="job-search" type="search" placeholder="작업, 사용자, Job ID 검색" aria-label="Slurm 작업 검색"><kbd>/</kbd></label></div><div class="jobs-tabs" role="group" aria-label="작업 상태 필터"><button class="active" data-state="all" aria-pressed="true">전체 작업 <span id="total-jobs"></span></button><button data-state="RUNNING">실행 중 <span id="running-jobs"></span></button><button data-state="PENDING">대기 중 <span id="pending-jobs"></span></button></div><div class="table-scroll"><table><caption class="sr-only">Slurm 작업 목록. 행의 작업 이름을 선택하면 상세 정보를 볼 수 있습니다.</caption><thead><tr><th>JOB ID</th><th>작업 이름</th><th>사용자</th><th>상태</th><th>파티션</th><th>요청 GPU</th><th>실행 경과</th><th>노드 / 대기 사유</th><th><span class="sr-only">상세 정보</span></th></tr></thead><tbody id="job-rows"></tbody></table></div><div class="table-footer"><span id="result-count"></span><div class="pagination"><button id="prev-page" aria-label="이전 작업 페이지">←</button><span id="page-number"></span><button id="next-page" aria-label="다음 작업 페이지">→</button></div><span>Slurm 스케줄러 <span class="footer-separator">/</span> 예시 스냅샷</span></div></section>
       <footer class="page-footer"><span><span class="footer-mark" aria-hidden="true">▦</span> Lattice <span>Research infrastructure, in view.</span></span><span>Asia/Seoul · 읽기 전용 대시보드</span></footer>
     </main>
-  </div>
   <dialog id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><span class="eyebrow" id="dialog-eyebrow">DETAILS</span><button class="icon-button" id="close-dialog" aria-label="상세 정보 닫기"><span data-icon="close"></span></button></div><div id="dialog-content"></div></dialog>
   <script src="app.js"></script>
   <script src="live.js"></script>
