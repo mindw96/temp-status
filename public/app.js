@@ -4,7 +4,7 @@ const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 function mountIcons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));}
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Display aliases only: collection identifiers and Slurm node keys stay unchanged.
-const nodeDisplayNames=Object.freeze({devbox:'Server1',server2:'Server2',ubuntu:'Server3',server4:'Server4'});
+const nodeDisplayNames=Object.freeze({devbox:'Server1',server2:'Server2',ubuntu:'Server3',server4:'Server4','baro-1':'Baro'});
 const nodeDisplayOrder=Object.keys(nodeDisplayNames);
 const nodeOrder=id=>{const index=nodeDisplayOrder.indexOf(id);return index<0?nodeDisplayOrder.length:index;};
 const displayNodeName=name=>Object.hasOwn(nodeDisplayNames,name)?nodeDisplayNames[name]:name;

@@ -20,12 +20,12 @@ function normalizeSnapshot(snapshot) {
   const sinfo = snapshot.slurm?.data.sinfo || [];
   const names = new Set([...sinfo.map(n => n.name || n.hostname), ...reported.keys()]);
   nodes = [...names].map(id => {
-    const report = reported.get(id), raw = report?.data, s = sinfo.find(n => (n.name || n.hostname) === id), stale = !fresh(report?.receivedAt);
+    const report = reported.get(id), raw = report?.data, isCloud = raw?.source_type === 'cloud', s = isCloud ? null : sinfo.find(n => (n.name || n.hostname) === id), stale = !fresh(report?.receivedAt);
     const gpus = (raw?.gpus || []).map(g => {
       const util = validNumber(g.gpu_utilization), memory = validNumber(g.vram_total_mb), memoryUsed = validNumber(g.vram_total_used_mb), processes = g.processes || [];
-      return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: resolveGpuJobs(processes, jobs)};
+      return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: isCloud ? [] : resolveGpuJobs(processes, jobs)};
     });
-    return {id, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: fresh(snapshot.slurm?.receivedAt)};
+    return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
   }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
 }
 currentNodes = () => liveState.mode === 'demo' ? nodes.filter(n => state.partition === 'all' || n.partition === state.partition) : nodes;
@@ -48,6 +48,7 @@ function renderConnection() {
 // Only process-reported Slurm IDs establish a GPU-to-job relationship.
 function gpuJobsMarkup(n, g) {
   if (g.error) return '<span class="gpu-job-empty">GPU report unavailable</span>';
+  if (n.isCloud) return cloudProcessesMarkup(n, g);
   if (!g.jobRecords.length) return `<span class="gpu-job-empty">${n.stale ? 'No process in last report' : 'No process observed'}</span>`;
   return g.jobRecords.map(record => {
     const user = record.users.join(', ') || 'User unavailable';
@@ -55,8 +56,24 @@ function gpuJobsMarkup(n, g) {
     return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" title="Job ${esc(record.jobId)} · ${esc(user)} · ${esc(record.name)}" aria-label="Job ${esc(record.jobId)}: ${esc(record.name)} by ${esc(user)}, details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
   }).join('');
 }
+function cloudProcessesMarkup(n, g) {
+  if (!g.processes.length) return `<span class="gpu-job-empty">${n.stale ? 'No process in last report' : 'No process observed'}</span>`;
+  const users = new Map();
+  for (const process of g.processes) {
+    const user = typeof process.username === 'string' && process.username.trim() ? process.username : null;
+    let group = users.get(user);
+    if (!group) {group = {count: 0, pids: new Set()}; users.set(user, group);}
+    const pid = process.pid, knownPid = typeof pid === 'number' && Number.isInteger(pid) && pid >= 0 || typeof pid === 'string' && /^\d+$/.test(pid);
+    if (!knownPid || !group.pids.has(String(pid))) {
+      group.count++;
+      if (knownPid) group.pids.add(String(pid));
+    }
+  }
+  return [...users].map(([user, group]) => `<div class="gpu-process-user"><span class="gpu-process-name" title="${esc(user || 'User unavailable')}">${esc(user || 'User unavailable')}</span><span class="gpu-process-count">${group.count} ${group.count === 1 ? 'process' : 'processes'}</span></div>`).join('');
+}
 function gpuJobsCaption(n) {
   if (n.stale) return 'Last observed · GPU data stale';
+  if (n.isCloud) return 'Standalone · observed GPU processes';
   if (!n.slurmFresh) return 'Observed processes · Slurm data stale';
   return 'Jobs observed on each GPU';
 }
@@ -69,13 +86,13 @@ renderNodes = function() {
     const models = [...new Set(n.gpus.map(g => g.model))].join(' / ');
     return `<article class="node live-node ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
       <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
-        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.stale ? 'drain' : 'mixed'}">${esc(n.state)}${n.slurmFresh ? '' : ' · stale'}</span></div>
+        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.stale ? 'drain' : n.isCloud ? 'cloud' : 'mixed'}">${esc(n.state)}${(n.isCloud ? n.stale : !n.slurmFresh) ? ' · stale' : ''}</span></div>
         <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
         <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-block ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
         <div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${percent(mem)}</strong></span><span>CPU <strong>${!n.stale && validNumber(n.raw?.cpu_percent) !== null ? Math.round(n.raw.cpu_percent) + '%' : '—'}</strong></span></div>
         <div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale ? 'Stale / missing' : `${n.allocated} GPUs with processes`}</span></div>
       </button>
-      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || !n.slurmFresh ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="gpu-jobs-heading"><span>GPU</span><span>Job ID · User / Job name</span></div>${n.gpus.map(g => `<div class="gpu-job-row" data-gpu-index="${esc(g.index)}"><span class="gpu-job-index">${esc(g.index)}</span><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>` : ''}
+      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="gpu-jobs-heading"><span>GPU</span><span>${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span></div>${n.gpus.map(g => `<div class="gpu-job-row" data-gpu-index="${esc(g.index)}"><span class="gpu-job-index">${esc(g.index)}</span><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>` : ''}
     </article>`;
   }).join('') : `<div class="waiting-nodes"><span class="small-icon">${icon('server')}</span><h3>Ready to connect your cluster</h3><p>Node and Slurm reports will appear here automatically.</p><button id="waiting-help">Collector setup ↗</button></div>`;
   $('#waiting-help')?.addEventListener('click', showDataInfo);
@@ -100,20 +117,23 @@ showNode = function(id) {
   const n = nodes.find(n => n.id === id);
   if (!n) return;
   const memory = n.raw;
-  openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(n.state)}${n.slurmFresh ? '' : ' · Slurm data stale'} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? 'Missing or over 30 seconds old' : 'Fresh report')}${detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported')}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
-    <p class="gpu-jobs-caption ${n.stale || !n.slurmFresh ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">Job ID · User / Job name</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
-    <p class="dialog-note">Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable. Reports older than 30 seconds are marked stale and excluded from current utilization.</p>`, 'GPU NODE · LIVE REPORTS');
+  const context = n.isCloud ? 'Standalone cloud node · no Slurm' : `${n.state}${n.slurmFresh ? '' : ' · Slurm data stale'}`;
+  const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported');
+  const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable.';
+  openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? 'Missing or over 30 seconds old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
+    <p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
+    <p class="dialog-note">${note} Reports older than 30 seconds are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
 };
 showJob = function(id) {
   if (liveState.mode === 'demo') return demoRender.job(id);
   const j = jobs.find(j => j.id === id);
   if (!j) return;
   const slurmFresh = fresh(liveState.snapshot?.slurm?.receivedAt);
-  const observed = slurmFresh ? nodes.flatMap(n => n.gpus.filter(g => !n.stale && !g.error && g.jobRecords.some(record => record.job?.id === j.id)).map(g => `${displayNodeName(n.id)} / GPU ${g.index}`)) : [];
+  const observed = slurmFresh ? nodes.filter(n => !n.isCloud).flatMap(n => n.gpus.filter(g => !n.stale && !g.error && g.jobRecords.some(record => record.job?.id === j.id)).map(g => `${displayNodeName(n.id)} / GPU ${g.index}`)) : [];
   openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${esc(j.id)} · ${esc(j.user)}${slurmFresh ? '' : ' · Slurm data stale'}</p><dl class="detail-grid">${detailItem('State', stateLabels[j.state] || j.state)}${detailItem('Partition', j.partition)}${detailItem('Requested GPUs (reported)', j.gpus)}${detailItem('Elapsed', j.state === 'PENDING' ? 'Not started' : j.elapsed)}${detailItem(j.state === 'PENDING' ? 'Pending reason' : 'Assigned nodes', j.state === 'PENDING' ? j.target : displayNodeList(j.target))}${detailItem('Observed GPUs', slurmFresh ? observed.join(', ') || 'No current process match' : 'Unavailable while Slurm data is stale')}${detailItem('Requested CPUs', j.raw.req_cpus || 'Not reported')}${detailItem('Slurm report received at', clockText(liveState.snapshot?.slurm?.receivedAt))}</dl><p class="dialog-note">${j.state === 'PENDING' ? 'Submission time is not collected, so time pending is unavailable. ' : ''}Requested GPUs are shown as reported by the collector. GPUs with observed processes may differ from the reserved GPU list.</p>`, 'SLURM JOB · LIVE REPORTS');
 };
 showDataInfo = function() {
-  openDialog('<h2 id="dialog-title">Collector connection</h2><p class="dialog-subtitle">Live reports from your node and Slurm collectors.</p><div class="dialog-copy"><p>Node reports arrive at <code>POST /api/report/node</code> and Slurm reports at <code>POST /api/report/slurm</code>, authenticated with the collectors\' reporting token.</p><p>The dashboard refreshes every 5 seconds. Reports older than 30 seconds are marked stale. Missing metrics are shown as unavailable rather than zero.</p><p>GPU jobs are matched using process Slurm IDs and exact job aliases. Job names come from the Slurm queue or the process report. GPUs without observed processes can still be reserved.</p></div>', 'DATA SOURCE');
+  openDialog('<h2 id="dialog-title">Collector connection</h2><p class="dialog-subtitle">Live reports from your node and Slurm collectors.</p><div class="dialog-copy"><p>Node reports arrive at <code>POST /api/report/node</code> and Slurm reports at <code>POST /api/report/slurm</code>, authenticated with the collectors\' reporting token.</p><p>The dashboard refreshes every 5 seconds. Reports older than 30 seconds are marked stale. Missing metrics are shown as unavailable rather than zero.</p><p>GPU jobs are matched using process Slurm IDs and exact job aliases. Job names come from the Slurm queue or the process report. GPUs without observed processes can still be reserved.</p><p>Standalone cloud nodes show GPU users and process counts independently of the lab Slurm queue.</p></div>', 'DATA SOURCE');
 };
 render = function() {renderConnection(); renderNodes(); renderJobs();};
 async function loadSnapshot() {

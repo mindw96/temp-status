@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=("node", "slurm"))
+    parser.add_argument("kind", choices=("node", "slurm", "cloud-gpu"))
     parser.add_argument("--config", required=True)
     parser.add_argument("--agent-dir", default="/home/mindw/status_agent")
     parser.add_argument("--once", action="store_true")
@@ -38,12 +38,17 @@ def main():
     os.environ["DASHBOARD_URL"] = base_url + "/api/report/" + args.kind
     for key in ("NODE_REPORT_TOKEN", "SLURM_REPORT_TOKEN", "STATUS_REPORT_TOKEN"):
         os.environ[key] = config["report_token"]
+    if args.kind == "cloud-gpu":
+        os.environ["CLOUD_GPU_REPORT_TOKEN"] = config["report_token"]
+        if config.get("disk_path"):
+            os.environ["DISK_PATH"] = config["disk_path"]
     os.environ["REQUIRE_REPORT_TOKEN"] = "1"
     # This dashboard displays active jobs. Do not run redundant seven-day accounting queries.
     os.environ["ENABLE_SACCT"] = "0"
     if config.get("server_name"):
         os.environ["SERVER_NAME"] = config["server_name"]
-    agent_path = Path(args.agent_dir) / ("agent.py" if args.kind == "node" else "slurm_agent.py")
+    agent_files = {"node": "agent.py", "slurm": "slurm_agent.py", "cloud-gpu": "cloud_gpu_agent.py"}
+    agent_path = Path(args.agent_dir) / agent_files[args.kind]
     spec = importlib.util.spec_from_file_location("lattice_source_agent", agent_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

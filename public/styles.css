@@ -52,3 +52,8 @@
 .gpu-job-user,.dialog-gpu .gpu-job-user{font-size:11px;line-height:1.5;color:#74826d;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gpu-job-user::before{content:'·';margin-right:7px;color:#9baa92}
 @media(max-width:480px){.gpu-job-user,.dialog-gpu .gpu-job-user{font-size:12px}}
+.state-badge.cloud{color:#587d9b;background:#eff5fa;border-color:#dfeaf2}
+.gpu-process-user{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;line-height:1.5}
+.gpu-process-name,.dialog-gpu .gpu-process-name{font-size:12px;color:#53664b;min-width:0;overflow-wrap:anywhere}
+.gpu-process-count,.dialog-gpu .gpu-process-count{font-size:11px;color:#74826d;white-space:nowrap;flex-shrink:0}
+@media(max-width:480px){.gpu-process-name,.dialog-gpu .gpu-process-name{font-size:13px}.gpu-process-count,.dialog-gpu .gpu-process-count{font-size:12px}}

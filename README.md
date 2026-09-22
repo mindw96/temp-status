@@ -9,7 +9,7 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 ## 화면
 
 - 실시간 보고와 명시적으로 분리된 가상 예시 모드
-- 수신된 GPU 장치 수, 유효한 GPU 계측 평균, 실행/대기 작업
+- Server1~4의 GPU별 Job ID·사용자·작업명과 Baro의 GPU별 사용자·프로세스 수
 - 노드별 GPU 연산, 전체 VRAM 점유, CPU 및 RAM
 - 작업명·사용자·ID 검색, 파티션/상태 필터, 12행 페이지 이동, 상세 정보
 - GPU 사용 추이 및 파티션 현황 패널은 표시하지 않음. 기존 서버의 1분 단위 기록 저장은 유지.
@@ -18,13 +18,13 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 
 ## 화면 수정과 자동 배포
 
-화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
+화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`, `baro-1 → Baro`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
 
 수정 후 `pnpm run build`로 확인하고 변경 파일을 커밋해 `main`에 푸시하면 연결된 Cloudflare Workers Builds가 자동 배포합니다. Cloudflare 편집기에서 같은 코드를 별도로 수정하기보다 이 저장소를 기준으로 관리합니다.
 
 ## 데이터 계약
 
-`POST /api/report/node`와 `POST /api/report/slurm`는 기존 에이전트 JSON 형식을 받습니다. `X-Status-Token`은 Worker의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
+`POST /api/report/node`와 `POST /api/report/slurm`는 기존 연구실 에이전트 JSON 형식을 받습니다. `POST /api/report/cloud-gpu`는 Baro의 `cloud_gpu_agent.py`가 보내는 `server`, `system`, `gpus` 형식을 받아 독립 클라우드 노드로 저장합니다. `X-Status-Token`은 Worker의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
 
 `GET /api/snapshot`은 최신 보고와 시계열을 반환합니다. 현재 Cloudflare 설정은 `SNAPSHOT_AUTH_MODE=public`으로 로그인 없이 조회할 수 있습니다. 기존 Sites 모드는 플랫폼 사용자 인증을 유지합니다. 보고 원문 중 UI에 필요한 필드만 저장하고 서버가 생성한 수신 시각을 사용합니다. 기존 에이전트는 실제 수집 시각을 포함하지 않으므로 수신 시각과 수집 시각은 동일하지 않습니다.
 
@@ -51,6 +51,27 @@ python collector_bridge.py slurm --config /secure/path/lattice.json --once
 
 기존 Sites용 설정은 `auth_mode` 생략 또는 `sites`를 사용하며 `sites_bypass_token`도 필요합니다. Cloudflare 설치 도구 `scripts/install-collectors.py`는 기존 Lattice 서비스와 원본 에이전트를 유지하고 별도 서비스를 등록합니다.
 
+## Baro 클라우드 노드
+
+Baro는 Slurm을 사용하지 않는 독립 서버입니다. 보고 ID `baro-1`을 보존하고 화면에는 `Baro`로 표시합니다. 클라우드 보고는 기존 Slurm 스냅샷을 덮어쓰지 않으며, GPU의 사용자·프로세스를 연구실 Job ID와 연결하지 않습니다. GPU 메모리 값은 MiB로 받아 GiB로 표시합니다.
+
+원본 에이전트는 `/home/mindw/baro1-status-agent/cloud_gpu_agent.py`입니다. 브리지는 이 모듈을 그대로 읽고, 별도 인증 설정으로 Cloudflare의 `/api/report/cloud-gpu`에 전송합니다. 원본 `agent.env`, 코드 및 PM2의 `baro1-agent`는 보존합니다.
+
+클라우드 브리지 설정은 기존 JSON 형식에 `"server_name":"baro-1"`, `"disk_path":"/home"`을 추가합니다. 인증 파일은 권한 600으로 저장합니다. 일회성 전송 검증은 다음과 같습니다.
+
+```sh
+python collector_bridge.py cloud-gpu \
+  --agent-dir /home/mindw/baro1-status-agent \
+  --config /secure/path/cloudflare.json --once
+```
+
+운영 연결은 `/home/mindw/baro1-status-agent/cloudflare-status/`와 systemd 사용자 서비스 `cloudflare-status-cloud-gpu.service`를 사용합니다. 사용자 lingering을 활성화해 로그아웃 이후와 부팅 시에도 서비스를 실행합니다. 상태 확인과 새 연결만 중지하는 명령은 다음과 같습니다.
+
+```sh
+ssh Baro 'systemctl --user status cloudflare-status-cloud-gpu.service --no-pager'
+ssh Baro 'systemctl --user disable --now cloudflare-status-cloud-gpu.service'
+```
+
 ## 개발 및 검증
 
 Node 24와 pnpm을 사용합니다.
@@ -60,6 +81,8 @@ pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm build
 node scripts/test-worker.mjs
+node scripts/test-gpu-jobs.mjs
+python3 scripts/test-collector-bridge.py
 pnpm deploy:check
 node scripts/preview.mjs
 ```
