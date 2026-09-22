@@ -10,6 +10,6 @@
     }
   ],
   "vars": {
-    "SNAPSHOT_AUTH_MODE": "unconfigured"
+    "SNAPSHOT_AUTH_MODE": "public"
   }
 }

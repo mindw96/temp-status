@@ -11,6 +11,7 @@ __pycache__/
 *.py[cod]
 
 # Runtime secrets and collected data
+.secrets/
 .env
 .env.*
 !.env.example

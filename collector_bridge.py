@@ -26,9 +26,13 @@ def main():
     config = json.loads(config_path.read_text())
     base_url = config["site_url"].rstrip("/")
     url = urlparse(base_url)
-    if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
+    if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment or url.path:
         parser.error("site_url must be an HTTPS origin")
-    for key in ("report_token", "sites_bypass_token"):
+    auth_mode = config.get("auth_mode", "sites")
+    if auth_mode not in ("sites", "cloudflare"):
+        parser.error("auth_mode must be sites or cloudflare")
+    required_keys = ("report_token", "sites_bypass_token") if auth_mode == "sites" else ("report_token",)
+    for key in required_keys:
         if not isinstance(config.get(key), str) or not config[key]:
             parser.error(f"Missing {key}")
     os.environ["DASHBOARD_URL"] = base_url + "/api/report/" + args.kind
@@ -43,7 +47,8 @@ def main():
     spec = importlib.util.spec_from_file_location("lattice_source_agent", agent_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
+    if auth_mode == "sites":
+        module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
     if args.once:
         payload = module.build_payload()
         if payload is None:

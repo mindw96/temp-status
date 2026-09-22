@@ -1,6 +1,6 @@
 # Lattice · 연구실 GPU & Slurm
 
-현재 운영 중인 대시보드의 소스 저장소입니다. [대시보드 열기](https://lattice-lab-gpu.mindw96.chatgpt.site/) — 현재는 소유자 전용 비공개이며 이 저장소의 공개 범위와 별개입니다.
+연구실 GPU·Slurm 대시보드의 소스 저장소입니다. [Cloudflare 대시보드](https://temp-status.mindw96-3c8.workers.dev/)는 공개 열람 방식입니다. 배포 이후 처음 연결하시는 경우 [단계별 설정 안내](SETUP.md)를 따라 데이터베이스와 서버 수집기를 연결하세요. [기존 Sites 대시보드](https://lattice-lab-gpu.mindw96.chatgpt.site/)는 별도의 비공개 배포로 유지됩니다.
 
 GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 브리지를 포함합니다. 인증 토큰, 실제 보고 데이터, 배포 빌드, Sites 프로젝트 식별 파일은 포함하지 않습니다.
 
@@ -18,9 +18,9 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 
 ## 데이터 계약
 
-`POST /api/report/node`와 `POST /api/report/slurm`는 기존 에이전트 JSON 형식을 받습니다. `X-Status-Token`은 Sites의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 원격 수집기가 비공개 Sites에 접근하려면 별도로 발급한 `OAI-Sites-Authorization: Bearer ...` 헤더가 필요합니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다.
+`POST /api/report/node`와 `POST /api/report/slurm`는 기존 에이전트 JSON 형식을 받습니다. `X-Status-Token`은 Worker의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
 
-`GET /api/snapshot`은 로그인한 브라우저를 위해 최신 보고와 시계열을 반환합니다. 보고 원문 중 UI에 필요한 필드만 저장합니다. 서버가 생성한 수신 시각을 사용합니다. 기존 에이전트는 실제 수집 시각을 포함하지 않으므로 수신 시각과 수집 시각은 동일하지 않습니다.
+`GET /api/snapshot`은 최신 보고와 시계열을 반환합니다. 현재 Cloudflare 설정은 `SNAPSHOT_AUTH_MODE=public`으로 로그인 없이 조회할 수 있습니다. 기존 Sites 모드는 플랫폼 사용자 인증을 유지합니다. 보고 원문 중 UI에 필요한 필드만 저장하고 서버가 생성한 수신 시각을 사용합니다. 기존 에이전트는 실제 수집 시각을 포함하지 않으므로 수신 시각과 수집 시각은 동일하지 않습니다.
 
 GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아닙니다. 화면은 `vram_total_used_mb / vram_total_mb`를 사용합니다. 저장·표시 단위는 원래 바이트 계산에 맞춰 MiB/GiB로 해석합니다. `vram_utilization`을 메모리 용량 점유율로 쓰지 않습니다.
 
@@ -33,7 +33,7 @@ GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아�
 자격 증명 파일 형식은 아래와 같습니다. 실제 값은 별도 비밀 파일에 저장하고 권한을 600으로 설정합니다.
 
 ```json
-{"site_url":"<deployed-site-origin>","report_token":"<secret>","sites_bypass_token":"<secret>"}
+{"site_url":"https://temp-status.mindw96-3c8.workers.dev","auth_mode":"cloudflare","report_token":"<secret>"}
 ```
 
 ```sh
@@ -42,6 +42,8 @@ python collector_bridge.py slurm --config /secure/path/lattice.json --once
 ```
 
 `--once`는 JSON 성공 응답까지 검증합니다. 상시 실행할 때만 해당 옵션을 제거합니다. 다른 환경에 설치할 때는 대상 서버의 실제 사용자 홈과 서비스 관리 방식을 확인한 뒤 자동 시작을 등록합니다. 롤백은 새로 추가한 Lattice 수집 프로세스만 중지하면 됩니다.
+
+기존 Sites용 설정은 `auth_mode` 생략 또는 `sites`를 사용하며 `sites_bypass_token`도 필요합니다. Cloudflare 설치 도구 `scripts/install-collectors.py`는 기존 Lattice 서비스와 원본 에이전트를 유지하고 별도 서비스를 등록합니다.
 
 ## 개발 및 검증
 
@@ -81,13 +83,13 @@ Wrangler는 `package.json`과 lockfile에 고정되어 있으며, `pnpm-workspac
 
 [Workers Builds 설정](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/), [D1 자동 생성](https://developers.cloudflare.com/changelog/post/2025-10-24-automatic-resource-provisioning/), [pnpm 패키지 실행 정책](https://pnpm.io/settings#allowbuilds)
 
-## 실시간 데이터 이전에 남은 설정
+## 실시간 데이터 연결
 
 Worker 배포와 실제 클러스터 데이터 이전은 별도 단계입니다. 기존 Sites와 Server1~4 수집기는 기존 목적지를 계속 사용합니다.
 
-1. 첫 배포 후 Cloudflare에서 생성된 D1의 이름·ID를 확인해 루트 설정의 `DB` 항목에 기록하고, `pnpm db:migrate:remote`로 테이블을 생성합니다. 로컬 검증에는 `pnpm db:migrate:local`을 사용합니다.
+1. `pnpm exec wrangler d1 info DB`로 조회한 DB가 Cloudflare Worker의 `DB` 바인딩과 같은지 확인하고, `pnpm run db:migrate:remote`로 테이블을 생성합니다. 로컬 검증에는 `pnpm run db:migrate:local`을 사용합니다. 현재 자동 생성 이름은 `temp-status-db`이며, 직접 이름을 바꾸거나 다른 DB에 연결했다면 루트 설정의 `DB`에 해당 이름과 ID를 추가해야 합니다.
 2. Workers의 **Settings → Variables & Secrets**에서 런타임 Secret `STATUS_REPORT_TOKEN`을 설정합니다. Build 전용 변수에만 넣으면 런타임에서 사용할 수 없습니다.
-3. 브라우저의 실시간 조회 인증을 Cloudflare Access 등 새 환경의 인증 방식으로 구현합니다. 독립 Worker는 Sites 사용자 헤더를 신뢰할 수 없으므로 현재 루트 설정은 `SNAPSHOT_AUTH_MODE=unconfigured`로 실시간 조회를 차단합니다(`503 access_not_configured`). 해당 값을 제거하거나 `oai-authenticated-user-id` 헤더를 임의로 추가하는 방식으로 우회하지 않습니다. 로컬 미리보기의 Sites 사용자 모의와 기존 운영 Sites 인증은 별개입니다.
-4. `collector_bridge.py`의 Sites 전용 토큰 처리와 각 서버의 전송 URL·인증 정보를 새 환경에 맞게 변경한 뒤, 실제 수신을 확인합니다. 현재 브리지는 기존 Sites 연결용입니다.
+3. 현재 루트 설정은 사용자가 선택한 공개 열람(`SNAPSHOT_AUTH_MODE=public`)입니다. 별도의 로그인 설정이 필요하지 않습니다.
+4. [단계별 안내](SETUP.md)의 설치 명령으로 각 서버에 별도 Cloudflare 수집기를 등록한 뒤 실제 수신을 확인합니다.
 
 화면과 API를 함께 실행하는 Cloudflare Workers + D1 구성이 현재 코드와 맞습니다. GitHub Pages는 정적 화면만 제공하므로 별도 백엔드가 필요합니다.
