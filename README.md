@@ -55,6 +55,22 @@ python collector_bridge.py slurm --config /secure/path/lattice.json --once
 
 기존 Sites용 설정은 `auth_mode` 생략 또는 `sites`를 사용하며 `sites_bypass_token`도 필요합니다. Cloudflare 설치 도구 `scripts/install-collectors.py`는 기존 Lattice 서비스와 원본 에이전트를 유지하고 별도 서비스를 등록합니다.
 
+## 서버별 저장공간
+
+각 서버의 Storage 영역은 수집기가 확인한 파일시스템의 사용 가능한 용량과 전체 용량을 표시합니다. API의 기존 `_gb` 필드는 바이트를 `1024 ** 3`으로 나눈 GiB입니다. 화면에서 TiB로 표시하는 경우 `1024 GiB = 1 TiB`로 환산합니다. 일반 사용자가 사용할 수 없는 예약 블록이 있으므로 남은 용량을 `total - used`로 추정하지 않고, `free_disk_gb`와 `free_subdisk_gb`를 그대로 사용합니다. 측정되지 않은 값과 오래된 보고는 사용 가능한 현재 용량처럼 표시하지 않습니다.
+
+브리지가 원본 에이전트의 실제 `DISK_PATH`와 `SUBDISK_PATH`를 `disk_path`, `subdisk_path`로 함께 전송합니다. 2026-09-26 확인한 경로는 다음과 같으며, 서버 전체의 디스크를 합산한 값은 아닙니다.
+
+| 서버 | 기본 파일시스템 | 추가 파일시스템 |
+| --- | --- | --- |
+| Server1 | `/` | `/mnt/raid5` |
+| Server2 | `/` | `/mnt/raid5` |
+| Server3 | `/` | `/data` |
+| Server4 | `/` | `/data` |
+| Baro | `/home` | — |
+
+연구실 에이전트가 이미 전송하는 `psutil.disk_usage(...).free`는 유지합니다. Baro 원본에는 남은 용량이 없어 브리지에서 `shutil.disk_usage(...).free`를 추가합니다. Linux에서 이 값은 일반 사용자가 사용할 수 있는 블록(`f_bavail`)을 사용합니다. Baro의 용량과 사용률도 같은 측정값으로 맞추고, 디스크 조회가 실패하면 해당 용량을 `null`로 전송합니다. 원본 에이전트 파일을 수정할 필요는 없습니다.
+
 ## Baro 클라우드 노드
 
 Baro는 Slurm을 사용하지 않는 독립 서버입니다. 보고 ID `baro-1`을 보존하고 화면에는 `Baro`로 표시합니다. 클라우드 보고는 기존 Slurm 스냅샷을 덮어쓰지 않으며, GPU의 사용자·프로세스를 연구실 Job ID와 연결하지 않습니다. GPU 메모리 값은 MiB로 받아 GiB로 표시합니다.

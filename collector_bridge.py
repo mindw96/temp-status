@@ -9,9 +9,57 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import stat
 import sys
 from urllib.parse import urlparse
+
+
+def install_storage_reporting(module, kind):
+    """Attach monitored paths and cloud free space without editing source agents."""
+    if kind not in ("node", "cloud-gpu"):
+        return
+    original_build_payload = module.build_payload
+
+    def build_payload():
+        payload = original_build_payload()
+        if not isinstance(payload, dict):
+            return payload
+        if kind == "node":
+            # Preserve the original psutil readings, including available space.
+            for field, attribute in (("disk_path", "DISK_PATH"),
+                                     ("subdisk_path", "SUBDISK_PATH")):
+                path = getattr(module, attribute, None)
+                if isinstance(path, str) and path:
+                    payload[field] = path
+            return payload
+
+        system = payload.get("system")
+        if not isinstance(system, dict):
+            return payload
+        path = getattr(module, "DISK_PATH", system.get("disk_path"))
+        if not isinstance(path, str) or not path:
+            return payload
+        system["disk_path"] = path
+        try:
+            usage = shutil.disk_usage(path)
+        except OSError:
+            # A failed new reading must not masquerade as available capacity.
+            for field in ("total_disk_gb", "used_disk_gb", "free_disk_gb", "disk_percent"):
+                system[field] = None
+        else:
+            # Linux shutil.free uses f_bavail: total - used would include blocks
+            # reserved for the administrator and overstate usable capacity.
+            system.update({
+                "total_disk_gb": round(usage.total / 1024 ** 3, 1),
+                "used_disk_gb": round(usage.used / 1024 ** 3, 1),
+                "free_disk_gb": round(usage.free / 1024 ** 3, 1),
+                "disk_percent": round(100 * usage.used / (usage.used + usage.free), 1)
+                if usage.used + usage.free else 0,
+            })
+        return payload
+
+    module.build_payload = build_payload
 
 
 def install_report_backoff(module, interval):
@@ -89,6 +137,7 @@ def main():
     spec = importlib.util.spec_from_file_location("lattice_source_agent", agent_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    install_storage_reporting(module, args.kind)
     if auth_mode == "sites":
         module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
     if args.once:

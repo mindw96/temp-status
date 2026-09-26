@@ -7,6 +7,7 @@ import sys
 import tempfile
 import importlib.util
 from types import SimpleNamespace
+from unittest.mock import patch
 
 BRIDGE = Path(__file__).resolve().parents[1] / 'collector_bridge.py'
 FAKE_AGENT = '''
@@ -55,6 +56,51 @@ with tempfile.TemporaryDirectory() as directory:
 spec = importlib.util.spec_from_file_location('bridge', BRIDGE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
+# A lab report already measures true available space. Keep its values and only
+# attach the actual paths selected by the source module.
+lab = SimpleNamespace(DISK_PATH='/', SUBDISK_PATH='/mnt/raid5', build_payload=lambda: {
+    'total_disk_gb': 100, 'used_disk_gb': 80, 'free_disk_gb': 15,
+    'total_subdisk_gb': 1000, 'used_subdisk_gb': 950, 'free_subdisk_gb': 0,
+})
+bridge.install_storage_reporting(lab, 'node')
+with patch.object(bridge.shutil, 'disk_usage', side_effect=AssertionError('No second lab disk query')):
+    lab_payload = lab.build_payload()
+assert lab_payload['disk_path'] == '/'
+assert lab_payload['subdisk_path'] == '/mnt/raid5'
+assert lab_payload['free_disk_gb'] == 15
+assert lab_payload['free_subdisk_gb'] == 0
+
+# The cloud source omits free space. Sample all disk fields together so the free
+# capacity does not accidentally include reserved blocks (100 - 80 != 15).
+cloud = SimpleNamespace(DISK_PATH='/home', build_payload=lambda: {
+    'system': {'total_disk_gb': 123, 'used_disk_gb': 99, 'disk_percent': 99, 'cpu_percent': 30},
+    'gpus': [{'index': 0}],
+})
+bridge.install_storage_reporting(cloud, 'cloud-gpu')
+gib = 1024 ** 3
+with patch.object(bridge.shutil, 'disk_usage', return_value=SimpleNamespace(
+        total=100 * gib, used=80 * gib, free=15 * gib)) as disk_usage:
+    cloud_payload = cloud.build_payload()
+disk_usage.assert_called_once_with('/home')
+assert cloud_payload['system'] == {'total_disk_gb': 100, 'used_disk_gb': 80,
+    'free_disk_gb': 15, 'disk_percent': 84.2, 'cpu_percent': 30, 'disk_path': '/home'}
+assert cloud_payload['gpus'] == [{'index': 0}]
+with patch.object(bridge.shutil, 'disk_usage', return_value=SimpleNamespace(
+        total=100 * gib, used=95 * gib, free=0)):
+    full_disk = cloud.build_payload()['system']
+assert full_disk['free_disk_gb'] == 0 and full_disk['disk_percent'] == 100
+with patch.object(bridge.shutil, 'disk_usage', side_effect=OSError('Mount unavailable')):
+    failed_disk = cloud.build_payload()['system']
+assert all(failed_disk[key] is None for key in (
+    'total_disk_gb', 'used_disk_gb', 'free_disk_gb', 'disk_percent'))
+assert failed_disk['cpu_percent'] == 30 and failed_disk['disk_path'] == '/home'
+failed_agent = SimpleNamespace(build_payload=lambda: None)
+bridge.install_storage_reporting(failed_agent, 'node')
+assert failed_agent.build_payload() is None
+slurm = SimpleNamespace(build_payload=lambda: {'squeue': []})
+original_slurm = slurm.build_payload
+bridge.install_storage_reporting(slurm, 'slurm')
+assert slurm.build_payload is original_slurm
 responses = iter([
     SimpleNamespace(status_code=503, headers={}),
     SimpleNamespace(status_code=503, headers={'Retry-After': '50000'}),
@@ -78,4 +124,4 @@ else: raise AssertionError('Network error must propagate')
 assert module.REPORT_INTERVAL_SEC == 30
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
-print('PASS: all collector kinds use 15-second reports; failed requests back off, quota Retry-After is bounded, success resumes normal cadence; credentials stay private.')
+print('PASS: true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')

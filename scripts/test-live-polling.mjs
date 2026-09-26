@@ -198,4 +198,35 @@ assert.match(failures.element('#dialog-content').innerHTML, /every 30 seconds/);
 assert.match(failures.element('#dialog-content').innerHTML, /older than 3 minutes/);
 assert.match(failures.element('#dialog-content').innerHTML, /at least 5 seconds/);
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, and 3-minute freshness.');
+// Disk availability must use the reported free value, not total minus used:
+// reserved filesystem blocks are not available to ordinary users.
+const storage = browser();
+await flush();
+storage.evaluate(`Object.assign(liveState.snapshot.nodes[0].data, {
+  disk_path: '/', total_disk_gb: 1759, used_disk_gb: 1655, free_disk_gb: 15,
+  subdisk_path: '/data', total_subdisk_gb: 14194, used_subdisk_gb: 12887, free_subdisk_gb: 591
+}); normalizeSnapshot(liveState.snapshot); renderNodes(); showNode('devbox');`);
+for (const selector of ['#node-grid', '#dialog-content']) {
+  const html = storage.element(selector).innerHTML;
+  assert.match(html, /15 GiB free/); assert.match(html, /591 GiB free/);
+  assert.match(html, /1\.72 TiB total/); assert.match(html, /13\.86 TiB total/);
+  assert.match(html, /\/data/); assert.doesNotMatch(html, /104 GiB free|1,307 GiB free/);
+}
+const markup = raw => storage.evaluate(`storageMarkup({raw:${JSON.stringify(raw)}, stale:false})`);
+assert.match(markup({total_disk_gb:100, used_disk_gb:100, free_disk_gb:0}), /0 GiB free/);
+assert.match(markup({total_disk_gb:100, used_disk_gb:50, free_disk_gb:null}), /Not reported/);
+assert.doesNotMatch(markup({total_disk_gb:100, used_disk_gb:50}), /50 GiB free|Data disk/);
+for (const free of [-1, 101, '50']) assert.match(markup({total_disk_gb:100, free_disk_gb:free}), /Not reported/);
+assert.match(markup({total_disk_gb:100, free_disk_gb:0.5}), /512 MiB free/);
+assert.match(markup({total_disk_gb:4096, free_disk_gb:2048}), /2 TiB free/);
+assert.match(markup({total_disk_gb:100, free_disk_gb:1, disk_path:'/<script>bad</script>'}), /&lt;script&gt;/);
+storage.evaluate('liveState.error="Request failed"; normalizeSnapshot(liveState.snapshot); renderNodes(); showNode("devbox");');
+for (const selector of ['#node-grid', '#dialog-content']) {
+  const html = storage.element(selector).innerHTML;
+  assert.match(html, /Stale report/); assert.match(html, /Awaiting fresh data/);
+  assert.doesNotMatch(html, /15 GiB free|591 GiB free/);
+}
+storage.evaluate('liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot); renderNodes();');
+assert.match(storage.element('#node-grid').innerHTML, /Stale report/);
+
+console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, and disk availability/reserves/units/missing/zero/stale handling.');

@@ -53,6 +53,20 @@
 .gpu-job-user::before{content:'·';margin-right:7px;color:#9baa92}
 @media(max-width:480px){.gpu-job-user,.dialog-gpu .gpu-job-user{font-size:12px}}
 .state-badge.cloud{color:#587d9b;background:#eff5fa;border-color:#dfeaf2}
+.node-storage{border-top:1px solid #edf1ea;margin-top:13px;padding-top:10px}
+.storage-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:3px 12px;font-size:10px;color:#81917b;margin-bottom:8px}
+.storage-heading>span:first-child{font-weight:600;color:#61765a}
+.storage-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;min-width:0}
+.storage-label{font-size:11px;color:#708068;min-width:0}
+.storage-path{display:block;font:10px/1.5 var(--mono);color:#899580;overflow-wrap:anywhere}
+.storage-values{flex-shrink:0;text-align:right}
+.storage-values strong{display:block;font:500 12px/1.5 var(--mono);color:#3b7153}
+.storage-values>span{display:block;font-size:10px;color:#8a9685}
+.storage-empty{font-size:11px;color:#8a9685;padding:5px 0}
+.node-storage.is-stale .storage-heading>span,.node-storage.is-stale .storage-values strong{color:#a18143}
+.storage-note{font-size:11px;line-height:1.6;color:#84917d;margin:8px 0 20px}
+#dialog-content .node-storage{border:1px solid #e3e9de;border-radius:8px;padding:12px 15px}
+@media(max-width:480px){.storage-heading,.storage-path,.storage-values>span{font-size:11px}.storage-label{font-size:12px}.storage-values strong{font-size:13px}}
 .gpu-process-user{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;line-height:1.5}
 .gpu-process-name,.dialog-gpu .gpu-process-name{font-size:12px;color:#53664b;min-width:0;overflow-wrap:anywhere}
 .gpu-process-count,.dialog-gpu .gpu-process-count{font-size:11px;color:#74826d;white-space:nowrap;flex-shrink:0}

@@ -21,7 +21,10 @@ assert.equal((await call('/api/report/node','POST',{server_name:'test',gpus:[]})
 assert.equal((await call('/api/report/node','POST',{},reportHeaders)).status,400);
 assert.equal((await call('/api/report/slurm','POST',{squeue:[]},reportHeaders)).status,400);
 assert.equal((await call('/api/report/slurm')).status,405);
-const node={server_name:'unit-node',cpu_percent:12,gpus:[{id:0,gpu_name:'A6000',gpu_utilization:0,vram_total_mb:49152,vram_total_used_mb:0,processes:[]},{id:1,collection_error:'NVML read failed',processes:[]}]};
+const node={server_name:'unit-node',cpu_percent:12,
+  disk_path:'/',total_disk_gb:100,used_disk_gb:80,free_disk_gb:15,disk_percent:84.2,
+  subdisk_path:'/data',total_subdisk_gb:1000,used_subdisk_gb:950,free_subdisk_gb:0,subdisk_percent:100,
+  gpus:[{id:0,gpu_name:'A6000',gpu_utilization:0,vram_total_mb:49152,vram_total_used_mb:0,processes:[]},{id:1,collection_error:'NVML read failed',processes:[]}]};
 // Names must survive ingestion and storage even when no matching queue job exists.
 node.gpus[0].processes=[
   {pid:101,slurm_job_id:'123_4',slurm_job_ids:['123_4','127'],slurm_job_name:'train <alpha> & evaluation'},
@@ -33,6 +36,11 @@ assert.equal((await call('/api/report/node','POST',node,reportHeaders)).status,2
 assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:[],accounting:{jobs:[]}},reportHeaders)).status,200);
 let snapshot=await (await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
 assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,0);assert.equal(snapshot.nodes[0].data.gpus[1].gpu_utilization,null);assert.deepEqual(snapshot.history,[]);
+// Available space excludes reserved blocks; a full disk remains zero, not missing.
+assert.equal(snapshot.nodes[0].data.free_disk_gb,15);
+assert.equal(snapshot.nodes[0].data.free_subdisk_gb,0);
+assert.equal(snapshot.nodes[0].data.disk_path,'/');
+assert.equal(snapshot.nodes[0].data.subdisk_path,'/data');
 const storedProcesses=snapshot.nodes[0].data.gpus[0].processes;
 assert.equal(storedProcesses[0].slurm_job_name,'train <alpha> & evaluation');
 assert.deepEqual(storedProcesses[0].slurm_job_ids,['123_4','127']);
@@ -52,7 +60,7 @@ assert.equal((await call('/api/report/cloud-gpu')).status,405);
 assert.equal((await call('/api/report/cloud-gpu','POST',{},reportHeaders)).status,400);
 const cloud={
   server:{name:' baro ',hostname:'ubuntu',type:'cloud',reported_at:'1970-01-01T00:00:00Z'},
-  system:{cpu_percent:0,cpu_count:64,ram_used_gb:16,ram_total_gb:128,ram_percent:12.5,used_disk_gb:100,total_disk_gb:1000,disk_percent:10},
+  system:{cpu_percent:0,cpu_count:64,ram_used_gb:16,ram_total_gb:128,ram_percent:12.5,used_disk_gb:100,total_disk_gb:1000,free_disk_gb:850,disk_percent:10.5,disk_path:'/home'},
   summary:{ignored:'must not be stored'},server_name:'unit-node',
   gpus:[
     {index:0,uuid:'GPU-cloud-0',name:'Cloud GPU',utilization_gpu:67.5,memory_used:12288,memory_total:81920,memory_usage_percent:15,temperature_gpu:55,power_draw:230,power_limit:400,
@@ -86,6 +94,10 @@ assert.equal(cloudNode.cpu_count,64);
 assert.equal(cloudNode.cpu_percent,0);
 assert.equal(cloudNode.ram_used_gb,16);
 assert.equal(cloudNode.total_disk_gb,1000);
+assert.equal(cloudNode.free_disk_gb,850);
+assert.equal(cloudNode.disk_path,'/home');
+assert.equal(cloudNode.free_subdisk_gb,null);
+assert.equal(cloudNode.subdisk_path,'');
 assert.equal(cloudNode.gpus[0].id,0);
 assert.equal(cloudNode.gpus[0].gpu_name,'Cloud GPU');
 assert.equal(cloudNode.gpus[0].gpu_utilization,67.5);
@@ -102,6 +114,8 @@ const labNode=snapshot.nodes.find(n=>n.data.server_name==='unit-node');
 assert.equal(labNode.data.gpus[0].processes[0].slurm_job_id,'123_4');
 assert.equal(Object.hasOwn(labNode.data,'source_type'),false);
 cloud.system.cpu_count=1000000000;
+delete cloud.system.free_disk_gb;
+cloud.system.disk_path={invalid:'path'};
 cloud.gpus[0].utilization_gpu=null;
 cloud.gpus[0].memory_used=null;
 assert.equal((await call('/api/report/cloud-gpu','POST',cloud,reportHeaders)).status,200);
@@ -110,6 +124,8 @@ assert.equal(snapshot.nodes.length,2);
 assert.deepEqual(snapshot.slurm,previousSlurm);
 const updatedCloud=snapshot.nodes.find(n=>n.data.server_name==='baro').data;
 assert.equal(updatedCloud.cpu_count,null);
+assert.equal(updatedCloud.free_disk_gb,null);
+assert.equal(updatedCloud.disk_path,'');
 assert.equal(updatedCloud.gpus[0].gpu_utilization,null);
 assert.equal(updatedCloud.gpus[0].vram_total_used_mb,null);
 assert.equal((await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'forged'}}),{...env,SNAPSHOT_AUTH_MODE:'unknown'},{})).status,503);

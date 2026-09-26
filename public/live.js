@@ -90,6 +90,25 @@ function gpuJobsCaption(n) {
   if (!n.slurmFresh) return 'Observed processes · Slurm data stale';
   return 'Jobs observed on each GPU';
 }
+function formatStorage(gib) {
+  if (gib >= 1024) return `${(gib / 1024).toLocaleString('en-US', {maximumFractionDigits: 2})} TiB`;
+  if (gib > 0 && gib < 1) return `${(gib * 1024).toLocaleString('en-US', {maximumFractionDigits: 1})} MiB`;
+  return `${gib.toLocaleString('en-US', {maximumFractionDigits: 1})} GiB`;
+}
+function storageMarkup(n) {
+  const raw = n.raw || {};
+  const disks = [
+    {label: 'Main disk', path: raw.disk_path, total: raw.total_disk_gb, free: raw.free_disk_gb, used: raw.used_disk_gb},
+    {label: 'Data disk', path: raw.subdisk_path, total: raw.total_subdisk_gb, free: raw.free_subdisk_gb, used: raw.used_subdisk_gb}
+  ].filter(disk => disk.path || [disk.total, disk.free, disk.used].some(value => validNumber(value) !== null));
+  return `<div class="node-storage ${n.stale ? 'is-stale' : ''}" aria-label="Storage capacity"><div class="storage-heading"><span>Storage</span><span>${n.stale ? 'Stale report' : 'Available / Total'}</span></div>${disks.length ? disks.map(disk => {
+    const total = validNumber(disk.total) !== null && disk.total > 0 ? disk.total : null;
+    // Use the collector's available space. Total minus used can include space
+    // reserved by the filesystem that ordinary users cannot write to.
+    const free = validNumber(disk.free) !== null && disk.free >= 0 && (total === null || disk.free <= total) ? disk.free : null;
+    return `<div class="storage-row"><span class="storage-label">${disk.label}${disk.path ? `<span class="storage-path">${esc(disk.path)}</span>` : ''}</span><span class="storage-values"><strong>${n.stale ? '—' : free === null ? 'Not reported' : `${formatStorage(free)} free`}</strong><span>${n.stale ? 'Awaiting fresh data' : total === null ? 'Total not reported' : `${formatStorage(total)} total`}</span></span></div>`;
+  }).join('') : `<p class="storage-empty">${n.stale ? 'Awaiting fresh data' : 'Not reported'}</p>`}</div>`;
+}
 renderNodes = function() {
   if (liveState.mode === 'demo') return demoRender.nodes();
   $('#node-count').textContent = liveState.snapshot ? nodes.length : '—';
@@ -103,6 +122,7 @@ renderNodes = function() {
         <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
         <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-block ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
         <div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${percent(mem)}</strong></span><span>CPU <strong>${!n.stale && validNumber(n.raw?.cpu_percent) !== null ? Math.round(n.raw.cpu_percent) + '%' : '—'}</strong></span></div>
+        ${storageMarkup(n)}
         <div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale ? 'Stale / missing' : `${n.allocated} GPUs with processes`}</span></div>
       </button>
       ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="gpu-jobs-heading"><span>GPU</span><span>${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span></div>${n.gpus.map(g => `<div class="gpu-job-row" data-gpu-index="${esc(g.index)}"><span class="gpu-job-index">${esc(g.index)}</span><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>` : ''}
@@ -134,6 +154,7 @@ showNode = function(id) {
   const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported');
   const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable.';
   openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 3 minutes old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
+    ${storageMarkup(n)}<p class="storage-note">Free space is available to users and excludes filesystem reserves. 1 TiB = 1,024 GiB.</p>
     <p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
     <p class="dialog-note">${note} Reports older than 3 minutes, or shown during a failed refresh, are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
 };
