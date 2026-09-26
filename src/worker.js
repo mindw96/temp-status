@@ -1,5 +1,9 @@
 // Site assets are embedded by scripts/build.mjs. Reports remain in D1.
 const MAX_BODY=8*1024*1024;
+// The Baro rental has ended. Ignore retained reports and refuse further updates
+// for its canonical identity while keeping other cloud collectors supported.
+const RETIRED_NODE_IDS = new Set(['baro-1']);
+const isRetiredNode = name => typeof name === 'string' && RETIRED_NODE_IDS.has(name.trim());
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const text=(v,max=250)=>typeof v==='string'?v.slice(0,max):typeof v==='number'?String(v):'';
 const number=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
@@ -67,6 +71,7 @@ if(request.method!=='POST')return json({error:'method_not_allowed'},405);
 if(!await authorized(request,env.STATUS_REPORT_TOKEN))return json({error:'unauthorized'},401);
 if(!env.DB)return json({error:'storage_unavailable'},503);
 let payload;const type=route.endsWith('/slurm')?'slurm':'node';try{const raw=await bodyJSON(request);payload=route.endsWith('/cloud-gpu')?validateCloudNode(raw):validate(raw,type);}catch(error){return json({error:error instanceof RangeError?'payload_too_large':'invalid_payload',message:error.message},error instanceof RangeError?413:400);}
+if(type==='node'&&isRetiredNode(payload.server_name))return json({error:'node_retired'},410);
 const serialized=JSON.stringify(payload);if(new TextEncoder().encode(serialized).length>1800000)return json({error:'normalized_payload_too_large'},413);
 const now=Date.now(),key=type==='node'?`node:${payload.server_name}`:'slurm';
 // Only latest reports are needed by the dashboard. Existing history is retained without querying it.
@@ -78,7 +83,7 @@ const mode=env.SNAPSHOT_AUTH_MODE||'sites';
 if(mode!=='public'&&mode!=='sites')return json({error:'access_not_configured'},503);
 // Only the Sites deployment has a trusted dispatch gateway that supplies this identity.
 if(mode==='sites'&&!request.headers.get('oai-authenticated-user-id'))return json({error:'sign_in_required'},401);
-try{const reports=await env.DB.prepare('SELECT key,payload,received_at FROM reports ORDER BY key').all();const data={serverTime:Date.now(),slurm:null,nodes:[],history:[]};for(const row of reports.results){const item={receivedAt:row.received_at,data:JSON.parse(row.payload)};if(row.key==='slurm')data.slurm=item;else if(row.key.startsWith('node:'))data.nodes.push(item);}return json(data);}catch(error){console.error('snapshot unavailable',error.message);return storageFailure(error);}}
+try{const reports=await env.DB.prepare('SELECT key,payload,received_at FROM reports ORDER BY key').all();const data={serverTime:Date.now(),slurm:null,nodes:[],history:[]};for(const row of reports.results){if(row.key.startsWith('node:')&&isRetiredNode(row.key.slice(5)))continue;const item={receivedAt:row.received_at,data:JSON.parse(row.payload)};if(row.key==='slurm')data.slurm=item;else if(row.key.startsWith('node:')&&!isRetiredNode(item.data.server_name))data.nodes.push(item);}return json(data);}catch(error){console.error('snapshot unavailable',error.message);return storageFailure(error);}}
 if(route.startsWith('/api/'))return json({error:'not_found'},404);
 if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Method not allowed',{status:405});
 const asset=ASSETS[route==='/'?'/index.html':route];if(!asset)return new Response('Not found',{status:404});return new Response(request.method==='HEAD'?null:asset.body,{headers:{'Content-Type':asset.type,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com"}});

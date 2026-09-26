@@ -14,7 +14,7 @@
 pbcopy < "$HOME/Projects/temp-status/.secrets/report-token"
 ```
 
-이 파일은 현재 Server1~4와 Baro 수집기의 전송 토큰과 일치하는 것으로 확인했습니다. 토큰 값을 GitHub나 채팅에 올리지 마세요. 다른 Mac이나 토큰이 변경된 환경에서는 먼저 실제 수집기와 일치하는 토큰을 확인해야 합니다.
+이 파일은 Server1~4 수집기의 전송 토큰과 일치하는 것으로 확인했습니다. 토큰 값을 GitHub나 채팅에 올리지 마세요. 다른 Mac이나 토큰이 변경된 환경에서는 먼저 실제 수집기와 일치하는 토큰을 확인해야 합니다.
 
 ## 2. 새 환경에서 Blueprint 생성
 
@@ -45,7 +45,7 @@ Blueprint 대신 **New → Web Service**를 사용할 경우 아래 설정을 �
 
 현재 서비스 주소는 `https://temp-status.onrender.com`이며 상태 확인 경로는 [/healthz](https://temp-status.onrender.com/healthz)입니다. 별도 서비스를 새로 만든 경우에는 Render가 표시한 해당 서비스 주소를 사용합니다. 홈페이지와 `/healthz` 응답은 서버 실행을 확인하는 것이며, 실제 GPU·Slurm 수신은 대시보드의 보고 시각을 별도로 확인해야 합니다. 새 배포는 수집기 목적지를 연결하기 전까지 GPU 데이터가 비어 있습니다.
 
-새 주소를 확인한 뒤 Server1~4와 Baro의 별도 대시보드 수집기 설정에서 `site_url`을 해당 HTTPS 주소로 변경하고 서비스를 재시작합니다. 원본 연구실 수집기와 Sites 연결은 보존합니다. 이 저장소 브리지의 `auth_mode: cloudflare`는 `X-Status-Token` 인증 방식을 뜻하므로 Render에서도 그대로 사용할 수 있습니다.
+새 주소를 확인한 뒤 Server1~4의 별도 대시보드 수집기 설정에서 `site_url`을 해당 HTTPS 주소로 변경하고 서비스를 재시작합니다. Baro는 대여 종료로 운영 대상에서 제외되었습니다. 원본 연구실 수집기와 Sites 연결은 보존합니다. 이 저장소 브리지의 `auth_mode: cloudflare`는 `X-Status-Token` 인증 방식을 뜻하므로 Render에서도 그대로 사용할 수 있습니다.
 
 기존 서비스의 코드만 업데이트할 때는 수집기 주소나 토큰을 다시 설정할 필요가 없습니다. 서비스를 다른 주소로 옮길 때만 수집기의 `site_url`을 변경하고 다섯 노드·Slurm 보고 수신을 검증합니다. 토큰 값은 GitHub나 채팅으로 전달하지 않습니다.
 

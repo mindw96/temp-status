@@ -128,6 +128,39 @@ assert.equal(updatedCloud.free_disk_gb,null);
 assert.equal(updatedCloud.disk_path,'');
 assert.equal(updatedCloud.gpus[0].gpu_utilization,null);
 assert.equal(updatedCloud.gpus[0].vram_total_used_mb,null);
+// A retired rental must disappear even when its old report remains in storage.
+const retiredNode={server_name:'baro-1',source_type:'cloud',gpus:[]};
+DB.raw.prepare('INSERT INTO reports (key,payload,received_at) VALUES (?,?,?)')
+  .run('node:baro-1',JSON.stringify(retiredNode),123);
+const retainedRental=DB.raw.prepare('SELECT * FROM reports WHERE key=?').get('node:baro-1');
+for(const headers of [{'oai-authenticated-user-id':'test'},{}]){
+  const response=await worker.fetch(new Request('https://local.test/api/snapshot',{headers}),
+    {...env,SNAPSHOT_AUTH_MODE:Object.keys(headers).length?'sites':'public'},{});
+  assert.equal(response.status,200);
+  const active=await response.json();
+  assert.deepEqual(active.nodes.map(n=>n.data.server_name).sort(),['baro','unit-node']);
+  assert.deepEqual(active.slurm,previousSlurm);
+}
+// Both collector envelopes reject the same trimmed identity, after authentication,
+// without running a write or allowing an old collector to revive the rental.
+for(const [route,body] of [
+  ['/api/report/node',{server_name:' baro-1 ',gpus:[]}],
+  ['/api/report/cloud-gpu',{...cloud,server:{name:' baro-1 '}}],
+]){
+  const beforeQueries=queries.length;
+  assert.equal((await call(route,'POST',body)).status,401);
+  const rejected=await call(route,'POST',body,reportHeaders);
+  assert.equal(rejected.status,410);
+  assert.deepEqual(await rejected.json(),{error:'node_retired'});
+  assert.equal(queries.length,beforeQueries);
+  assert.deepEqual(DB.raw.prepare('SELECT * FROM reports WHERE key=?').get('node:baro-1'),retainedRental);
+}
+assert.equal((await call('/api/report/node','POST',node,reportHeaders)).status,200);
+assert.equal((await call('/api/report/cloud-gpu','POST',cloud,reportHeaders)).status,200);
+assert.equal((await call('/api/report/slurm','POST',previousSlurm.data,reportHeaders)).status,200);
+snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
+assert.deepEqual(snapshot.nodes.map(n=>n.data.server_name).sort(),['baro','unit-node']);
+assert.deepEqual(snapshot.slurm.data,previousSlurm.data);
 assert.equal((await worker.fetch(new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'forged'}}),{...env,SNAPSHOT_AUTH_MODE:'unknown'},{})).status,503);
 const readRequest=()=>new Request('https://local.test/api/snapshot',{headers:{'oai-authenticated-user-id':'test'}});
 const writeRequest=()=>new Request('https://local.test/api/report/node',{method:'POST',headers:reportHeaders,body:JSON.stringify(node)});
@@ -165,4 +198,4 @@ assert.ok(queries.every(sql=>/\breports\b/.test(sql)));
 
 if(process.argv[2]){const real=JSON.parse(readFileSync(process.argv[2],'utf8'));assert.equal((await call('/api/report/node','POST',real.node,reportHeaders)).status,200);assert.equal((await call('/api/report/slurm','POST',real.slurm,reportHeaders)).status,200);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.slurm.data.squeue.length,real.slurm.squeue.length);assert.equal(snapshot.nodes.find(n=>n.data.server_name===real.node.server_name).data.gpus.length,real.node.gpus.length);console.log('Real agent fixture: both reports accepted and retrieved.');}
 assert.equal((await call('/')).status,200);assert.equal((await call('/api/unknown')).status,404);
-console.log('PASS: authentication, input validation, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, no history I/O, UTC quota recovery, failure handling, assets.');
+console.log('PASS: authentication, input validation, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, retired rental exclusion and ingestion rejection, no history I/O, UTC quota recovery, failure handling, assets.');
