@@ -30,7 +30,6 @@ function normalizeSnapshot(snapshot) {
     return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
   }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
 }
-currentNodes = () => liveState.mode === 'demo' ? nodes.filter(n => state.partition === 'all' || n.partition === state.partition) : nodes;
 const sampleNote = $('.sample-note');
 function renderConnection() {
   const demo = liveState.mode === 'demo', snap = liveState.snapshot, hasData = !!(snap?.slurm || snap?.nodes?.length), staleNodes = nodes.filter(n => n.stale).length;
@@ -40,7 +39,6 @@ function renderConnection() {
   renderRefreshControl();
   const times = demo ? [] : [snap?.slurm?.receivedAt, ...(snap?.nodes || []).map(n => n.receivedAt)].filter(Number.isFinite);
   $('.snapshot').innerHTML = `${icon('clock')}<span>${demo ? 'Sep 22, 10:40 KST · Sample' : times.length ? clockText(Math.max(...times)) : 'No reports received'}</span>`;
-  renderFilterSelect('#partition-filter', state.partition, [['all', 'All job partitions'], ...Object.keys(partitionMeta).map(partition => [partition, partition])]);
   $('.node-key').innerHTML = demo ? '<span><i class="green-dot"></i>Healthy</span><span><i class="amber-dot"></i>Maintenance</span>' : '<span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Stale / missing</span>';
   $('.table-footer>span:last-child').textContent = demo ? 'Slurm · Sample snapshot' : `Slurm: ${ageText(snap?.slurm?.receivedAt)}`;
 }

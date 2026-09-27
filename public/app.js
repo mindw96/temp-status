@@ -15,10 +15,10 @@ let nodes=nodeSpecs.map(([id,partition,total,allocated,state,utils,temp,cpu,cpuA
 const jobSpecs=[['48217','llama3-70b-sft','minji','RUNNING','accelerated',8,'03:42:18','gpu-01',[0,1,2,3,4,5,6,7]],['48231','multimodal-pretrain','jiwon','RUNNING','accelerated',4,'01:28:05','gpu-02',[0,1,2,3]],['48236','retrieval-ablation','hyunwoo','RUNNING','accelerated',2,'00:46:12','gpu-02',[4,5]],['48222','diffusion-train','seoyeon','RUNNING','compute',4,'02:53:40','gpu-03',[0,1,2,3]],['48240','embedding-train','yujin','RUNNING','compute',1,'00:31:09','gpu-04',[0]],['48241','reranker-eval','junho','RUNNING','compute',1,'00:24:16','gpu-04',[1]],['48245','data-validation','doyun','RUNNING','interactive',1,'00:12:24','gpu-05',[0]],['48246','tokenizer-benchmark','harin','RUNNING','interactive',1,'00:10:03','gpu-05',[1]],['48248','llama-full-ft','doyun','PENDING','accelerated',8,'00:38:12','Resources',[]],['48250','reward-model','harin','PENDING','accelerated',2,'00:22:45','Priority',[]],['48253','eval-after-sft','minji','PENDING','interactive',1,'00:14:06','Dependency',[]],['48254','diffusion-sweep','seoyeon','PENDING','compute',4,'00:08:32','QOSMaxGRESPerUser',[]]];
 let jobs=jobSpecs.map(([id,name,user,state,partition,gpus,elapsed,target,indices])=>({id,name,user,state,partition,gpus,elapsed,target,indices}));
 const reasons={Resources:'Insufficient resources',Priority:'Waiting for priority',Dependency:'Waiting for dependency',QOSMaxGRESPerUser:'User GPU limit'};
-const state={partition:'all',jobState:'all',search:'',user:'',server:''};
+const state={jobState:'all',search:'',user:'',server:''};
 const $=selector=>document.querySelector(selector);
-let currentNodes=()=>nodes.filter(n=>state.partition==='all'||n.partition===state.partition);
-const currentJobs=()=>jobs.filter(j=>state.partition==='all'||j.partition===state.partition);
+const currentNodes=()=>nodes;
+const currentJobs=()=>jobs;
 const average=values=>values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
 const percent=v=>v===null?'—':`${Math.round(v)}%`;
 function getMetrics(){const ns=currentNodes(),js=currentJobs(),gpu=ns.flatMap(n=>n.gpus),known=gpu.filter(g=>g.util!==null);return{total:gpu.length,allocated:gpu.filter(g=>g.allocated).length,idle:ns.filter(n=>!n.state.includes('DRAIN')).reduce((sum,n)=>sum+n.total-n.allocated,0),unavailable:gpu.length-known.length,util:average(known.map(g=>g.util)),running:js.filter(j=>j.state==='RUNNING').length,pending:js.filter(j=>j.state==='PENDING').length,normal:ns.filter(n=>!n.state.includes('DRAIN')).length,nodes:ns.length};}
@@ -96,7 +96,7 @@ function renderJobFilters() {
     ['#job-server-filter', state.server, [['', 'All servers'], ...servers.map(id => [id, displayNodeName(id)]), ['@unassigned', 'Unassigned / pending']]]
   ];
   for (const [selector, value, entries] of options) renderFilterSelect(selector, value, entries);
-  $('#reset-job-filters').disabled = !state.user && !state.server && !state.search && state.jobState === 'all' && state.partition === 'all';
+  $('#reset-job-filters').disabled = !state.user && !state.server && !state.search && state.jobState === 'all';
 }
 function jobsForFilterCounts() {
   const q = state.search.toLowerCase();
@@ -107,8 +107,8 @@ function jobsForFilterCounts() {
 function filteredJobs(){return jobsForFilterCounts().filter(job => state.jobState === 'all' || job.state === state.jobState);}
 function resetJobPage() {if (typeof liveState !== 'undefined') liveState.page = 1;}
 function resetJobFilters() {
-  Object.assign(state, {partition: 'all', jobState: 'all', search: '', user: '', server: ''});
-  $('#partition-filter').value = 'all'; $('#job-search').value = '';
+  Object.assign(state, {jobState: 'all', search: '', user: '', server: ''});
+  $('#job-search').value = '';
   resetJobPage(); render();
 }
 function renderJobs(){renderJobFilters();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map((j,i)=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i%3===0?'lilac':i%3===1?'blue':''}" aria-hidden="true">${j.user.slice(0,1).toUpperCase()}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state==='PENDING'?'pending':''}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${esc(j.state==='PENDING'?reasons[j.target]:displayNodeList(j.target))}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
@@ -118,7 +118,6 @@ const detailItem=(label,value)=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</d
 function showNode(id){const n=nodes.find(n=>n.id===id);if(!n)return;const assigned=jobs.filter(j=>j.target===id);openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${partitionMeta[n.partition].model} × ${n.total} · ${n.partition}</p><dl class="detail-grid">${detailItem('Slurm state',n.state)}${detailItem('Allocated GPUs',`${n.allocated} / ${n.total}`)}${detailItem('Allocated CPUs',`${n.cpuAllocated} / ${n.cpu}`)}${detailItem('Collected at','Sep 22, 2026, 10:40 KST · Sample')}</dl><div class="dialog-gpus">${n.gpus.map(g=>`<div class="dialog-gpu ${g.util===null?'gpu-offline':''}"><strong>GPU ${g.index}</strong>${g.util===null?'No metrics':g.allocated?'Allocated':'Idle'}<span>Compute ${percent(g.util)}</span><span>${g.memoryUsed===null?'—':g.memoryUsed+' / '+g.memory+' GB'}</span><span>${g.temp===null?'—':g.temp+' °C'}</span></div>`).join('')}</div><p class="dialog-note">${n.reason?'Maintenance: '+n.reason+'. This node is not accepting new jobs.':'Dark GPU blocks indicate job allocations. An allocated GPU can have low utilization while loading data or waiting for I/O.'}</p>${assigned.length?`<p class="dialog-jobs" style="margin-top:16px">Running jobs: ${assigned.map(j=>`${j.id} · ${j.name}`).join('<br>')}</p>`:''}`,'GPU NODE · SAMPLE DATA');}
 function showJob(id){const j=jobs.find(j=>j.id===id);if(!j)return;openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${j.id} · ${esc(j.user)}</p><dl class="detail-grid">${detailItem('State',j.state)}${detailItem('Partition',j.partition)}${detailItem(j.state==='RUNNING'?'Allocated GPUs':'Requested GPUs',`${j.gpus}`)}${detailItem(j.state==='RUNNING'?'Elapsed':'Time pending',j.elapsed)}${detailItem(j.state==='RUNNING'?'Assigned node':'Pending reason',j.state==='RUNNING'?displayNodeList(j.target):j.target)}${detailItem(j.state==='RUNNING'?'GPU indices':'Assigned node',j.state==='RUNNING'?j.indices.join(', '):'Not yet allocated')}</dl><p class="dialog-note">${j.state==='RUNNING'?'This job has been allocated resources and is running. GPU allocation and utilization are separate metrics.':j.target==='Dependency'?'Waiting for job 48217 to complete successfully.':j.target==='QOSMaxGRESPerUser'?'In this sample, the user has a limit of 4 GPUs, all currently allocated to diffusion-train.':j.target==='Priority'?'Waiting for higher-priority jobs in this partition to be scheduled.':`This job requests ${j.gpus} GPUs on one node, but sufficient matching resources are not available.`}</p>`,'SLURM JOB · SAMPLE DATA');}
 function showDataInfo(){openDialog('<h2 id="dialog-title">Sample data</h2><p class="dialog-subtitle">This view uses a sample cluster snapshot.</p><div class="dialog-copy"><p>Node reports use <code>POST /api/report/node</code> and Slurm reports use <code>POST /api/report/slurm</code>.</p><p>The live dashboard displays reports received from the configured collectors. Sample data is provided separately for previewing the interface.</p><p>All nodes, job names, users, and metrics in this sample are fictional.</p></div>','DATA SOURCE');}
-$('#partition-filter').addEventListener('change',e=>{state.partition=e.target.value;resetJobPage();render();});
 $('#job-search').addEventListener('input',e=>{state.search=e.target.value;resetJobPage();renderJobs();});
 $('#job-user-filter').addEventListener('change',e=>{state.user=e.target.value;resetJobPage();renderJobs();});
 $('#job-server-filter').addEventListener('change',e=>{state.server=e.target.value;resetJobPage();renderJobs();});
@@ -136,9 +135,8 @@ if (document.modelContext?.registerTool) {
   try {
     Promise.resolve(document.modelContext.registerTool({
       name: 'filter_cluster_dashboard', title: 'Filter cluster dashboard',
-      description: 'Filter the dashboard by partition and its Slurm jobs by exact user, assigned server, status, or search term. Filters combine; empty user/server clears that filter.',
+      description: 'Filter Slurm jobs by exact user, assigned server, status, or search term. Filters combine; empty user/server clears that filter.',
       inputSchema: {type: 'object', properties: {
-        partition: {type: 'string', maxLength: 128},
         jobState: {type: 'string', enum: ['all', 'RUNNING', 'PENDING']},
         search: {type: 'string', maxLength: 100},
         user: {type: 'string', maxLength: 128, description: 'Exact username, or an empty string for all users.'},
@@ -147,15 +145,14 @@ if (document.modelContext?.registerTool) {
       annotations: {readOnlyHint: false, untrustedContentHint: false},
       execute(input) {
         if (!input || typeof input !== 'object' || Array.isArray(input)
-          || Object.keys(input).some(key => !['partition', 'jobState', 'search', 'user', 'server'].includes(key))
-          || (input.partition !== undefined && !['all', state.partition, ...Object.keys(partitionMeta)].includes(input.partition))
+          || Object.keys(input).some(key => !['jobState', 'search', 'user', 'server'].includes(key))
           || (input.jobState !== undefined && !['all', 'RUNNING', 'PENDING'].includes(input.jobState))
           || (input.search !== undefined && (typeof input.search !== 'string' || input.search.length > 100))
           || (input.user !== undefined && (typeof input.user !== 'string' || input.user.length > 128))
           || (input.server !== undefined && (typeof input.server !== 'string' || input.server.length > 128
             || !['', '@unassigned', state.server, ...jobFilterServers()].includes(input.server)))) throw new Error('Unsupported filter.');
         Object.assign(state, input); resetJobPage();
-        $('#partition-filter').value = state.partition; $('#job-search').value = state.search;
+        $('#job-search').value = state.search;
         render();
         return {isSample: typeof liveState === 'undefined' || liveState.mode === 'demo', filters: {...state}, metrics: getMetrics(), visibleJobIds: filteredJobs().map(job => job.id)};
       }

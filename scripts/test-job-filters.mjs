@@ -7,6 +7,7 @@ import vm from 'node:vm';
 const elements = new Map(), tools = new Map();
 let requests = 0;
 function element(selector) {
+  assert.notEqual(selector, '#partition-filter', 'The removed partition control must not be accessed');
   if (!elements.has(selector)) {
     const listeners = new Map();
     elements.set(selector, {innerHTML: '', textContent: '', value: '', disabled: false,
@@ -89,7 +90,8 @@ assert.deepEqual(apply({server: 'devbox'}).visibleJobIds, []);
 assert.deepEqual(apply({server: '@unassigned', user: 'alice', search: ''}).visibleJobIds, ['4', '6', '7']);
 assert.equal(element('#pending-jobs').textContent, 2);
 assert.deepEqual(apply({jobState: 'PENDING'}).visibleJobIds, ['4', '6']);
-assert.throws(() => apply({partition: 'missing'}), /Unsupported filter/);
+assert.throws(() => apply({partition: 'gpu'}), /Unsupported filter/);
+assert.equal(tools.get('filter_cluster_dashboard').inputSchema.properties.partition, undefined);
 assert.throws(() => apply({server: 'server20'}), /Unsupported filter/);
 assert.throws(() => apply({user: 123}), /Unsupported filter/);
 
@@ -142,21 +144,20 @@ assert.equal(element('#job-server-filter').value, 'extra-node');
 assert.match(element('#job-server-filter').innerHTML, /extra-node · No current jobs/);
 assert.deepEqual(ids(), []);
 
-// Partition disappearance also keeps the combined filter narrow.
+// Partition changes do not limit the remaining user/server filters or node cards.
 element('#reset-job-filters').dispatch('click');
-apply({partition: 'gpu', user: 'bob'});
+apply({user: 'bob', server: 'devbox'});
 report([job(43, 'bob', 'devbox', 'RUNNING', {partition: 'other'})]);
-assert.equal(evaluate('state.partition'), 'gpu');
-assert.match(element('#partition-filter').innerHTML, /gpu · No current jobs/);
-assert.deepEqual(ids(), []);
+assert.equal(evaluate('state.partition'), undefined);
+assert.deepEqual(ids(), ['43']);
+assert.deepEqual(plain(evaluate('currentNodes().map(node => node.id)')), ['devbox', 'server2', 'ubuntu', 'server4']);
 
-// Clearing also clears the shared partition and status filters.
-apply({partition: 'gpu', jobState: 'RUNNING', search: 'job'});
+// Clearing also clears the shared status and search filters.
+apply({jobState: 'RUNNING', search: 'job'});
 element('#reset-job-filters').dispatch('click');
-assert.deepEqual(plain(evaluate('state')), {partition: 'all', jobState: 'all', search: '', user: '', server: ''});
+assert.deepEqual(plain(evaluate('state')), {jobState: 'all', search: '', user: '', server: ''});
 assert.equal(evaluate('liveState.page'), 1);
 assert.equal(element('#job-search').value, '');
-assert.equal(element('#partition-filter').value, 'all');
 assert.equal(element('#job-user-filter').value, '');
 assert.equal(element('#job-server-filter').value, '');
 assert.equal(element('#reset-job-filters').disabled, true);
