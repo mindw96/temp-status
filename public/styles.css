@@ -71,3 +71,28 @@
 .gpu-process-name,.dialog-gpu .gpu-process-name{font-size:12px;color:#53664b;min-width:0;overflow-wrap:anywhere}
 .gpu-process-count,.dialog-gpu .gpu-process-count{font-size:11px;color:#74826d;white-space:nowrap;flex-shrink:0}
 @media(max-width:480px){.gpu-process-name,.dialog-gpu .gpu-process-name{font-size:13px}.gpu-process-count,.dialog-gpu .gpu-process-count{font-size:12px}}
+
+.jobs-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;padding:16px 22px 0}
+.job-filter{display:flex;flex-direction:column;gap:5px;flex:0 1 220px;min-width:0}
+.job-filter>span{font-size:11px;font-weight:600;color:#71826f}
+.job-filter select{width:100%;max-width:none;min-width:0;height:37px;border:1px solid #dfe6db;border-radius:5px;background:#fff;padding:7px 10px;font-size:13px;color:#49634a;text-overflow:ellipsis}
+.reset-job-filters{height:37px;border:1px solid #dfe6db;border-radius:5px;padding:7px 12px;font-size:12px;color:#56734d;background:#f8faf6}
+.reset-job-filters:hover:not(:disabled){background:#edf4e9;border-color:#a6bea0}
+.reset-job-filters:disabled{opacity:.5;cursor:default}
+.jobs-table{table-layout:fixed;min-width:1080px}
+.jobs-table .job-id-column{width:105px}
+.jobs-table .job-user-column{width:140px}
+.jobs-table .job-status-column{width:120px}
+.jobs-table .job-gpus-column{width:130px}
+.jobs-table .job-target-column{width:205px}
+.jobs-table .job-details-column{width:48px}
+.jobs-table td{vertical-align:middle}
+.jobs-panel .jobs-table td:nth-child(2){max-width:none}
+.jobs-table .job-name{width:100%;max-width:none;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.6;text-overflow:ellipsis}
+.jobs-table .job-user{white-space:normal;overflow-wrap:anywhere;min-width:0}
+.jobs-table .user-dot{flex-shrink:0}
+.jobs-table td:nth-child(1),.jobs-table td:nth-child(5),.jobs-table td:nth-child(6){white-space:normal;overflow-wrap:anywhere}
+.jobs-scroll-hint{display:none;font-size:11px;color:#71826f;padding:9px 16px}
+.table-scroll:focus-visible{outline:2px solid #53bca0;outline-offset:-2px}
+@media(max-width:1152px){.jobs-scroll-hint{display:block}}
+@media(max-width:740px){.jobs-filters{padding-inline:16px;gap:10px}.job-filter{flex:1 1 calc(50% - 5px)}.jobs-table{min-width:980px}.jobs-table .job-user-column{width:125px}.jobs-table .job-status-column{width:105px}.jobs-table .job-target-column{width:175px}.jobs-table .job-gpus-column{width:115px}}

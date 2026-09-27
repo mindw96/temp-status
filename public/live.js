@@ -40,10 +40,7 @@ function renderConnection() {
   renderRefreshControl();
   const times = demo ? [] : [snap?.slurm?.receivedAt, ...(snap?.nodes || []).map(n => n.receivedAt)].filter(Number.isFinite);
   $('.snapshot').innerHTML = `${icon('clock')}<span>${demo ? 'Sep 22, 10:40 KST · Sample' : times.length ? clockText(Math.max(...times)) : 'No reports received'}</span>`;
-  const selected = state.partition;
-  $('#partition-filter').innerHTML = '<option value="all">All job partitions</option>' + Object.keys(partitionMeta).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  state.partition = Object.hasOwn(partitionMeta, selected) ? selected : 'all';
-  $('#partition-filter').value = state.partition;
+  renderFilterSelect('#partition-filter', state.partition, [['all', 'All job partitions'], ...Object.keys(partitionMeta).map(partition => [partition, partition])]);
   $('.node-key').innerHTML = demo ? '<span><i class="green-dot"></i>Healthy</span><span><i class="amber-dot"></i>Maintenance</span>' : '<span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Stale / missing</span>';
   $('.table-footer>span:last-child').textContent = demo ? 'Slurm · Sample snapshot' : `Slurm: ${ageText(snap?.slurm?.receivedAt)}`;
 }
@@ -131,14 +128,15 @@ renderNodes = function() {
   $('#waiting-help')?.addEventListener('click', showDataInfo);
 };
 renderJobs = function() {
-  const all = currentJobs(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / 12)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
+  renderJobFilters();
+  const all = jobsForFilterCounts(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / 12)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
   liveState.page = Math.min(liveState.page, pages);
   const visible = rows.slice((liveState.page - 1) * 12, liveState.page * 12);
   $('#job-count').textContent = hasSlurm ? all.length : '—';
   $('#total-jobs').textContent = hasSlurm ? all.length : '—';
   $('#running-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'RUNNING').length : '—';
   $('#pending-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'PENDING').length : '—';
-  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td><button class="job-name" data-job="${esc(j.id)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state === 'PENDING' ? 'pending' : ''}">${esc(stateLabels[j.state] || j.state)}</span></td><td><span class="partition-chip">${esc(j.partition)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="mono">${j.state === 'PENDING' ? '—' : esc(j.elapsed)}</td><td class="${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="9" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : all.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
+  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state === 'PENDING' ? 'pending' : ''}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
   $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * 12 + 1) + '–' + Math.min(liveState.page * 12, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;
@@ -250,9 +248,6 @@ async function loadSnapshot({force = false, resume = false} = {}) {
 }
 $('#prev-page').onclick = () => {liveState.page = Math.max(1, liveState.page - 1); renderJobs();};
 $('#next-page').onclick = () => {liveState.page++; renderJobs();};
-$('#job-search').addEventListener('input', () => {liveState.page = 1; renderJobs();});
-$('#partition-filter').addEventListener('change', () => {liveState.page = 1; renderJobs();});
-document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => {liveState.page = 1; renderJobs();}));
 nodes = []; jobs = []; partitionMeta = {};
 render(); loadSnapshot();
 document.addEventListener('visibilitychange', () => {
