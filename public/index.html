@@ -18,11 +18,16 @@
       </section>
       <section id="nodes" class="nodes-section" aria-labelledby="nodes-title"><div class="section-heading"><div class="title-row"><h2 id="nodes-title">GPU nodes</h2><span class="count-chip" id="node-count">—</span></div><div class="node-key"><span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Delayed / missing</span></div></div><div id="node-grid" class="node-grid"></div></section>
       <section id="jobs" class="panel jobs-panel" aria-labelledby="jobs-title">
-        <div class="jobs-header"><div class="title-row"><h2 id="jobs-title">Slurm jobs</h2><span class="count-chip" id="job-count">—</span></div><label class="search"><span data-icon="search"></span><input id="job-search" type="search" placeholder="Search jobs, users, or job IDs" aria-label="Search Slurm jobs"><kbd>/</kbd></label></div>
-        <div class="jobs-filters" role="group" aria-label="Filter Slurm jobs">
-          <label class="job-filter" for="job-user-filter"><span>User</span><select id="job-user-filter"><option value="">All users</option></select></label>
-          <label class="job-filter" for="job-server-filter"><span>Server</span><select id="job-server-filter"><option value="">All servers</option></select></label>
-          <button type="button" id="reset-job-filters" class="reset-job-filters">Reset filters</button>
+        <div class="jobs-header">
+          <div class="title-row"><h2 id="jobs-title">Slurm jobs</h2><span class="count-chip" id="job-count">—</span></div>
+          <div class="jobs-tools">
+            <div class="jobs-filters" role="group" aria-label="Filter Slurm jobs">
+              <label class="job-filter" for="job-user-filter"><span class="sr-only">User</span><select id="job-user-filter"><option value="">All users</option></select></label>
+              <label class="job-filter" for="job-server-filter"><span class="sr-only">Server</span><select id="job-server-filter"><option value="">All servers</option></select></label>
+            </div>
+            <label class="search"><span data-icon="search"></span><input id="job-search" type="search" placeholder="Search jobs, users, or job IDs" aria-label="Search Slurm jobs"><kbd>/</kbd></label>
+            <button type="button" id="reset-job-filters" class="reset-job-filters">Reset filters</button>
+          </div>
         </div>
         <div class="jobs-tabs" role="group" aria-label="Filter jobs by status"><button class="active" data-state="all" aria-pressed="true">All jobs <span id="total-jobs"></span></button><button data-state="RUNNING">Running <span id="running-jobs"></span></button><button data-state="PENDING">Pending <span id="pending-jobs"></span></button></div>
         <p class="jobs-scroll-hint">Scroll horizontally to view all columns.</p>

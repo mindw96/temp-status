@@ -72,11 +72,18 @@
 .gpu-process-count,.dialog-gpu .gpu-process-count{font-size:11px;color:#74826d;white-space:nowrap;flex-shrink:0}
 @media(max-width:480px){.gpu-process-name,.dialog-gpu .gpu-process-name{font-size:13px}.gpu-process-count,.dialog-gpu .gpu-process-count{font-size:12px}}
 
-.jobs-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;padding:16px 22px 0}
-.job-filter{display:flex;flex-direction:column;gap:5px;flex:0 1 220px;min-width:0}
-.job-filter>span{font-size:11px;font-weight:600;color:#71826f}
+.jobs-header{flex-wrap:wrap}
+.jobs-header>.title-row{flex-shrink:0}
+.jobs-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.jobs-filters{display:flex;align-items:center;gap:8px;min-width:0}
+.job-filter{display:block;width:150px;min-width:0}
+.job-filter[for="job-server-filter"]{width:180px}
 .job-filter select{width:100%;max-width:none;min-width:0;height:37px;border:1px solid #dfe6db;border-radius:5px;background:#fff;padding:7px 10px;font-size:13px;color:#49634a;text-overflow:ellipsis}
+.jobs-tools .search{width:280px;height:37px;min-width:0}
+.jobs-tools .search input{width:100%;flex:1}
+.jobs-tools .search svg,.jobs-tools .search kbd{flex-shrink:0}
 .reset-job-filters{height:37px;border:1px solid #dfe6db;border-radius:5px;padding:7px 12px;font-size:12px;color:#56734d;background:#f8faf6}
+.jobs-tools .reset-job-filters{flex-shrink:0;white-space:nowrap}
 .reset-job-filters:hover:not(:disabled){background:#edf4e9;border-color:#a6bea0}
 .reset-job-filters:disabled{opacity:.5;cursor:default}
 .jobs-table{table-layout:fixed;min-width:1080px}
@@ -95,4 +102,5 @@
 .jobs-scroll-hint{display:none;font-size:11px;color:#71826f;padding:9px 16px}
 .table-scroll:focus-visible{outline:2px solid #53bca0;outline-offset:-2px}
 @media(max-width:1152px){.jobs-scroll-hint{display:block}}
-@media(max-width:740px){.jobs-filters{padding-inline:16px;gap:10px}.job-filter{flex:1 1 calc(50% - 5px)}.jobs-table{min-width:980px}.jobs-table .job-user-column{width:125px}.jobs-table .job-status-column{width:105px}.jobs-table .job-target-column{width:175px}.jobs-table .job-gpus-column{width:115px}}
+@media(max-width:1050px){.jobs-tools{width:100%}.jobs-tools .search{flex:1;width:auto}}
+@media(max-width:740px){.jobs-tools{display:grid;grid-template-columns:minmax(0,1fr) auto}.jobs-filters{grid-column:1/-1}.job-filter,.job-filter[for="job-server-filter"]{flex:1;width:auto}.jobs-tools .search{width:100%}.jobs-table{min-width:980px}.jobs-table .job-user-column{width:125px}.jobs-table .job-status-column{width:105px}.jobs-table .job-target-column{width:175px}.jobs-table .job-gpus-column{width:115px}}
