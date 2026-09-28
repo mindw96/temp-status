@@ -42,6 +42,7 @@ for (const name of ['app.js', 'gpu-jobs.js', 'live.js']) {
 const evaluate = code => vm.runInContext(code, context);
 const plain = value => JSON.parse(JSON.stringify(value));
 const ids = () => plain(evaluate('filteredJobs().map(job => job.id)'));
+const visibleIds = () => [...element('#job-rows').innerHTML.matchAll(/<tr><td[^>]*>([^<]*)<\/td>/g)].map(match => match[1]);
 const apply = toolInput => plain(tools.get('filter_cluster_dashboard').execute(toolInput));
 const job = (id, user, target, state = 'RUNNING', extra = {}) => ({
   job_id: String(id), name: `Long training job ${id}`, user, node_list_or_reason: target,
@@ -99,11 +100,34 @@ assert.throws(() => apply({user: 123}), /Unsupported filter/);
 // with the others. Clear filters returns the entire queue and first page.
 element('#reset-job-filters').dispatch('click');
 report(Array.from({length: 36}, (_, index) => job(index + 1, index % 2 ? 'bob' : 'alice', 'server2')));
-evaluate('liveState.page = 3; renderJobs();');
+assert.deepEqual(visibleIds(), Array.from({length: 10}, (_, index) => String(index + 1)));
+assert.equal(element('#page-number').textContent, '1 / 4');
+assert.equal(element('#result-count').textContent, '36 jobs · Showing 1–10');
+assert.equal(element('#prev-page').disabled, true);
+assert.equal(element('#next-page').disabled, false);
+element('#next-page').onclick();
+assert.deepEqual(visibleIds(), Array.from({length: 10}, (_, index) => String(index + 11)));
+assert.equal(element('#result-count').textContent, '36 jobs · Showing 11–20');
+element('#prev-page').onclick();
+assert.equal(element('#page-number').textContent, '1 / 4');
+evaluate('liveState.page = 4; renderJobs();');
+assert.deepEqual(visibleIds(), ['31', '32', '33', '34', '35', '36']);
+assert.equal(element('#page-number').textContent, '4 / 4');
+assert.equal(element('#result-count').textContent, '36 jobs · Showing 31–36');
+assert.equal(element('#prev-page').disabled, false);
+assert.equal(element('#next-page').disabled, true);
+// A refreshed queue that shrinks clamps to its last valid page.
+report(Array.from({length: 21}, (_, index) => job(index + 1, index % 2 ? 'bob' : 'alice', 'server2')));
 assert.equal(element('#page-number').textContent, '3 / 3');
+assert.deepEqual(visibleIds(), ['21']);
+assert.equal(element('#result-count').textContent, '21 jobs · Showing 21–21');
+report(Array.from({length: 36}, (_, index) => job(index + 1, index % 2 ? 'bob' : 'alice', 'server2')));
+evaluate('liveState.page = 4; renderJobs();');
 element('#job-user-filter').dispatch('change', 'alice');
 assert.equal(evaluate('liveState.page'), 1);
 assert.equal(ids().length, 18);
+assert.equal(element('#page-number').textContent, '1 / 2');
+assert.equal(visibleIds().length, 10);
 evaluate('liveState.page = 2;');
 element('#job-server-filter').dispatch('change', 'server2');
 assert.equal(evaluate('liveState.page'), 1);
@@ -131,6 +155,9 @@ assert.equal(element('#job-user-filter').value, 'bob');
 assert.equal(evaluate('state.server'), 'server2');
 assert.match(element('#job-rows').innerHTML, /colspan="7"/);
 assert.match(element('#job-rows').innerHTML, /No jobs in the latest report/);
+assert.equal(element('#page-number').textContent, '1 / 1');
+assert.equal(element('#prev-page').disabled, true);
+assert.equal(element('#next-page').disabled, true);
 report([job(41, 'bob', 'server2')]);
 assert.deepEqual(ids(), ['41']);
 assert.doesNotMatch(element('#job-user-filter').innerHTML, /No current jobs/);
@@ -174,8 +201,12 @@ assert.match(markup, /title="Training &lt;script&gt; &amp; &quot;full name&quot;
 assert.doesNotMatch(markup, /<script>|partition-chip|12:34:56/);
 assert.match(element('#job-user-filter').innerHTML, /user&lt;one&gt;&quot;/);
 
-// The demo renderer has the same seven-column contract.
+// The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
-assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 12 * 7);
+assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);
 assert.doesNotMatch(element('#job-rows').innerHTML, /partition-chip/);
+element('#next-page').onclick();
+assert.equal(visibleIds().length, 2);
+assert.equal(element('#page-number').textContent, '2 / 2');
+assert.equal(element('#next-page').disabled, true);
 console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping and seven columns.');

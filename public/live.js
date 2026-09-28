@@ -2,6 +2,7 @@
 const demoData = {nodes: structuredClone(nodes), jobs: structuredClone(jobs), partitions: structuredClone(partitionMeta)};
 const demoRender = {nodes: renderNodes, node: showNode, job: showJob, dataInfo: showDataInfo};
 const REFRESH_INTERVAL_MS = 30000, ERROR_RETRY_BASE_MS = 120000, FRESHNESS_MS = 180000, QUOTA_RETRY_MS = 300000, MANUAL_COOLDOWN_MS = 5000;
+const JOBS_PER_PAGE = 10;
 const liveState = {mode: 'live', snapshot: null, error: null, errorKind: null, retryAt: null, loading: false, page: 1, lastRead: 0, lastAttemptAt: null, nextAttemptAt: 0, failureCount: 0};
 let refreshTimer, refreshControlTimer, activeRequest;
 const fresh = at => !liveState.error && Number.isFinite(at) && Date.now() - at < FRESHNESS_MS;
@@ -60,7 +61,7 @@ function gpuJobsMarkup(n, g) {
   if (!g.jobRecords.length) return `<span class="gpu-job-empty">${n.stale ? 'No process in last report' : 'No process observed'}</span>`;
   return g.jobRecords.map(record => {
     const user = record.users.join(', ') || 'User unavailable';
-    const content = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? `#${esc(record.jobId)}` : 'Job ID unavailable'}</span><span class="gpu-job-user" title="User: ${esc(user)}">${esc(user)}</span></span><span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
+    const content = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? esc(record.jobId) : 'Job ID unavailable'}</span><span class="gpu-job-user" title="User: ${esc(user)}">${esc(user)}</span></span><span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
     return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" title="Job ${esc(record.jobId)} · ${esc(user)} · ${esc(record.name)}" aria-label="Job ${esc(record.jobId)}: ${esc(record.name)} by ${esc(user)}, details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
   }).join('');
 }
@@ -110,9 +111,10 @@ function nodeBadgeClass(n) {
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
   const util = available ? g.util : null;
-  const vram = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory
-    ? `${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB` : 'VRAM —';
-  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-header"><span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span><span class="gpu-vram-badge">${vram}</span></div><div class="gpu-util-row"><span class="gpu-util-label">UTIL</span>${meterMarkup(util)}<span class="gpu-util-pct">${percent(util)}</span></div><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`;
+  const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
+  const vram = memoryAvailable ? `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB` : 'VRAM —';
+  const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
+  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-header"><span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span><span class="gpu-vram-badge">${vram}</span></div><div class="gpu-util-row"><span class="gpu-util-label">UTIL</span>${meterMarkup(util)}<span class="gpu-util-pct">${percent(util)}</span></div><div class="gpu-util-row gpu-vram-row"><span class="gpu-util-label">VRAM</span>${meterMarkup(vramPercent)}<span class="gpu-util-pct">${percent(vramPercent)}</span></div><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
@@ -152,15 +154,15 @@ renderNodes = function() {
 };
 renderJobs = function() {
   renderJobFilters();
-  const all = jobsForFilterCounts(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / 12)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
+  const all = jobsForFilterCounts(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / JOBS_PER_PAGE)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
   liveState.page = Math.min(liveState.page, pages);
-  const visible = rows.slice((liveState.page - 1) * 12, liveState.page * 12);
+  const visible = rows.slice((liveState.page - 1) * JOBS_PER_PAGE, liveState.page * JOBS_PER_PAGE);
   $('#job-count').textContent = hasSlurm ? all.length : '—';
   $('#total-jobs').textContent = hasSlurm ? all.length : '—';
   $('#running-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'RUNNING').length : '—';
   $('#pending-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'PENDING').length : '—';
   $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
-  $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * 12 + 1) + '–' + Math.min(liveState.page * 12, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
+  $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * JOBS_PER_PAGE + 1) + '–' + Math.min(liveState.page * JOBS_PER_PAGE, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;
   $('#next-page').disabled = liveState.page === pages;
