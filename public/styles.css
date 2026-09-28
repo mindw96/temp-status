@@ -104,3 +104,135 @@
 @media(max-width:1152px){.jobs-scroll-hint{display:block}}
 @media(max-width:1050px){.jobs-tools{width:100%}.jobs-tools .search{flex:1;width:auto}}
 @media(max-width:740px){.jobs-tools{display:grid;grid-template-columns:minmax(0,1fr) auto}.jobs-filters{grid-column:1/-1}.job-filter,.job-filter[for="job-server-filter"]{flex:1;width:auto}.jobs-tools .search{width:100%}.jobs-table{min-width:980px}.jobs-table .job-user-column{width:125px}.jobs-table .job-status-column{width:105px}.jobs-table .job-target-column{width:175px}.jobs-table .job-gpus-column{width:115px}}
+
+/* Keep the theme action beside the report timestamp on wide screens. */
+:root{color-scheme:light}
+.heading-controls{flex-direction:row;align-items:center;gap:14px;max-width:none;padding-top:0}
+.heading-controls .snapshot{white-space:nowrap}
+.theme-toggle{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:10px 12px;border:1px solid #dfe6df;border-radius:7px;background:#fff;color:#49634a;font-size:12px;font-weight:550;white-space:nowrap;flex-shrink:0}
+.theme-toggle:hover{background:#edf4ee;border-color:#9cb9a5}
+.theme-toggle svg{width:17px;height:17px;flex-shrink:0}
+.theme-toggle .theme-icon-sun{display:none}
+:root[data-theme="dark"] .theme-toggle .theme-icon-moon{display:none}
+:root[data-theme="dark"] .theme-toggle .theme-icon-sun{display:block}
+.search:focus-within{border-color:#53a887;box-shadow:0 0 0 2px #53a88733}
+#retry-live:disabled{cursor:default;opacity:.55}
+@media(max-width:740px){
+  .page-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px}
+  .page-heading h1{grid-column:1;grid-row:1}
+  .heading-controls{display:contents}
+  .heading-controls .snapshot{grid-column:1/-1;grid-row:2;font-size:11px;white-space:normal}
+  .theme-toggle{grid-column:2;grid-row:1;width:44px;height:44px;padding:10px}
+  .theme-toggle-label{display:none}
+}
+
+/* Dark surfaces use neutral greens; running, waiting, and missing states stay distinct. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --surface:#18231f;
+  --surface-raised:#1d2b25;
+  --surface-hover:#22352b;
+  --ink:#e3eee7;
+  --text-secondary:#bdcfc2;
+  --muted:#a0b3a6;
+  --line:#30443a;
+  --green:#93d5b1;
+  --warning:#e6be79;
+  --warning-surface:#342c1d;
+  --warning-line:#655235;
+  color:var(--ink);
+  background:#101713;
+}
+:root[data-theme="dark"] ::selection{background:#38654e;color:#f2faf4}
+:root[data-theme="dark"] :is(h1,h2,h3,#dialog-title){color:var(--ink)}
+:root[data-theme="dark"] .heading-period{color:var(--green)}
+:root[data-theme="dark"] :is(.panel,.node,.theme-toggle,.skip,dialog){background:var(--surface);border-color:var(--line);color:var(--ink)}
+:root[data-theme="dark"] .theme-toggle{color:var(--text-secondary)}
+:root[data-theme="dark"] .theme-toggle:hover{background:var(--surface-hover);border-color:#5d9276;color:var(--ink)}
+:root[data-theme="dark"] :is(button,a,input,select):focus-visible{outline-color:#83d4b2}
+:root[data-theme="dark"] .table-scroll:focus-visible{outline-color:#83d4b2}
+:root[data-theme="dark"] .sample-note{background:#1c3027;border-color:#365343;color:var(--text-secondary)}
+:root[data-theme="dark"] .sample-note button{color:#a8e1bf}
+:root[data-theme="dark"] .sample-note button:hover:not(:disabled){color:#def7e7;text-decoration:underline}
+:root[data-theme="dark"] :is(.snapshot,.node-key,.node-model,.node-stats,.node-detail-line,.node-detail-line span:last-child,.page-footer,.page-footer>span:first-child,.page-footer>span:first-child>span:last-child,.table-footer,.jobs-scroll-hint){color:var(--muted)}
+:root[data-theme="dark"] .count-chip{background:#263a2f;color:#bad5c3}
+:root[data-theme="dark"] .green-dot{background:#87cfa8}
+:root[data-theme="dark"] .amber-dot{background:var(--warning)}
+:root[data-theme="dark"] .node:hover{border-color:#5d9276;box-shadow:0 4px 18px #0003}
+:root[data-theme="dark"] .node-summary:hover{background:var(--surface-hover)}
+:root[data-theme="dark"] .node-title svg{color:#9ac0a8}
+:root[data-theme="dark"] .node-name{color:var(--ink)}
+:root[data-theme="dark"] .node-stats strong{color:var(--text-secondary)}
+:root[data-theme="dark"] :is(.node-detail-line,.node-storage,.gpu-jobs-summary,.gpu-job-row,.dialog-gpu-jobs){border-color:var(--line)}
+:root[data-theme="dark"] .state-badge{background:#203b2c;border-color:#3a634b;color:#abe0bf}
+:root[data-theme="dark"] .state-badge.mixed{background:#1e3732;border-color:#355a50;color:#a6d5c8}
+:root[data-theme="dark"] .state-badge.cloud{background:#203340;border-color:#39596e;color:#a9cfe9}
+:root[data-theme="dark"] .state-badge.drain{background:var(--warning-surface);border-color:var(--warning-line);color:var(--warning)}
+:root[data-theme="dark"] .node.drain-node{background:#25251d}
+:root[data-theme="dark"] .drain-node .node-summary:hover{background:#303126}
+:root[data-theme="dark"] .gpu-block{background:#203428;border-color:#3b5947;color:#b0cfba}
+:root[data-theme="dark"] .gpu-block.occupied{background:#79be99;border-color:#79be99;color:#102319}
+:root[data-theme="dark"] .gpu-block.unavailable{background:repeating-linear-gradient(135deg,#393322,#393322 4px,#302b1f 4px,#302b1f 5px);border-color:var(--warning-line);color:var(--warning)}
+:root[data-theme="dark"] .node-no-gpu{color:var(--warning)}
+:root[data-theme="dark"] :is(.gpu-jobs-caption,.gpu-jobs-heading,.gpu-job-empty,.gpu-job-user,.gpu-process-count,.storage-heading,.storage-path,.storage-values>span,.storage-empty,.storage-note){color:var(--muted)}
+:root[data-theme="dark"] :is(.storage-heading>span:first-child,.storage-label,.gpu-job-name,.gpu-process-name){color:var(--text-secondary)}
+:root[data-theme="dark"] :is(.gpu-job-id,.storage-values strong){color:#a0d9b7}
+:root[data-theme="dark"] .gpu-job-index{background:#23372b;border-color:#3b5745;color:#bddac7}
+:root[data-theme="dark"] .gpu-job-link:hover .gpu-job-name{color:#b7ebcb}
+:root[data-theme="dark"] .gpu-job-user::before{color:#789382}
+:root[data-theme="dark"] :is(.gpu-job-unlinked .gpu-job-id,.gpu-job-unlinked .gpu-job-name){color:#b6bda8}
+:root[data-theme="dark"] :is(.gpu-jobs-caption.is-stale,.node-storage.is-stale .storage-heading>span,.node-storage.is-stale .storage-values strong){color:var(--warning)}
+
+/* Form controls and the table retain native keyboard and selection behavior. */
+:root[data-theme="dark"] :is(.job-filter select,.search,.pagination button){background:var(--surface-raised);border-color:#425b4b;color:var(--text-secondary)}
+:root[data-theme="dark"] .job-filter select option{background:var(--surface-raised);color:var(--ink)}
+:root[data-theme="dark"] .search input{color:var(--ink)}
+:root[data-theme="dark"] .search input::placeholder{color:var(--muted)}
+:root[data-theme="dark"] .search svg{color:var(--muted)}
+:root[data-theme="dark"] .search kbd{border-color:#4b6253;color:#bbcabd}
+:root[data-theme="dark"] .search:focus-within{border-color:#83d4b2;box-shadow:0 0 0 2px #83d4b233}
+:root[data-theme="dark"] .reset-job-filters{background:var(--surface-raised);border-color:#425b4b;color:var(--text-secondary)}
+:root[data-theme="dark"] :is(.reset-job-filters,.pagination button):hover:not(:disabled){background:var(--surface-hover);border-color:#6d9b7d;color:var(--ink)}
+:root[data-theme="dark"] .jobs-tabs button{color:var(--muted)}
+:root[data-theme="dark"] .jobs-tabs button:hover{color:var(--ink)}
+:root[data-theme="dark"] .jobs-tabs button.active{color:#a8e1bf;border-bottom-color:#89cda6}
+:root[data-theme="dark"] .jobs-tabs button span{background:#273a2e;color:#bdcfbc}
+:root[data-theme="dark"] th{background:var(--surface-raised);color:var(--text-secondary);border-color:var(--line)}
+:root[data-theme="dark"] td{border-color:#293d31;color:var(--text-secondary)}
+:root[data-theme="dark"] tbody tr:hover{background:#1d3025}
+:root[data-theme="dark"] :is(.job-name,.job-user){color:var(--text-secondary)}
+:root[data-theme="dark"] .job-name:hover{color:#b7ebcb}
+:root[data-theme="dark"] .user-dot{background:#304335;color:#c6dabb}
+:root[data-theme="dark"] .user-dot.lilac{background:#393246;color:#d1bae9}
+:root[data-theme="dark"] .user-dot.blue{background:#2a3d4b;color:#b5d1e6}
+:root[data-theme="dark"] .job-status{color:#a1d8ac}
+:root[data-theme="dark"] .job-status:before{background:#87c794}
+:root[data-theme="dark"] :is(.job-status.pending,.pending-reason){color:var(--warning)}
+:root[data-theme="dark"] .job-status.pending:before{background:var(--warning)}
+:root[data-theme="dark"] .table-arrow{color:#a0b98f}
+:root[data-theme="dark"] .table-arrow:hover{color:#dcf1cd}
+:root[data-theme="dark"] .table-footer{background:#16211b}
+:root[data-theme="dark"] .footer-separator{color:#6e8473}
+:root[data-theme="dark"] .empty-state{color:var(--muted)}
+:root[data-theme="dark"] .waiting-nodes{background:var(--surface);border-color:#49654f;color:var(--muted)}
+:root[data-theme="dark"] .waiting-nodes :is(.small-icon,button){color:#afd2b5}
+
+/* Details can contain storage, GPU assignments, and explanatory code snippets. */
+:root[data-theme="dark"] dialog{box-shadow:0 25px 100px #0009}
+:root[data-theme="dark"] dialog::backdrop{background:#060e0ac4}
+:root[data-theme="dark"] :is(.dialog-head,.dialog-subtitle,.dialog-copy,.dialog-jobs){color:var(--muted)}
+:root[data-theme="dark"] .icon-button:hover{background:var(--surface-hover);color:var(--ink)}
+:root[data-theme="dark"] .detail-grid{background:var(--line);border-color:var(--line)}
+:root[data-theme="dark"] .detail-grid>div{background:var(--surface-raised)}
+:root[data-theme="dark"] .detail-grid dt{color:var(--muted)}
+:root[data-theme="dark"] .detail-grid dd{color:var(--ink)}
+:root[data-theme="dark"] .dialog-note{background:#253729;color:#c0d1b8}
+:root[data-theme="dark"] .dialog-copy code{background:#2b3d2f;color:#d3e4c8}
+:root[data-theme="dark"] .dialog-gpu{background:#1e3024;border-color:#39553e;color:var(--ink)}
+:root[data-theme="dark"] .dialog-gpu span{color:var(--text-secondary)}
+:root[data-theme="dark"] .dialog-gpu.gpu-offline{background:var(--warning-surface);border-color:var(--warning-line)}
+:root[data-theme="dark"] .dialog-gpu :is(.gpu-jobs-label,.gpu-job-user,.gpu-job-empty,.gpu-process-count){color:var(--muted)}
+:root[data-theme="dark"] .dialog-gpu .gpu-job-id{color:#a0d9b7}
+:root[data-theme="dark"] .dialog-gpu :is(.gpu-job-name,.gpu-process-name){color:var(--text-secondary)}
+:root[data-theme="dark"] .dialog-gpu .gpu-job-unlinked :is(.gpu-job-id,.gpu-job-name){color:#b6bda8}
+:root[data-theme="dark"] #dialog-content .node-storage{border-color:var(--line)}
