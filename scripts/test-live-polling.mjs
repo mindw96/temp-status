@@ -229,4 +229,37 @@ for (const selector of ['#node-grid', '#dialog-content']) {
 storage.evaluate('liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot); renderNodes();');
 assert.match(storage.element('#node-grid').innerHTML, /Stale report/);
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, and disk availability/reserves/units/missing/zero/stale handling.');
+// The cards, meters and detail dialog must distinguish real zero usage from
+// unavailable metrics, including impossible VRAM usage above device capacity.
+const metrics = browser();
+await flush();
+const renderMetrics = code => metrics.evaluate(`${code}; normalizeSnapshot(liveState.snapshot); renderNodes(); showNode('devbox');`);
+renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:0,vram_total_used_mb:0})');
+assert.match(metrics.element('#node-grid').innerHTML, /width:0%/);
+for (const selector of ['#node-grid', '#dialog-content']) {
+  assert.match(metrics.element(selector).innerHTML, /0\.0 \/ 1\.0 GiB/);
+  assert.match(metrics.element(selector).innerHTML, /0%/);
+}
+renderMetrics('liveState.snapshot.nodes[0].data.gpus[0].vram_total_used_mb=2048');
+assert.equal(metrics.evaluate('nodes[0].gpus[0].memoryUsed'), null);
+for (const selector of ['#node-grid', '#dialog-content']) {
+  assert.match(metrics.element(selector).innerHTML, /VRAM —/);
+  assert.doesNotMatch(metrics.element(selector).innerHTML, /2\.0 \/ 1\.0 GiB|200%/);
+}
+for (const value of ['null', 'NaN', '-1', '101']) {
+  renderMetrics(`Object.assign(liveState.snapshot.nodes[0].data, {cpu_percent:${value},ram_percent:${value}});
+    liveState.snapshot.nodes[0].data.gpus[0].gpu_utilization=${value}`);
+  assert.match(metrics.element('#node-grid').innerHTML, /is-unavailable/);
+  assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /--p:|NaN%|101%|-1%|>0%/);
+  assert.match(metrics.element('#dialog-content').innerHTML, /Compute —/);
+}
+for (const cause of ['liveState.snapshot.nodes[0].receivedAt=Date.now()-180000', 'liveState.error="Request failed"', 'liveState.snapshot.nodes[0].data.gpus[0].collection_error="Query failed"']) {
+  renderMetrics(`liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now();
+    Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:77,vram_total_used_mb:512,collection_error:null}); ${cause}`);
+  for (const selector of ['#node-grid', '#dialog-content']) {
+    assert.match(metrics.element(selector).innerHTML, /VRAM —/);
+    assert.doesNotMatch(metrics.element(selector).innerHTML, /77%|0\.5 \/ 1\.0 GiB|--p:/);
+  }
+}
+
+console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, and card/detail metric bounds/zero/stale/error handling.');

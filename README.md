@@ -19,8 +19,11 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 - 수집기 15초 전송, 화면 30초 조회. 3분 이상 지연되거나 조회 실패한 계측은 현재 값으로 표시하지 않음
 - 노드 수신 시각과 Slurm 수신 시각을 별도로 표시
 - 우측 상단에서 라이트·다크 모드 전환. 처음에는 기기 설정을 따르고, 직접 선택한 모드는 브라우저에 저장
+- 제공된 UNIST NLP Lab 디자인 시스템의 유리 질감 패널·상태 배지·사용률 막대를 적용하고 Inter 폰트를 유지
 
 ## 화면 수정과 자동 배포
+
+`public/design-system.css`는 제공된 `UNIST NLP Lab Dashboard.zip`의 원본 `_ds_bundle.css`입니다. `public/styles.css`는 이 스타일을 현재 화면에 연결하고 모바일 배치, 대비, Inter 우선 적용을 보완합니다. 화면 상태와 API는 기존 JavaScript를 사용하며, 원본 라이브러리의 React 런타임이나 예시 데이터는 배포하지 않습니다. `public/theme.js`는 테마 선택과 저장을 담당합니다.
 
 화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
 

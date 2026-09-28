@@ -1,0 +1,681 @@
+/* =============================================================
+   UNIST NLP Lab · Dashboard Design System
+   Apple Glassmorphism · Light + Dark Mode
+   Extracted from the live server dashboard.
+   ============================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap");
+
+/* ── Design Tokens · Light ─────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-shadow: rgba(0, 0, 0, 0.08);
+  --glass-shadow-deep: rgba(0, 0, 0, 0.14);
+  --glass-inset: rgba(255, 255, 255, 0.9);
+
+  --gpu-block-bg: rgba(255, 255, 255, 0.50);
+  --gpu-block-border: rgba(255, 255, 255, 0.80);
+
+  --text-primary: #0a0a0a;
+  --text-secondary: #3a3a3a;
+  --text-tertiary: #6b6b6b;
+  --metric-calm: #425466;
+
+  --meter-track: rgba(0, 0, 0, 0.08);
+  --divider: rgba(0, 0, 0, 0.07);
+  --table-header-bg: rgba(0, 0, 0, 0.03);
+  --table-header-color: #4a4a4a;
+  --table-row-border: rgba(0, 0, 0, 0.05);
+  --table-row-hover: rgba(0, 122, 255, 0.05);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --panel-title-border: rgba(0, 0, 0, 0.07);
+  --pill-bg: rgba(0, 0, 0, 0.06);
+  --pill-color: #3a3a3a;
+  --badge-idle-bg: rgba(0, 0, 0, 0.06);
+  --badge-idle-color: #3a3a3a;
+  --badge-idle-dot: rgba(0, 0, 0, 0.25);
+  --toggle-bg: rgba(255, 255, 255, 0.7);
+  --toggle-border: rgba(0, 0, 0, 0.12);
+}
+
+/* ── Design Tokens · Dark ──────────────────────────────────── */
+[data-theme="dark"] {
+  --glass-bg: rgba(18, 20, 32, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-shadow: rgba(0, 0, 0, 0.40);
+  --glass-shadow-deep: rgba(0, 0, 0, 0.60);
+  --glass-inset: rgba(255, 255, 255, 0.08);
+
+  --gpu-block-bg: rgba(255, 255, 255, 0.08);
+  --gpu-block-border: rgba(255, 255, 255, 0.14);
+
+  --text-primary: #ffffff;
+  --text-secondary: #e3e8f7;
+  --text-tertiary: #b7c0d8;
+  --metric-calm: #dce7f7;
+
+  --meter-track: rgba(255, 255, 255, 0.14);
+  --divider: rgba(255, 255, 255, 0.08);
+  --table-header-bg: rgba(255, 255, 255, 0.08);
+  --table-header-color: #dce3f4;
+  --table-row-border: rgba(255, 255, 255, 0.09);
+  --table-row-hover: rgba(0, 122, 255, 0.10);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --panel-title-border: rgba(255, 255, 255, 0.08);
+  --pill-bg: rgba(255, 255, 255, 0.10);
+  --pill-color: #e3e8f7;
+  --badge-idle-bg: rgba(255, 255, 255, 0.08);
+  --badge-idle-color: #e3e8f7;
+  --badge-idle-dot: rgba(255, 255, 255, 0.30);
+  --toggle-bg: rgba(40, 42, 58, 0.85);
+  --toggle-border: rgba(255, 255, 255, 0.14);
+  --accent-blue: #8ad7ff;
+  --accent-indigo: #c1bdff;
+}
+
+/* ── Accent Colors ─────────────────────────────────────────── */
+:root {
+  --accent-blue: #007AFF;
+  --accent-teal: #30D158;
+  --accent-orange: #FF9F0A;
+  --accent-red: #FF3B30;
+  --accent-purple: #BF5AF2;
+  --accent-indigo: #5856D6;
+}
+
+/* ── Base font for component roots ─────────────────────────── */
+.panel,
+.pill,
+.badge,
+.gpu-block,
+.section-label,
+.ds-server-card,
+.ds-cloud-card,
+.ds-job-panel,
+.ds-theme-toggle,
+.ds-page-header,
+.header-badge,
+.metric-label,
+.metric-value,
+.ds-job-table {
+  font-family: -apple-system, "Inter", BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ds-server-card *,
+.ds-cloud-card *,
+.ds-job-panel *,
+.panel * {
+  box-sizing: border-box;
+}
+
+/* ── Glass Panel ───────────────────────────────────────────── */
+.panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow:
+    0 2px 1px var(--glass-inset) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.05) inset,
+    0 8px 32px var(--glass-shadow),
+    0 2px 8px var(--glass-shadow);
+  transition: box-shadow 0.3s ease, transform 0.3s ease,
+    background 0.4s ease, border-color 0.3s ease;
+}
+
+.panel:not(.no-hover):hover {
+  box-shadow:
+    0 2px 1px var(--glass-inset) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.05) inset,
+    0 16px 48px var(--glass-shadow-deep),
+    0 4px 16px var(--glass-shadow);
+  transform: translateY(-1px);
+}
+
+/* ── Theme Toggle (inline, non-fixed variant) ──────────────── */
+.ds-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  border: 1px solid var(--toggle-border);
+  background: var(--toggle-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: inherit;
+  box-shadow: 0 2px 12px var(--glass-shadow);
+  transition: all 0.25s ease;
+}
+
+.ds-theme-toggle:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 20px var(--glass-shadow-deep);
+}
+
+.ds-theme-toggle .icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ── Page Header ───────────────────────────────────────────── */
+.ds-page-header {
+  text-align: center;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 122, 255, 0.08);
+  border: 1px solid rgba(0, 122, 255, 0.2);
+  border-radius: 100px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  letter-spacing: 0.05em;
+  margin-bottom: 18px;
+}
+
+.header-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  box-shadow: 0 0 8px var(--accent-teal);
+  animation: ds-pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes ds-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.8); }
+}
+
+.ds-page-header h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.ds-page-header h1 span {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ds-page-header p {
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+/* ── Section Label ─────────────────────────────────────────── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.section-label h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+/* ── Pill ──────────────────────────────────────────────────── */
+.pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: var(--pill-bg);
+  color: var(--pill-color);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ── Utility ───────────────────────────────────────────────── */
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Server Card ───────────────────────────────────────────── */
+.ds-server-card,
+.ds-cloud-card {
+  padding: 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ds-server-card h3,
+.ds-cloud-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.ds-server-card .ip,
+.ds-cloud-card .ip {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-server-card h3,
+.ds-server-card .ip,
+.ds-server-card .metric-value,
+.ds-cloud-card h3,
+.ds-cloud-card .ip,
+.gpu-users,
+.gpu-vram-badge,
+.gpu-job-tag,
+.gpu-job-empty {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Status Dot ────────────────────────────────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.2);
+}
+
+.status-dot.offline {
+  background: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.2);
+}
+
+.timestamp {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Metric Rows ───────────────────────────────────────────── */
+.metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.metric-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-accent {
+  color: var(--accent-blue);
+}
+
+.ds-server-card .metric-accent,
+.ds-cloud-card .metric-accent {
+  color: var(--metric-calm);
+}
+
+.metric-warm {
+  color: var(--accent-orange) !important;
+}
+
+.metric-hot {
+  color: var(--accent-red) !important;
+}
+
+/* ── Meter ─────────────────────────────────────────────────── */
+.meter {
+  height: 5px;
+  background: var(--meter-track);
+  border-radius: 100px;
+  overflow: hidden;
+  margin-top: 5px;
+  transition: background 0.3s;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 100px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  --p: 0;
+  background: linear-gradient(90deg,
+    hsl(calc(140 - var(--p) * 1.4), 85%, 45%) 0%,
+    hsl(calc(140 - var(--p) * 1.4), 85%, 50%) 100%);
+}
+
+/* ── GPU Block ─────────────────────────────────────────────── */
+.gpu-block {
+  background: var(--gpu-block-bg);
+  border: 1px solid var(--gpu-block-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: 0 1px 0 var(--glass-inset) inset, 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.gpu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.gpu-header > * {
+  min-width: 0;
+}
+
+.gpu-id {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gpu-users {
+  font-size: 13px;
+  color: var(--accent-blue);
+  font-weight: 500;
+  text-align: right;
+  max-width: 55%;
+}
+
+.gpu-vram-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.gpu-util-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  width: 32px;
+}
+
+.gpu-util-pct {
+  font-size: 11px;
+  color: var(--accent-blue);
+  font-weight: 600;
+  width: 28px;
+  text-align: right;
+}
+
+/* ── GPU Job Tag ───────────────────────────────────────────── */
+.gpu-job-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0);
+  border: 1px solid rgba(0, 0, 0, 0);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.3s, border-color 0.3s;
+  max-width: 100%;
+}
+
+.gpu-job-tag .job-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  flex-shrink: 0;
+}
+
+.gpu-job-empty {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ── Divider ───────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: var(--divider);
+  margin: 14px 0;
+  transition: background 0.3s;
+}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.badge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.badge-running { background: rgba(48, 209, 88, 0.13); color: #1a9e3f; }
+.badge-running::before { background: #30D158; }
+[data-theme="dark"] .badge-running { color: #3dd068; }
+
+.badge-pending { background: rgba(255, 159, 10, 0.13); color: #a34800; }
+.badge-pending::before { background: #FF9F0A; }
+[data-theme="dark"] .badge-pending { color: #f0930a; }
+
+.badge-completing,
+.badge-completed { background: rgba(0, 122, 255, 0.10); color: #0040DD; }
+.badge-completing::before,
+.badge-completed::before { background: #007AFF; }
+[data-theme="dark"] .badge-completing,
+[data-theme="dark"] .badge-completed { color: #5aacff; }
+
+.badge-allocated { background: rgba(48, 209, 88, 0.13); color: #1a9e3f; }
+.badge-allocated::before { background: #30D158; }
+[data-theme="dark"] .badge-allocated { color: #3dd068; }
+
+.badge-mixed { background: rgba(0, 122, 255, 0.10); color: #0040DD; }
+.badge-mixed::before { background: #007AFF; }
+[data-theme="dark"] .badge-mixed { color: #5aacff; }
+
+.badge-idle { background: var(--badge-idle-bg); color: var(--badge-idle-color); }
+.badge-idle::before { background: var(--badge-idle-dot); }
+
+.badge-down,
+.badge-drained { background: rgba(255, 59, 48, 0.10); color: #cc0011; }
+.badge-down::before,
+.badge-drained::before { background: #FF3B30; }
+[data-theme="dark"] .badge-down,
+[data-theme="dark"] .badge-drained { color: #ff6b61; }
+
+/* ── Tables ────────────────────────────────────────────────── */
+.ds-job-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.ds-job-table thead th {
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--table-header-color);
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--table-row-border);
+  text-align: left;
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(10px);
+  transition: background 0.3s, color 0.3s;
+}
+
+.ds-job-table tbody tr {
+  border-bottom: 1px solid var(--table-row-border);
+  transition: background 0.15s ease;
+}
+
+.ds-job-table tbody tr:last-child { border-bottom: none; }
+.ds-job-table tbody tr:hover { background: var(--table-row-hover); }
+
+.ds-job-table td {
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-sort-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.job-sort-button:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.job-sort-button.is-active { color: var(--accent-blue); }
+
+.job-sort-indicator {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1;
+  min-width: 10px;
+}
+
+.scroll-region {
+  max-height: 380px;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scroll-region::-webkit-scrollbar { width: 4px; height: 4px; }
+.scroll-region::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+.job-name-cell { font-weight: 500; line-height: 1.4; }
+.job-meta-cell { color: var(--text-tertiary); font-size: 11px; line-height: 1.35; }
+
+/* ── Job Panel (collapsible) ───────────────────────────────── */
+.ds-job-panel {
+  overflow: hidden;
+  padding: 0;
+}
+
+.job-panel-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--panel-title-border);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 20px 20px 14px;
+  text-align: left;
+}
+
+.job-panel-title { font-size: 15px; font-weight: 600; }
+
+.job-panel-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+.job-panel-count {
+  padding: 3px 8px;
+  border-radius: 100px;
+  background: var(--pill-bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.job-panel-chevron {
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-tertiary);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.ds-job-panel.is-collapsed .job-panel-chevron { transform: rotate(-45deg); }
+.ds-job-panel.is-collapsed .job-panel-body { display: none; }
+
+.job-panel-toggle:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -4px;
+}

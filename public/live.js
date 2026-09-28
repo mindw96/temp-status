@@ -25,7 +25,7 @@ function normalizeSnapshot(snapshot) {
     const report = reported.get(id), raw = report?.data, isCloud = raw?.source_type === 'cloud', s = isCloud ? null : sinfo.find(n => (n.name || n.hostname) === id), stale = !fresh(report?.receivedAt);
     const gpus = (raw?.gpus || []).map(g => {
       const util = validNumber(g.gpu_utilization), memory = validNumber(g.vram_total_mb), memoryUsed = validNumber(g.vram_total_used_mb), processes = g.processes || [];
-      return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: isCloud ? [] : resolveGpuJobs(processes, jobs)};
+      return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 && (memory === null || memoryUsed <= memory) ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: isCloud ? [] : resolveGpuJobs(processes, jobs)};
     });
     return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
   }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
@@ -90,6 +90,30 @@ function formatStorage(gib) {
   if (gib > 0 && gib < 1) return `${(gib * 1024).toLocaleString('en-US', {maximumFractionDigits: 1})} MiB`;
   return `${gib.toLocaleString('en-US', {maximumFractionDigits: 1})} GiB`;
 }
+function meterMarkup(value) {
+  const known = validNumber(value) !== null && value >= 0 && value <= 100;
+  return `<div class="meter${known ? '' : ' is-unavailable'}" aria-hidden="true">${known ? `<span style="--p:${value};width:${value}%"></span>` : ''}</div>`;
+}
+function resourceMarkup(label, value) {
+  const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
+  return `<div class="resource-row"><div class="resource-line"><span class="metric-label">${esc(label)}</span><strong class="metric-value">${percent(usable)}</strong></div>${meterMarkup(usable)}</div>`;
+}
+function nodeBadgeClass(n) {
+  if (n.stale) return 'badge-down drain';
+  if (n.isCloud) return 'badge-mixed cloud';
+  if (!n.slurmFresh) return 'badge-idle';
+  if (/DOWN|DRAIN|FAIL|MAINT|NOT_RESPONDING/.test(n.state)) return 'badge-down';
+  if (/MIX/.test(n.state)) return 'badge-mixed mixed';
+  if (/ALLOC/.test(n.state)) return 'badge-allocated';
+  return 'badge-idle';
+}
+function gpuBlockMarkup(n, g) {
+  const available = !n.stale && !g.error;
+  const util = available ? g.util : null;
+  const vram = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory
+    ? `${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB` : 'VRAM —';
+  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-header"><span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span><span class="gpu-vram-badge">${vram}</span></div><div class="gpu-util-row"><span class="gpu-util-label">UTIL</span>${meterMarkup(util)}<span class="gpu-util-pct">${percent(util)}</span></div><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`;
+}
 function storageMarkup(n) {
   const raw = n.raw || {};
   const disks = [
@@ -101,7 +125,8 @@ function storageMarkup(n) {
     // Use the collector's available space. Total minus used can include space
     // reserved by the filesystem that ordinary users cannot write to.
     const free = validNumber(disk.free) !== null && disk.free >= 0 && (total === null || disk.free <= total) ? disk.free : null;
-    return `<div class="storage-row"><span class="storage-label">${disk.label}${disk.path ? `<span class="storage-path">${esc(disk.path)}</span>` : ''}</span><span class="storage-values"><strong>${n.stale ? '—' : free === null ? 'Not reported' : `${formatStorage(free)} free`}</strong><span>${n.stale ? 'Awaiting fresh data' : total === null ? 'Total not reported' : `${formatStorage(total)} total`}</span></span></div>`;
+    const used = validNumber(disk.used) !== null && disk.used >= 0 && total !== null && disk.used <= total ? disk.used : null;
+    return `<div class="storage-entry"><div class="storage-row"><span class="storage-label">${disk.label}${disk.path ? `<span class="storage-path">${esc(disk.path)}</span>` : ''}</span><span class="storage-values"><strong>${n.stale ? '—' : free === null ? 'Not reported' : `${formatStorage(free)} free`}</strong><span>${n.stale ? 'Awaiting fresh data' : total === null ? 'Total not reported' : `${formatStorage(total)} total`}</span></span></div>${meterMarkup(!n.stale && used !== null ? used / total * 100 : null)}</div>`;
   }).join('') : `<p class="storage-empty">${n.stale ? 'Awaiting fresh data' : 'Not reported'}</p>`}</div>`;
 }
 renderNodes = function() {
@@ -111,16 +136,16 @@ renderNodes = function() {
     const valid = n.gpus.filter(g => g.util !== null), memory = n.gpus.filter(g => !g.error && g.memory !== null && g.memoryUsed !== null);
     const util = valid.length ? average(valid.map(g => g.util)) : null, mem = !n.stale && memory.length ? 100 * memory.reduce((sum, g) => sum + g.memoryUsed, 0) / memory.reduce((sum, g) => sum + g.memory, 0) : null;
     const models = [...new Set(n.gpus.map(g => g.model))].join(' / ');
-    return `<article class="node live-node ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
+    return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
       <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
-        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.stale ? 'drain' : n.isCloud ? 'cloud' : 'mixed'}">${esc(n.state)}${(n.isCloud ? n.stale : !n.slurmFresh) ? ' · stale' : ''}</span></div>
+        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge badge ${nodeBadgeClass(n)}">${esc(n.state)}${(n.stale || (!n.isCloud && !n.slurmFresh)) ? ' · stale' : ''}</span></div>
         <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
-        <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-block ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
-        <div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${percent(mem)}</strong></span><span>CPU <strong>${!n.stale && validNumber(n.raw?.cpu_percent) !== null ? Math.round(n.raw.cpu_percent) + '%' : '—'}</strong></span></div>
+        <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-slot ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
+        <div class="resource-metrics">${resourceMarkup('Compute', util)}${resourceMarkup('VRAM', mem)}${resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null)}${resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null)}</div>
         ${storageMarkup(n)}
         <div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale ? 'Stale / missing' : `${n.allocated} GPUs with processes`}</span></div>
       </button>
-      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="gpu-jobs-heading"><span>GPU</span><span>${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span></div>${n.gpus.map(g => `<div class="gpu-job-row" data-gpu-index="${esc(g.index)}"><span class="gpu-job-index">${esc(g.index)}</span><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>` : ''}
+      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p>${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
     </article>`;
   }).join('') : `<div class="waiting-nodes"><span class="small-icon">${icon('server')}</span><h3>${liveState.error ? 'Cluster data is unavailable' : 'Waiting for node reports'}</h3><p>${liveState.error ? 'The last request failed. The dashboard will retry automatically.' : 'Received node reports will appear here automatically.'}</p><button id="waiting-help">Collector details ↗</button></div>`;
   $('#waiting-help')?.addEventListener('click', showDataInfo);
@@ -134,7 +159,7 @@ renderJobs = function() {
   $('#total-jobs').textContent = hasSlurm ? all.length : '—';
   $('#running-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'RUNNING').length : '—';
   $('#pending-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'PENDING').length : '—';
-  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${j.state === 'PENDING' ? 'pending' : ''}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
+  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(j.user.slice(0, 1).toUpperCase())}</span>${esc(j.user)}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}"><span title="${esc(j.state === 'PENDING' ? j.target : displayNodeList(j.target))}">${esc(j.state === 'PENDING' ? reasons[j.target.replace(/^\(|\)$/g, '')] || j.target : displayNodeList(j.target))}</span></td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
   $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * 12 + 1) + '–' + Math.min(liveState.page * 12, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;

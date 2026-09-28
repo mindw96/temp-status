@@ -9,7 +9,7 @@ import {localDB} from './local-db.mjs';
 
 const MAX_BODY = 8 * 1024 * 1024;
 const gzip = promisify(gzipCallback), brotli = promisify(brotliCallback);
-const STATIC_ASSETS = new Set(['/index.html', '/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js']);
+const STATIC_ASSETS = new Set(['/index.html', '/design-system.css', '/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js']);
 class PayloadTooLarge extends Error {}
 
 function readBody(req) {

@@ -122,7 +122,7 @@ try {
   assert.deepEqual(brotliDecompressSync(differentEncoding.body), htmlBytes);
   const headNotModified = await raw(base, '/', {method: 'HEAD', headers: {'Accept-Encoding': 'br', 'If-None-Match': differentEncoding.headers.etag}});
   assert.equal(headNotModified.status, 304); assert.equal(headNotModified.body.length, 0);
-  for (const path of ['/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js']) {
+  for (const path of ['/design-system.css', '/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js']) {
     const asset = await raw(base, path, {headers: {'Accept-Encoding': 'br'}});
     assert.equal(asset.status, 200);
     assert.notEqual(asset.headers.etag, differentEncoding.headers.etag);
