@@ -114,9 +114,7 @@ function gpuBlockMarkup(n, g) {
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vram = memoryAvailable ? `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB` : 'VRAM —';
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
-  const moreJobs = !n.isCloud && !g.error && g.jobRecords.length > 1
-    ? `<button class="gpu-more-jobs" data-node="${esc(n.id)}" aria-label="View all ${g.jobRecords.length} jobs on ${esc(displayNodeName(n.id))} GPU ${esc(g.index)}">+${g.jobRecords.length - 1} more</button>` : '';
-  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-header"><span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span><span class="gpu-vram-badge">${vram}</span></div><div class="gpu-util-row"><span class="gpu-util-label">UTIL</span>${meterMarkup(util)}<span class="gpu-util-pct">${percent(util)}</span></div><div class="gpu-util-row gpu-vram-row"><span class="gpu-util-label">VRAM</span>${meterMarkup(vramPercent)}<span class="gpu-util-pct">${percent(vramPercent)}</span></div><div class="gpu-job-items">${gpuJobsMarkup(n, g)}${moreJobs}</div></div>`;
+  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-header"><span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span><span class="gpu-vram-badge">${vram}</span></div><div class="gpu-util-row"><span class="gpu-util-label">UTIL</span>${meterMarkup(util)}<span class="gpu-util-pct">${percent(util)}</span></div><div class="gpu-util-row gpu-vram-row"><span class="gpu-util-label">VRAM</span>${meterMarkup(vramPercent)}<span class="gpu-util-pct">${percent(vramPercent)}</span></div><div class="gpu-job-items">${gpuJobsMarkup(n, g)}</div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
