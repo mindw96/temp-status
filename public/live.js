@@ -145,7 +145,6 @@ renderNodes = function() {
         <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-slot ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
         <div class="resource-metrics">${resourceMarkup('Compute', util)}${resourceMarkup('VRAM', mem)}${resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null)}${resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null)}</div>
         ${storageMarkup(n)}
-        <div class="node-detail-line"><span>${esc(ageText(n.receivedAt))}</span><span>${n.stale ? 'Stale / missing' : `${n.allocated} GPUs with processes`}</span></div>
       </button>
       ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p>${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
     </article>`;
