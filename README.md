@@ -1,6 +1,6 @@
 # Lattice · 연구실 GPU & Slurm
 
-연구실 GPU·Slurm 대시보드의 소스 저장소입니다. 현재 기본 배포 주소는 **[Render 대시보드](https://temp-status.onrender.com/)**이며 로그인 없이 열람할 수 있습니다. 이미 생성된 서비스이므로 대시보드를 열기 위해 새 Blueprint나 서비스를 만들 필요는 없습니다. 설정과 새 환경에 배포하는 방법은 [Render 운영 안내](RENDER_SETUP.md)를 참고하세요.
+연구실 GPU·Slurm 대시보드의 소스 저장소입니다. 현재 기본 배포 주소는 **[연구실 대시보드](https://status.nlp.io.kr/)**이며 로그인 없이 열람할 수 있습니다. 기존 Render `temp-status` 서비스에 연결한 도메인이므로 새 Blueprint나 서비스를 만들 필요는 없습니다. 설정과 새 환경에 배포하는 방법은 [Render 운영 안내](RENDER_SETUP.md)를 참고하세요.
 
 Render에서는 동일한 화면과 API를 Node 서버로 실행하며 최신 보고만 메모리에 보관합니다. 홈페이지 배포와 수집기 연결은 별도이므로 실제 데이터 수신 여부는 화면의 노드·Slurm 보고 시각으로 확인합니다. [Cloudflare 대체 배포](https://temp-status.mindw96-3c8.workers.dev/)의 설치 방법은 [Cloudflare 설정 안내](SETUP.md)에 유지합니다. [기존 Sites 대시보드](https://lattice-lab-gpu.mindw96.chatgpt.site/)는 별도의 비공개 배포입니다.
 
@@ -44,8 +44,10 @@ GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아�
 자격 증명 파일 형식은 아래와 같습니다. 실제 값은 별도 비밀 파일에 저장하고 권한을 600으로 설정합니다.
 
 ```json
-{"site_url":"https://temp-status.onrender.com","auth_mode":"cloudflare","report_token":"<secret>"}
+{"site_url":"https://status.nlp.io.kr","auth_mode":"cloudflare","report_token":"<secret>"}
 ```
+
+2026-09-28 도메인 전환 후 기존 `https://temp-status.onrender.com`은 HTTP 404를 반환하므로 수집기의 `site_url`도 `https://status.nlp.io.kr`을 사용합니다. Render 서비스와 전송 토큰은 기존 설정을 유지합니다.
 
 ```sh
 python collector_bridge.py node --config /secure/path/lattice.json --once

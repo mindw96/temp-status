@@ -1,6 +1,6 @@
 # Render 배포 및 운영
 
-현재 배포된 대시보드는 **[https://temp-status.onrender.com/](https://temp-status.onrender.com/)**입니다. 열람만 하실 때는 이 주소를 사용하시면 됩니다. 기존 `temp-status` 서비스가 있으므로 새 Blueprint나 Web Service를 추가로 만들 필요는 없습니다.
+현재 배포된 대시보드는 **[https://status.nlp.io.kr/](https://status.nlp.io.kr/)**입니다. 열람만 하실 때는 이 주소를 사용하시면 됩니다. 기존 Render `temp-status` 서비스에 연결한 도메인이므로 새 Blueprint나 Web Service를 추가로 만들 필요는 없습니다.
 
 기존 서비스의 환경 변수와 배포 상태는 [Render Dashboard](https://dashboard.render.com/)에서 `temp-status`를 선택해 확인합니다. 아래 1~3단계는 **새 환경에 처음 배포하거나 서비스를 다시 구성할 때** 사용하는 절차입니다. 현재 서비스의 실제 수집기 수신 여부는 대시보드의 노드·Slurm 보고 시각으로 확인합니다.
 
@@ -43,11 +43,13 @@ Blueprint 대신 **New → Web Service**를 사용할 경우 아래 설정을 �
 
 ## 3. 배포 확인과 수집기 연결
 
-현재 서비스 주소는 `https://temp-status.onrender.com`이며 상태 확인 경로는 [/healthz](https://temp-status.onrender.com/healthz)입니다. 별도 서비스를 새로 만든 경우에는 Render가 표시한 해당 서비스 주소를 사용합니다. 홈페이지와 `/healthz` 응답은 서버 실행을 확인하는 것이며, 실제 GPU·Slurm 수신은 대시보드의 보고 시각을 별도로 확인해야 합니다. 새 배포는 수집기 목적지를 연결하기 전까지 GPU 데이터가 비어 있습니다.
+현재 서비스 주소는 `https://status.nlp.io.kr`이며 상태 확인 경로는 [/healthz](https://status.nlp.io.kr/healthz)입니다. 별도 서비스를 새로 만든 경우에는 해당 서비스에서 활성화된 HTTPS 주소를 사용합니다. 홈페이지와 `/healthz` 응답은 서버 실행을 확인하는 것이며, 실제 GPU·Slurm 수신은 대시보드의 보고 시각을 별도로 확인해야 합니다. 새 배포는 수집기 목적지를 연결하기 전까지 GPU 데이터가 비어 있습니다.
+
+2026-09-28 도메인 전환 후 기존 `https://temp-status.onrender.com`은 HTTP 404를 반환합니다. 따라서 현재 Server1~4의 수집기는 `site_url: https://status.nlp.io.kr`을 사용해야 합니다. 호스팅은 기존 Render `temp-status` 서비스 그대로이며 전송 토큰도 유지합니다.
 
 새 주소를 확인한 뒤 Server1~4의 별도 대시보드 수집기 설정에서 `site_url`을 해당 HTTPS 주소로 변경하고 서비스를 재시작합니다. Baro는 대여 종료로 운영 대상에서 제외되었습니다. 원본 연구실 수집기와 Sites 연결은 보존합니다. 이 저장소 브리지의 `auth_mode: cloudflare`는 `X-Status-Token` 인증 방식을 뜻하므로 Render에서도 그대로 사용할 수 있습니다.
 
-기존 서비스의 코드만 업데이트할 때는 수집기 주소나 토큰을 다시 설정할 필요가 없습니다. 서비스를 다른 주소로 옮길 때만 수집기의 `site_url`을 변경하고 다섯 노드·Slurm 보고 수신을 검증합니다. 토큰 값은 GitHub나 채팅으로 전달하지 않습니다.
+기존 서비스의 코드만 업데이트할 때는 수집기 주소나 토큰을 다시 설정할 필요가 없습니다. 서비스를 다른 주소로 옮길 때만 수집기의 `site_url`을 변경하고 Server1~4의 노드 보고와 Server1의 Slurm 보고 수신을 검증합니다. 토큰 값은 GitHub나 채팅으로 전달하지 않습니다.
 
 ## 무료 운영의 범위
 
@@ -64,7 +66,7 @@ Blueprint 대신 **New → Web Service**를 사용할 경우 아래 설정을 �
 같은 환경에서 현재 응답 크기로 다시 계산하려면 다음을 실행합니다. 실제 사용자 이름이나 작업 내용은 출력하지 않습니다.
 
 ```sh
-node scripts/check-render-usage.mjs https://temp-status.onrender.com 25
+node scripts/check-render-usage.mjs https://status.nlp.io.kr 25
 ```
 
 정확한 합산 사용량은 Render Dashboard의 **Billing → Monthly Included Usage**에서, 이 서비스의 최근 전송량은 **temp-status → Metrics → Outbound Bandwidth**에서 확인합니다. 작업량이나 접속자가 늘었을 때 먼저 이 값을 확인합니다. 전송량 그래프는 시간 단위로 집계되어 지연될 수 있으므로 방금 절약한 효과가 바로 표시되지는 않습니다.
