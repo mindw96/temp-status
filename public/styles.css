@@ -51,7 +51,7 @@ h1,h2,h3,p{margin:0}
 h1{font-size:34px;font-weight:600;letter-spacing:-.035em;line-height:1.2;color:var(--text-primary)}
 h2{font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--text-primary)}
 h3{font-size:15px;font-weight:600;color:var(--text-primary)}
-main{max-width:1660px;margin:auto;padding:36px 36px 0}
+main{max-width:1920px;margin:auto;padding:24px 24px 0}
 section[id]{scroll-margin-top:24px}
 .panel,.pill,.badge,.gpu-block,.section-label,.ds-server-card,.ds-cloud-card,.ds-job-panel,.ds-theme-toggle,.ds-page-header,.header-badge,.metric-label,.metric-value,.ds-job-table{font-family:var(--font)}
 .mono,.timestamp,.snapshot,.storage-values,.gpu-job-id,.gpu-job-user{font-variant-numeric:tabular-nums}
@@ -60,7 +60,7 @@ section[id]{scroll-margin-top:24px}
 .skip:focus{top:12px}
 
 /* Compact page header and persistent, keyboard-accessible theme action. */
-.page-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}
+.page-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:14px}
 .heading-period{color:var(--accent-indigo);margin-left:2px}
 .heading-controls{display:flex;align-items:center;justify-content:flex-end;gap:16px;min-width:0}
 .snapshot{display:flex;align-items:center;gap:6px;color:var(--text-tertiary);font-size:12px;white-space:nowrap}
@@ -70,7 +70,7 @@ section[id]{scroll-margin-top:24px}
 .theme-toggle .theme-icon-sun{display:none}
 :root[data-theme='dark'] .theme-toggle .theme-icon-moon{display:none}
 :root[data-theme='dark'] .theme-toggle .theme-icon-sun{display:block}
-.sample-note{display:flex;align-items:center;gap:10px;margin-bottom:28px;padding:11px 14px;border:1px solid var(--divider);border-radius:12px;background:var(--soft-blue);font-size:12px;line-height:1.6;color:var(--text-secondary)}
+.sample-note{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:7px 12px;border:1px solid var(--divider);border-radius:12px;background:var(--soft-blue);font-size:12px;line-height:1.6;color:var(--text-secondary)}
 .sample-note>svg,.sample-note>[data-icon]{flex-shrink:0;color:var(--link)}
 .sample-note svg{width:16px;height:16px}
 .sample-note>span{min-width:0}
@@ -85,7 +85,7 @@ section[id]{scroll-margin-top:24px}
 .node-key>span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .green-dot,.amber-dot{display:inline-block;width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--accent-teal)}
 .amber-dot{background:var(--accent-orange)}
-.nodes-section{margin-bottom:30px}
+.nodes-section{margin-bottom:20px}
 .node-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 
 /* Server surfaces reuse the reference's 20px glass panels. */
@@ -159,6 +159,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-util-label{width:30px;font-size:10px;flex-shrink:0}
 .gpu-util-pct{width:34px;flex-shrink:0;color:var(--link);font-variant-numeric:tabular-nums}
 .gpu-job-items{display:grid;gap:7px;min-width:0}
+.gpu-more-jobs{display:none}
 .gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;line-height:1.5}
 .gpu-job-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px;min-width:0}
 .gpu-job-id{display:block;min-width:0;font-size:13px;font-weight:500;color:var(--link);overflow-wrap:anywhere}
@@ -289,8 +290,63 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 .dialog-jobs{font-size:12px;color:var(--text-secondary);line-height:1.8}
 #dialog-content .node-storage{border:1px solid var(--divider);border-radius:12px;padding:12px 15px}
 
-@media(min-width:1280px){.node-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(min-width:1500px){main{padding:40px 44px 0}.node-grid{gap:20px}}
+/* A full eight-GPU node fits a 1080p display with normal browser chrome.
+   Keep job text readable by rearranging the rows instead of scaling the page. */
+@media(min-width:1280px){
+  main{padding:14px 24px 0}
+  h1{font-size:28px}
+  .page-heading{margin-bottom:8px}
+  .theme-toggle{min-height:36px;padding:6px 13px}
+  .sample-note{padding:4px 10px;margin-bottom:10px}
+  .sample-note button{padding:2px}
+  .section-heading{margin-bottom:8px}
+  .section-heading h2{font-size:16px}
+  .node-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .node-summary{padding:10px 12px}
+  .node-name{font-size:14px}
+  .node-model{margin:2px 0 6px;font-size:11px}
+  .gpu-blocks{gap:4px;margin-bottom:6px}
+  .gpu-slot{height:19px;font-size:10px}
+  .resource-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;margin-top:6px}
+  .resource-metrics .resource-row{display:flex;align-items:center;gap:8px}
+  .resource-metrics .resource-line{width:90px;flex-shrink:0;gap:7px}
+  .resource-line .metric-label{font-size:10px}
+  .resource-line .metric-value{font-size:11px}
+  .resource-metrics .meter{flex:1;min-width:0;height:4px;margin-top:0}
+  .node-summary .node-storage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 12px;margin-top:6px;padding-top:6px}
+  .node-summary .storage-heading{grid-column:1/-1;margin-bottom:0;font-size:10px;line-height:1.2}
+  .node-summary .storage-entry+.storage-entry{margin-top:0}
+  .node-summary .storage-row{display:block;padding:0}
+  .node-summary .storage-label{display:flex;align-items:baseline;gap:5px;font-size:11px;line-height:1.2;white-space:nowrap}
+  .node-summary .storage-path{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .node-summary .storage-values{display:flex;justify-content:space-between;gap:2px 6px;flex-wrap:wrap;text-align:left;line-height:1.2}
+  .node-summary .storage-values strong{font-size:11px}
+  .node-summary .storage-values>span{font-size:10px}
+  .node-summary .storage-entry>.meter{height:4px;margin-top:3px}
+  .node-detail-line{margin-top:5px;padding-top:4px;font-size:10px}
+  .gpu-jobs-summary{padding:7px 10px 10px}
+  .gpu-jobs-caption{margin-bottom:5px;font-size:10px;line-height:1.4}
+  .gpu-job-row.gpu-block{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px 12px;padding:3px 8px;margin-top:4px;border-radius:9px}
+  .gpu-job-row.gpu-block:first-of-type{margin-top:0}
+  .gpu-job-row .gpu-header{grid-column:1/-1;margin-bottom:0;line-height:1.3}
+  .gpu-job-row .gpu-vram-badge{padding:1px 5px;font-size:10px}
+  .gpu-job-row .gpu-util-row{margin:0;gap:5px;line-height:1.3}
+  .gpu-job-row .gpu-util-label{width:30px;font-size:10px}
+  .gpu-job-row .gpu-util-pct{width:30px;font-size:10px}
+  .gpu-job-row .meter{height:4px}
+  .gpu-job-row .gpu-job-items{grid-column:1/-1;display:flex;align-items:center;gap:6px;min-height:19px}
+  .gpu-job-row .gpu-job-link,.gpu-job-row .gpu-job-unlinked{display:flex;align-items:baseline;gap:8px;flex:1;min-width:0;line-height:1.3}
+  .gpu-job-row .gpu-job-meta{flex-wrap:nowrap;flex-shrink:0;max-width:48%;gap:0 5px}
+  .gpu-job-row .gpu-job-id{flex-shrink:0;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gpu-job-row .gpu-job-user{font-size:11px;min-width:0}
+  .gpu-job-row .gpu-job-user::before{margin-right:5px}
+  .gpu-job-row .gpu-job-name{min-width:0;flex:1}
+  .gpu-job-row .gpu-job-items>.gpu-job-link:nth-child(n+2),.gpu-job-row .gpu-job-items>.gpu-job-unlinked:nth-child(n+2){display:none}
+  .gpu-job-row .gpu-more-jobs{display:block;flex-shrink:0;padding:1px 4px;border-radius:4px;background:var(--pill-bg);color:var(--link);font-size:11px;white-space:nowrap}
+  .jobs-header{padding:14px 18px 0}
+  .jobs-table td{padding-block:9px}
+  .table-footer{padding:10px 18px}
+}
 @media(max-width:1200px){main{padding:28px 24px 0}.node-grid{gap:16px}h1{font-size:32px}}
 @media(max-width:1152px){.jobs-scroll-hint{display:block}}
 @media(max-width:1050px){.jobs-tools{width:100%}.jobs-tools .search{flex:1;width:auto}}
