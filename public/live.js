@@ -135,15 +135,13 @@ renderNodes = function() {
   if (liveState.mode === 'demo') return demoRender.nodes();
   $('#node-count').textContent = liveState.snapshot ? nodes.length : '—';
   $('#node-grid').innerHTML = nodes.length ? nodes.map(n => {
-    const valid = n.gpus.filter(g => g.util !== null), memory = n.gpus.filter(g => !g.error && g.memory !== null && g.memoryUsed !== null);
-    const util = valid.length ? average(valid.map(g => g.util)) : null, mem = !n.stale && memory.length ? 100 * memory.reduce((sum, g) => sum + g.memoryUsed, 0) / memory.reduce((sum, g) => sum + g.memory, 0) : null;
     const models = [...new Set(n.gpus.map(g => g.model))].join(' / ');
     return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
       <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
         <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge badge ${nodeBadgeClass(n)}">${esc(n.state)}${(n.stale || (!n.isCloud && !n.slurmFresh)) ? ' · stale' : ''}</span></div>
         <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
         <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-slot ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
-        <div class="resource-metrics">${resourceMarkup('Compute', util)}${resourceMarkup('VRAM', mem)}${resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null)}${resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null)}</div>
+        <div class="resource-metrics">${resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null)}${resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null)}</div>
         ${storageMarkup(n)}
       </button>
       ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p>${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
