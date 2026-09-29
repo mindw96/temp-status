@@ -275,6 +275,34 @@ evaluate('showJob("45")');
 assert.match(element('#dialog-content').innerHTML, /server2&lt;script&gt; &amp; &quot;host&quot;/);
 assert.doesNotMatch(element('#dialog-content').innerHTML, /<script>/);
 
+// Requested memory preserves units and scope without turning missing data into
+// zero, or treating an explicit all-node-memory request as a zero allocation.
+for (const [raw, expected] of [
+  [{req_mem: '4G', req_mem_scope: 'total'}, '4 GiB total'],
+  [{job_id: '46_[2-8%3]', req_mem: '59G', req_mem_scope: 'total'}, '59 GiB per array task'],
+  [{req_mem: '32768M', req_mem_scope: 'node'}, '32 GiB per node'],
+  [{req_mem: '2048M', req_mem_scope: 'cpu'}, '2 GiB per CPU'],
+  [{req_mem: '512Mc'}, '512 MiB per CPU'],
+  [{req_mem: '1.5Tn'}, '1.5 TiB per node'],
+  [{req_mem: '64G'}, '64 GiB'],
+  [{req_mem: '0M', req_mem_scope: 'node'}, 'All node memory'],
+  [{req_mem: '0n'}, 'All node memory'],
+  ...[{}, {req_mem: ''}, {req_mem: '-4G'}, {req_mem: 'NaN'},
+    {req_mem: '<script>'}, {req_mem: '0'}, {req_mem: '0', req_mem_scope: 'total'},
+    {req_mem: '4Gc', req_mem_scope: 'total'}].map(raw => [raw, 'Not reported'])
+]) {
+  report([job(46, 'alice', 'devbox', 'RUNNING', {req_cpus: '2', ...raw})]);
+  evaluate(`showJob(${JSON.stringify(raw.job_id || '46')})`);
+  const dialog = element('#dialog-content').innerHTML;
+  assert.ok(dialog.includes(`<dt>Requested RAM</dt><dd>${expected}</dd>`), JSON.stringify(raw));
+  assert.match(dialog, /<dt>Requested CPUs<\/dt><dd>2<\/dd>/);
+  assert.doesNotMatch(dialog, /<script>/);
+}
+report([job(47, 'alice', '(Priority)', 'PENDING', {req_mem: '32G', req_mem_scope: 'total'})]);
+evaluate('showJob("47")');
+assert.match(element('#dialog-content').innerHTML, /<dt>Requested RAM<\/dt><dd>32 GiB total<\/dd>/);
+assert.match(element('#dialog-content').innerHTML, /<dt>Requested CPUs<\/dt><dd>Not reported<\/dd>/);
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);

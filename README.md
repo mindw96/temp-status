@@ -33,6 +33,8 @@ Slurm jobs의 **User**와 **Server** 선택은 검색어·작업 상태와 함�
 
 ## 데이터 계약
 
+Job 상세창의 **Requested CPUs**와 **Requested RAM**은 Slurm 요청량입니다. 수집기 래퍼는 `squeue --json`을 한 번 일괄 조회해 원본 에이전트의 200개 상세 조회 한도와 무관하게 요청량을 보완합니다. RAM은 요청 TRES의 전체량을 우선 사용하며, 노드당·CPU당 값만 보고되면 그 범위를 표시합니다. `--mem=0`에 해당하는 노드 메모리 요청은 **All node memory**로, 누락된 값은 **Not reported**로 표시합니다. 원본 에이전트 파일은 수정하지 않습니다.
+
 서버 요약의 CPU·RAM은 Slurm 할당 기준입니다. CPU는 `idle_cpus`를 남은 수량으로 표시하며(`4 Free / 64`), `Other` 상태 CPU를 여유 자원으로 더하지 않습니다. RAM은 Slurm `real_memory`에서 `alloc_memory`와 보고된 시스템 예약량(`mem_spec_limit`)을 제외하고 MiB를 GiB로 변환합니다. 막대는 할당 비율이고, 마우스를 올리거나 서버 상세를 열면 할당량·여유량·총량을 확인할 수 있습니다. 이 수치는 OS의 실제 사용률이 아니며, 작업 조건·예약·스케줄링 정책에 따라 즉시 실행 가능한 양과 다를 수 있습니다. Slurm 보고가 오래됐거나 누락된 경우, 노드가 DOWN·DRAIN 등인 경우에는 여유량을 확정해 표시하지 않습니다. 저장공간과 개별 GPU 카드의 실제 측정값은 유지합니다.
 
 `POST /api/report/node`와 `POST /api/report/slurm`는 기존 연구실 에이전트 JSON 형식을 받습니다. `POST /api/report/cloud-gpu`는 `server`, `system`, `gpus` 형식의 독립 클라우드 노드를 지원합니다. 운영 종료된 노드의 보고는 저장하지 않습니다. `X-Status-Token`은 수신 서버의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.

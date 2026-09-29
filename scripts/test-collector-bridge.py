@@ -56,6 +56,109 @@ with tempfile.TemporaryDirectory() as directory:
 spec = importlib.util.spec_from_file_location('bridge', BRIDGE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
+
+# The source stops collecting per-job details at 200 jobs. One bulk request
+# snapshot supplies all active jobs without adding one subprocess per job.
+def optional(number, *, present=True, infinite=False):
+    return {'set': present, 'infinite': infinite, 'number': number}
+
+
+def enrich_requests(payload, report=None, error=None):
+    calls = []
+
+    def build_payload():
+        calls.append('build')
+        return payload
+
+    def run_slurm_json(command, **kwargs):
+        assert calls == ['build']
+        assert command == ['squeue', '--json'] and kwargs == {'quiet': True}
+        calls.append('query')
+        if error:
+            raise error
+        return report
+
+    agent = SimpleNamespace(build_payload=build_payload, run_slurm_json=run_slurm_json)
+    bridge.install_slurm_job_requests(agent, 'slurm')
+    result = agent.build_payload()
+    assert result is payload
+    return result, calls
+
+
+many_jobs = {'squeue': [{'job_id': str(i), 'req_cpus': '', 'req_mem': ''} for i in range(1, 210)],
+             'sinfo': [{'hostname': 'server1', 'alloc_memory': 123}]}
+many_report = {'jobs': [{'job_id': i, 'tres_req_str': 'cpu=4,mem=8G,node=1',
+                        'tres_alloc_str': 'cpu=64,mem=128G', 'cpus': optional(64)}
+                       for i in range(1, 210)]}
+enriched, calls = enrich_requests(many_jobs, many_report)
+assert calls == ['build', 'query']
+assert len(enriched['squeue']) == 209
+assert all(job['req_cpus'] == '4' and job['req_mem'] == '8G'
+           and job['req_mem_scope'] == 'total' for job in enriched['squeue'])
+# The original builder's node allocation calculation is not rerun or modified.
+assert enriched['sinfo'] == [{'hostname': 'server1', 'alloc_memory': 123}]
+
+assert bridge.slurm_job_request({'cpus': optional(12), 'memory_per_node': optional(4096)}) == {
+    'req_cpus': '12', 'req_mem': '4096M', 'req_mem_scope': 'node'}
+assert bridge.slurm_job_request({'memory_per_node': optional(0, present=False),
+                                'memory_per_cpu': optional(2048)}) == {
+    'req_mem': '2048M', 'req_mem_scope': 'cpu'}
+assert bridge.slurm_job_request({'tres_req_str': 'cpu=2,mem=512000',
+                                'memory_per_node': optional(0)}) == {
+    'req_cpus': '2', 'req_mem': '0M', 'req_mem_scope': 'node'}
+assert bridge.slurm_job_request({'tres_req_str': 'mem=512000',
+                                'memory_per_node': optional(0, present=False)}) == {
+    'req_mem': '512000M', 'req_mem_scope': 'total'}
+assert bridge.slurm_job_request({'tres_req_str': 'mem=1.5G'}) == {
+    'req_mem': '1.5G', 'req_mem_scope': 'total'}
+# Allocated resources and unset/infinite optional wrappers cannot be used as
+# requested resources; booleans, non-finite values and negative values are invalid.
+for invalid in (optional(16, present=False), optional(16, infinite=True),
+                {'set': True, 'number': 16}, {'set': False, 'number': 0},
+                True, None, -1, float('inf'), float('nan'), 'NaN'):
+    assert bridge.slurm_job_request({'cpus': invalid, 'memory_per_node': invalid,
+                                    'memory_per_cpu': invalid, 'tres_alloc_str': 'cpu=64,mem=128G'}) == {}
+assert bridge.slurm_job_request({'tres_req_str': 'cpu=invalid,mem=invalid',
+                                'cpus': optional(6), 'memory_per_cpu': optional(1024)}) == {
+    'req_cpus': '6', 'req_mem': '1024M', 'req_mem_scope': 'cpu'}
+
+# Match numeric jobs, opaque SLUIDs, exact individual array tasks and exact
+# aggregate expressions. Never let a source-provided parent alias match siblings.
+identities_payload = {'squeue': [
+    {'job_id': '500_0'}, {'job_id': '500_1'}, {'job_id': '500_[2-8%3]'},
+    {'job_id': 'sD8DM3P9RE0E00'}, {'job_id': '602'},
+    {'job_id': '500_9', 'job_id_aliases': ['500', 'sParent']},
+    {'job_id': '500_[2-5]', 'job_id_aliases': ['500', 'sParent']},
+    {'job_id': '700', 'req_cpus': 'original'},
+]}
+identity_report = {'jobs': [
+    {'job_id': 601, 'array_job_id': optional(500), 'array_task_id': optional(0),
+     'tres_req_str': 'cpu=1,mem=1G'},
+    {'job_id': 602, 'array_job_id': optional(500), 'array_task_id': optional(1),
+     'step_id': {'sluid': 'sD8DM3P9RE0E00'}, 'tres_req_str': 'cpu=2,mem=2G'},
+    {'job_id': 500, 'array_job_id': optional(500), 'array_task_id': optional(0, present=False),
+     'array_task_string': '2-8%3', 'step_id': {'sluid': 'sParent'}, 'tres_req_str': 'cpu=8,mem=8G'},
+    {'job_id': 700, 'tres_req_str': 'cpu=3,mem=3G'},
+    {'job_id': 700, 'tres_req_str': 'cpu=4,mem=4G'},
+]}
+identity_result, _ = enrich_requests(identities_payload, identity_report)
+assert [job.get('req_cpus') for job in identity_result['squeue']] == ['1', '2', '8', '2', '2', None, None, 'original']
+assert not any('req_mem' in job for job in identity_result['squeue'][5:])
+
+original = {'squeue': [{'job_id': '123', 'req_cpus': '4', 'req_mem': '6G', 'req_mem_scope': 'total'}]}
+for report in (None, {}, {'jobs': None}, {'jobs': []}, {'errors': ['query failed'], 'jobs': [{'job_id': 123}]},
+               {'jobs': [{'job_id': 999, 'tres_req_str': 'cpu=8,mem=8G'}]},
+               {'jobs': [{'job_id': 123, 'cpus': optional(4, present=False)}]}):
+    payload = json.loads(json.dumps(original))
+    assert enrich_requests(payload, report)[0] == original
+assert enrich_requests(json.loads(json.dumps(original)), error=RuntimeError('Slurm unavailable'))[0] == original
+for payload in (None, {}, {'squeue': []}):
+    assert enrich_requests(payload, {'jobs': []})[1] == ['build']
+non_slurm = SimpleNamespace(build_payload=lambda: original, run_slurm_json=lambda *_: None)
+non_slurm_build = non_slurm.build_payload
+bridge.install_slurm_job_requests(non_slurm, 'node')
+assert non_slurm.build_payload is non_slurm_build
+
 # A lab report already measures true available space. Keep its values and only
 # attach the actual paths selected by the source module.
 lab = SimpleNamespace(DISK_PATH='/', SUBDISK_PATH='/mnt/raid5', build_payload=lambda: {
@@ -124,4 +227,4 @@ else: raise AssertionError('Network error must propagate')
 assert module.REPORT_INTERVAL_SEC == 30
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
-print('PASS: true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')
+print('PASS: bulk Slurm requests beyond 200 jobs, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')

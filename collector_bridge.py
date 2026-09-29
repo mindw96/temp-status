@@ -9,10 +9,120 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import sys
 from urllib.parse import urlparse
+
+
+def slurm_number(value):
+    """Read Slurm's optional numeric value without treating its set flag as data."""
+    if isinstance(value, dict):
+        if value.get("set") is not True or value.get("infinite") is not False:
+            return None
+        value = value.get("number")
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+def slurm_identity(value):
+    if isinstance(value, dict):
+        value = slurm_number(value)
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, (int, float)):
+        if not math.isfinite(value) or value < 0 or int(value) != value:
+            return ""
+        return str(int(value))
+    return str(value).strip()
+
+
+def slurm_job_identities(job):
+    """Only exact job IDs, SLUIDs and individual array task IDs are aliases."""
+    step = job.get("step_id")
+    step = step if isinstance(step, dict) else {}
+    identities = {slurm_identity(value) for value in (
+        job.get("job_id"), job.get("sluid"), step.get("sluid"), step.get("job_id"))}
+    array_id, task_id = slurm_number(job.get("array_job_id")), slurm_number(job.get("array_task_id"))
+    if (array_id is not None and array_id > 0 and array_id.is_integer()
+            and task_id is not None and task_id.is_integer() and task_id < 4294967294):
+        identities.add(f"{int(array_id)}_{int(task_id)}")
+    elif array_id is not None and array_id > 0 and array_id.is_integer():
+        task_range = job.get("array_task_string")
+        if isinstance(task_range, str) and re.fullmatch(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*(?:%\d+)?", task_range):
+            identities.add(f"{int(array_id)}_[{task_range}]")
+    return identities - {""}
+
+
+def slurm_job_request(job):
+    """Prefer aggregate requested TRES; retain the scope of minimum RAM requests."""
+    tres = job.get("tres_req_str")
+    fields = dict(re.findall(r"(?:^|,)\s*(cpu|mem)=([^,\s]+)", tres)) if isinstance(tres, str) else {}
+    result = {}
+    cpus = slurm_number(fields.get("cpu"))
+    if cpus is None or not cpus.is_integer():
+        cpus = slurm_number(job.get("cpus"))
+    if cpus is not None and cpus.is_integer():
+        result["req_cpus"] = str(int(cpus))
+
+    node_memory = slurm_number(job.get("memory_per_node"))
+    cpu_memory = slurm_number(job.get("memory_per_cpu"))
+    # --mem=0 requests all memory on each node, rather than zero job memory.
+    if node_memory == 0:
+        result.update(req_mem="0M", req_mem_scope="node")
+    else:
+        memory = fields.get("mem", "")
+        if re.fullmatch(r"\d+(?:\.\d+)?[KMGTPE]?", memory, re.IGNORECASE):
+            result.update(req_mem=memory.upper() if re.search(r"[A-Za-z]", memory) else memory + "M",
+                          req_mem_scope="total")
+        elif node_memory is not None:
+            result.update(req_mem=f"{node_memory:g}M", req_mem_scope="node")
+        elif cpu_memory is not None:
+            result.update(req_mem=f"{cpu_memory:g}M", req_mem_scope="cpu")
+    return result
+
+
+def install_slurm_job_requests(module, kind):
+    """Fill requests in one bulk query, including jobs beyond the source's cap."""
+    if kind != "slurm" or not callable(getattr(module, "run_slurm_json", None)):
+        return
+    original_build_payload = module.build_payload
+
+    def build_payload():
+        payload = original_build_payload()
+        jobs = payload.get("squeue") if isinstance(payload, dict) else None
+        if not isinstance(jobs, list) or not jobs:
+            return payload
+        try:
+            report = module.run_slurm_json(["squeue", "--json"], quiet=True)
+        except Exception:
+            return payload
+        if not isinstance(report, dict) or report.get("errors") or not isinstance(report.get("jobs"), list):
+            return payload
+        by_id = {}
+        for raw_job in report["jobs"]:
+            if not isinstance(raw_job, dict):
+                continue
+            for identity in slurm_job_identities(raw_job):
+                # Do not choose one job when the producer gives ambiguous IDs.
+                by_id[identity] = None if identity in by_id else raw_job
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            # Source aliases can contain an array parent for an aggregate/sibling.
+            # Match the displayed ID itself, never those inferred parent aliases.
+            raw_job = by_id.get(slurm_identity(job.get("job_id")))
+            if raw_job is not None:
+                job.update(slurm_job_request(raw_job))
+        return payload
+
+    module.build_payload = build_payload
 
 
 def install_storage_reporting(module, kind):
@@ -138,6 +248,7 @@ def main():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     install_storage_reporting(module, args.kind)
+    install_slurm_job_requests(module, args.kind)
     if auth_mode == "sites":
         module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
     if args.once:

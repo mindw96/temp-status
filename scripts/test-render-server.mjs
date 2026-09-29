@@ -55,7 +55,7 @@ try {
   const node = {server_name: 'test-node', cpu_percent: 20, gpus: [{id: 0, gpu_name: 'Test GPU', gpu_utilization: 40, vram_total_mb: 81920, vram_total_used_mb: 12288, processes: [{pid: 42, username: 'test-user', slurm_job_id: '123', slurm_job_name: 'test-job'}]}]};
   const slurm = {sinfo: [{name: 'test-node', state: 'mixed', cpus: 64, alloc_cpus: 60, idle_cpus: 4,
     cpus_other: 0, real_memory: 512000, alloc_memory: 432128, mem_spec_limit: 0,
-    ignored: 'must not be stored'}], squeue: [{job_id: '123', name: 'test-job', user: 'test-user', job_state: 'R'}]};
+    ignored: 'must not be stored'}], squeue: [{job_id: '123', name: 'test-job', user: 'test-user', job_state: 'R', req_cpus: '2', req_mem: '4G', req_mem_scope: 'total'}]};
   const cloud = {server: {name: 'test-cloud', type: 'cloud'}, system: {cpu_count: 8}, gpus: [{index: 0, name: 'Cloud GPU', utilization_gpu: 80, memory_used: 100, memory_total: 81920, processes: []}]};
   assert.equal((await post('node', node)).status, 200);
   assert.equal((await post('slurm', slurm)).status, 200);
@@ -67,6 +67,7 @@ try {
   assert.equal(snapshot.nodes.find(n => n.data.server_name === 'test-node').data.gpus[0].gpu_utilization, 77);
   assert.equal(snapshot.nodes.find(n => n.data.server_name === 'test-cloud').data.source_type, 'cloud');
   assert.equal(snapshot.slurm.data.squeue[0].job_id, '123');
+  assert.deepEqual(['req_cpus', 'req_mem', 'req_mem_scope'].map(key => snapshot.slurm.data.squeue[0][key]), ['2', '4G', 'total']);
   assert.deepEqual(snapshot.history, []);
   const allocationFields = ['real_memory', 'alloc_memory', 'cpus_other', 'mem_spec_limit'];
   const allocation = snapshot.slurm.data.sinfo[0];

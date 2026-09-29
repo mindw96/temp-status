@@ -41,7 +41,9 @@ const slurmReport={sinfo:[
   {name:'missing-node'},
   ...[null,'0',true,{},[],NaN,Infinity].map((value,index)=>({name:`invalid-${index}`,
     ...Object.fromEntries(slurmAllocationFields.map(key=>[key,value]))})),
-],squeue:[],accounting:{jobs:[]}};
+],squeue:['total','node','cpu',undefined,'unknown',{}].map((scope,index)=>({
+  job_id:String(index+1),req_cpus:'2',req_mem:'4G',req_mem_scope:scope,
+})),accounting:{jobs:[]}};
 assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
 let snapshot=await (await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
 assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,0);assert.equal(snapshot.nodes[0].data.gpus[1].gpu_utilization,null);assert.deepEqual(snapshot.history,[]);
@@ -52,7 +54,8 @@ assert.equal(slurmNode.cpus,64);assert.equal(slurmNode.alloc_cpus,60);assert.equ
 assert.deepEqual(slurmAllocationFields.map(key=>slurmNode[key]),[1536000,327680,0,1024]);
 assert.equal(Object.hasOwn(slurmNode,'ignored'),false);
 assert.equal(Object.hasOwn(snapshot.slurm.data,'accounting'),false);
-assert.deepEqual(snapshot.slurm.data.squeue,[]);
+assert.deepEqual(snapshot.slurm.data.squeue.map(j=>[j.req_cpus,j.req_mem,j.req_mem_scope]),
+  ['total','node','cpu','','',''].map(scope=>['2','4G',scope]));
 assert.ok(slurmAllocationFields.every(key=>snapshot.slurm.data.sinfo[1][key]===0));
 for(const entry of snapshot.slurm.data.sinfo.slice(2)){
   assert.ok(slurmAllocationFields.every(key=>entry[key]===null),entry.name);
