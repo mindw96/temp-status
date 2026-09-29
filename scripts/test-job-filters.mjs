@@ -80,10 +80,11 @@ assert.deepEqual(plain(evaluate('jobFilterServers()')), ['devbox', 'server2', 'u
 assert.match(element('#job-user-filter').innerHTML, /value="alice"/);
 assert.match(element('#job-server-filter').innerHTML, /value="@unassigned"/);
 assert.equal(element('#reset-job-filters').disabled, true);
-assert.deepEqual(apply({server: 'server2'}).visibleJobIds, ['2', '3']);
-assert.equal(element('#total-jobs').textContent, 2);
-assert.equal(element('#pending-jobs').textContent, 0);
-assert.deepEqual(apply({user: 'alice'}).visibleJobIds, ['2']);
+assert.deepEqual(apply({server: 'server2'}).visibleJobIds, ['2', '3', '4']);
+assert.equal(element('#total-jobs').textContent, 3);
+assert.equal(element('#running-jobs').textContent, 2);
+assert.equal(element('#pending-jobs').textContent, 1);
+assert.deepEqual(apply({user: 'alice'}).visibleJobIds, ['2', '4']);
 assert.deepEqual(apply({search: 'training job 3'}).visibleJobIds, []);
 assert.match(element('#job-rows').innerHTML, /No matching jobs/);
 assert.deepEqual(apply({user: 'bob'}).visibleJobIds, ['3']);
@@ -95,6 +96,70 @@ assert.throws(() => apply({partition: 'gpu'}), /Unsupported filter/);
 assert.equal(tools.get('filter_cluster_dashboard').inputSchema.properties.partition, undefined);
 assert.throws(() => apply({server: 'server20'}), /Unsupported filter/);
 assert.throws(() => apply({user: 123}), /Unsupported filter/);
+
+// Pending jobs are associated only with explicitly requested nodes. A reason,
+// apparent target, batch host, or shared partition is not a server assignment.
+element('#reset-job-filters').dispatch('click');
+const pendingQueue = [
+  job(101, 'alice', '(Resources)', 'PENDING', {req_node_list: 'devbox,server2', batch_host: 'ubuntu'}),
+  job(102, 'alice', '(Priority)', 'PD', {req_node_list: 'server[2,4]'}),
+  job(103, 'bob', '(Resources)', 'PENDING', {req_node_list: 'server20'}),
+  job(104, 'bob', '(ReqNodeNotAvail, UnavailableNodes:server2)', 'PENDING', {batch_host: 'server2'}),
+  job(105, 'alice', 'server2', 'PENDING', {req_node_list: '(null)', batch_host: 'server2'}),
+  job(106, 'alice', '(Resources)', 'PENDING', {req_node_list: ' ubuntu '}),
+  job(107, 'bob', 'server4', 'RUNNING', {req_node_list: 'server2'})
+];
+report(pendingQueue);
+assert.deepEqual(apply({server: 'server2'}).visibleJobIds, ['101', '102']);
+assert.equal(element('#total-jobs').textContent, 2);
+assert.equal(element('#pending-jobs').textContent, 2);
+assert.equal(element('#running-jobs').textContent, 0);
+assert.deepEqual(apply({server: 'devbox'}).visibleJobIds, ['101']);
+assert.deepEqual(apply({server: 'server4'}).visibleJobIds, ['102', '107']);
+assert.deepEqual(apply({server: 'ubuntu'}).visibleJobIds, ['106']);
+assert.match(element('#job-rows').innerHTML, /Requested: Server3/);
+assert.deepEqual(apply({server: '@unassigned'}).visibleJobIds, ['101', '102', '103', '104', '105', '106']);
+assert.match(element('#job-rows').innerHTML, /Server not specified/);
+// Search accepts reported hostnames and display aliases, but not batch hosts.
+assert.deepEqual(apply({server: '', search: 'devbox'}).visibleJobIds, ['101']);
+assert.deepEqual(apply({search: 'Server1'}).visibleJobIds, ['101']);
+assert.deepEqual(apply({search: 'Server3'}).visibleJobIds, ['106']);
+assert.deepEqual(apply({server: 'server2', search: '', user: 'bob'}).visibleJobIds, []);
+assert.deepEqual(apply({user: 'alice', jobState: 'PENDING'}).visibleJobIds, ['101', '102']);
+assert.deepEqual(apply({jobState: 'RUNNING'}).visibleJobIds, []);
+assert.equal(element('#pending-jobs').textContent, 2, 'Status counts retain the user/server filters');
+evaluate('showJob("106")');
+assert.match(element('#dialog-content').innerHTML, /<dt>Requested nodes<\/dt><dd>Server3<\/dd>/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /<dt>Assigned nodes<\/dt><dd>Server3/);
+evaluate('showJob("105")');
+assert.match(element('#dialog-content').innerHTML, /<dt>Requested nodes<\/dt><dd>Not specified<\/dd>/);
+
+// Missing or malformed metadata cannot silently assign a pending job. Slurm's
+// common empty sentinels also remain in the unassigned view without throwing.
+const noRequest = [undefined, null, '', '  ', '(null)', '(none)', 'None', 'N/A', '—', 123, {}, ['server2']];
+element('#reset-job-filters').dispatch('click');
+report(noRequest.map((req_node_list, index) => job(200 + index, 'alice', 'server2', 'PENDING', {req_node_list, batch_host: 'server2'})));
+assert.deepEqual(apply({server: 'server2'}).visibleJobIds, []);
+assert.equal(apply({server: '@unassigned'}).visibleJobIds.length, noRequest.length);
+assert.match(element('#job-rows').innerHTML, /Server not specified/);
+assert.equal(visibleIds().length, 10);
+
+// Pending pagination includes requested-server jobs and resets/clamps when
+// filters change or a new report moves the job from requested to assigned nodes.
+element('#reset-job-filters').dispatch('click');
+report(Array.from({length: 23}, (_, index) => job(300 + index, 'alice', '(Resources)', 'PENDING', {req_node_list: 'server2'})));
+apply({server: 'server2', user: 'alice', jobState: 'PENDING'});
+assert.equal(element('#pending-jobs').textContent, 23);
+assert.equal(visibleIds().length, 10);
+assert.equal(element('#page-number').textContent, '1 / 3');
+element('#next-page').onclick();
+element('#next-page').onclick();
+assert.deepEqual(visibleIds(), ['320', '321', '322']);
+report([job(300, 'alice', 'server4', 'RUNNING', {req_node_list: 'server2'})]);
+assert.deepEqual(ids(), []);
+assert.equal(element('#page-number').textContent, '1 / 1');
+assert.deepEqual(apply({server: 'server4', jobState: 'RUNNING'}).visibleJobIds, ['300']);
+assert.deepEqual(apply({server: '@unassigned', jobState: 'all'}).visibleJobIds, []);
 
 // Filter controls reset page immediately, without a fetch, and each combines
 // with the others. Clear filters returns the entire queue and first page.
@@ -200,6 +265,15 @@ assert.match(markup, /class="job-name-cell"/);
 assert.match(markup, /title="Training &lt;script&gt; &amp; &quot;full name&quot;"/);
 assert.doesNotMatch(markup, /<script>|partition-chip|12:34:56/);
 assert.match(element('#job-user-filter').innerHTML, /user&lt;one&gt;&quot;/);
+
+// Requested nodes are untrusted report text in both the row and detail dialog.
+const unusualRequest = 'server2<script> & "host"';
+report([job(45, 'alice', '(Resources)', 'PENDING', {req_node_list: unusualRequest})]);
+assert.match(element('#job-rows').innerHTML, /server2&lt;script&gt; &amp; &quot;host&quot;/);
+assert.doesNotMatch(element('#job-rows').innerHTML, /<script>/);
+evaluate('showJob("45")');
+assert.match(element('#dialog-content').innerHTML, /server2&lt;script&gt; &amp; &quot;host&quot;/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /<script>/);
 
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');

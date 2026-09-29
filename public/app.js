@@ -67,14 +67,32 @@ function hostlistContains(hostlist, hostname) {
     return matches(0, 0);
   });
 }
+function jobIsPending(job) {
+  return ['PD', 'PENDING'].includes(job.state) || ['PD', 'PENDING'].includes(job.raw?.job_state);
+}
+function requestedNodeList(job) {
+  const value = job.raw?.req_node_list;
+  if (typeof value !== 'string') return '';
+  const list = value.trim();
+  return /^(?:|—|n\/a|none|null|\(none\)|\(null\))$/i.test(list) ? '' : list;
+}
 function jobIsUnassigned(job) {
-  return job.state === 'PENDING' || ['PD', 'PENDING'].includes(job.raw?.job_state)
+  return jobIsPending(job)
     || ['', '—', '(null)', 'null', 'None', 'N/A'].includes(String(job.target || '').trim());
 }
 function jobMatchesServer(job, server) {
   if (!server) return true;
   if (server === '@unassigned') return jobIsUnassigned(job);
+  // Pending reasons and batch hosts are not allocations. Match only the
+  // explicit requested-node list already reported by the Slurm collector.
+  if (jobIsPending(job)) return hostlistContains(requestedNodeList(job), server);
   return !jobIsUnassigned(job) && hostlistContains(job.target, server);
+}
+function jobTargetMarkup(job) {
+  if (!jobIsPending(job)) return `<span title="${esc(displayNodeList(job.target))}">${esc(displayNodeList(job.target))}</span>`;
+  const requested = requestedNodeList(job), label = requested ? `Requested: ${displayNodeList(requested)}` : 'Server not specified';
+  const reason = reasons[job.target.replace(/^\(|\)$/g, '')] || job.target;
+  return `<span class="job-requested-nodes" title="${esc(label)}">${esc(label)}</span><span title="${esc(job.target)}">${esc(reason)}</span>`;
 }
 function jobFilterUsers() {return [...new Set(jobs.map(job => job.user))].sort((a, b) => a.localeCompare(b));}
 function jobFilterServers() {
@@ -101,7 +119,7 @@ function renderJobFilters() {
 function jobsForFilterCounts() {
   const q = state.search.toLowerCase();
   return currentJobs().filter(job => (!state.user || job.user === state.user) && jobMatchesServer(job, state.server)
-    && [job.name, job.user, job.id, job.target, job.state === 'PENDING' ? job.target : displayNodeList(job.target)]
+    && [job.name, job.user, job.id, job.target, jobIsPending(job) ? requestedNodeList(job) : displayNodeList(job.target), jobIsPending(job) ? displayNodeList(requestedNodeList(job)) : '']
       .some(value => String(value ?? '').toLowerCase().includes(q)));
 }
 function filteredJobs(){return jobsForFilterCounts().filter(job => state.jobState === 'all' || job.state === state.jobState);}
@@ -117,7 +135,7 @@ function jobStatusClass(status) {
     FAILED: 'down', CANCELLED: 'down', TIMEOUT: 'down'}[status] || 'idle';
   return `badge badge-${badge}${status === 'PENDING' ? ' pending' : ''}`;
 }
-function renderJobs(){renderJobFilters();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map((j,i)=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i%3===0?'lilac':i%3===1?'blue':''}" aria-hidden="true">${j.user.slice(0,1).toUpperCase()}</span>${esc(j.user)}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${esc(j.state==='PENDING'?reasons[j.target]:displayNodeList(j.target))}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
+function renderJobs(){renderJobFilters();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map((j,i)=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i%3===0?'lilac':i%3===1?'blue':''}" aria-hidden="true">${j.user.slice(0,1).toUpperCase()}</span>${esc(j.user)}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
 function render(){renderNodes();renderJobs();}
 function openDialog(html,eyebrow){$('#dialog-content').innerHTML=html;$('#dialog-eyebrow').textContent=eyebrow;$('#detail-dialog').showModal();}
 const detailItem=(label,value)=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
@@ -141,12 +159,12 @@ if (document.modelContext?.registerTool) {
   try {
     Promise.resolve(document.modelContext.registerTool({
       name: 'filter_cluster_dashboard', title: 'Filter cluster dashboard',
-      description: 'Filter Slurm jobs by exact user, assigned server, status, or search term. Filters combine; empty user/server clears that filter.',
+      description: 'Filter Slurm jobs by exact user, assigned server (or explicitly requested server for pending jobs), status, or search term. Filters combine; empty user/server clears that filter.',
       inputSchema: {type: 'object', properties: {
         jobState: {type: 'string', enum: ['all', 'RUNNING', 'PENDING']},
         search: {type: 'string', maxLength: 100},
         user: {type: 'string', maxLength: 128, description: 'Exact username, or an empty string for all users.'},
-        server: {type: 'string', maxLength: 128, description: 'Node ID (devbox, server2, ubuntu, server4), @unassigned for pending/unassigned jobs, or an empty string for all servers.'}
+        server: {type: 'string', maxLength: 128, description: 'Node ID (devbox, server2, ubuntu, server4) matches assigned nodes or explicitly requested nodes for pending jobs. @unassigned includes all pending/unassigned jobs; an empty string includes all servers.'}
       }, additionalProperties: false},
       annotations: {readOnlyHint: false, untrustedContentHint: false},
       execute(input) {
