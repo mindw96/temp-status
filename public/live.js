@@ -7,6 +7,16 @@ const liveState = {mode: 'live', snapshot: null, error: null, errorKind: null, r
 let refreshTimer, refreshControlTimer, activeRequest;
 const fresh = at => !liveState.error && Number.isFinite(at) && Date.now() - at < FRESHNESS_MS;
 const validNumber = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+function slurmResources(node) {
+  const total = node?.cpus ?? node?.cpus_total, allocated = node?.alloc_cpus ?? node?.cpus_allocated, idle = node?.idle_cpus;
+  // Slurm's Other CPUs are not idle. Do not count them as free capacity.
+  const cpu = [total, allocated, idle].every(Number.isInteger) && total > 0 && allocated >= 0 && idle >= 0 && allocated + idle <= total
+    ? {total, allocated, free: idle} : null;
+  const memory = validNumber(node?.real_memory), reserved = validNumber(node?.mem_spec_limit ?? 0), used = validNumber(node?.alloc_memory);
+  const ram = memory !== null && reserved !== null && used !== null && memory > 0 && reserved >= 0 && reserved < memory && used >= 0 && used <= memory - reserved
+    ? {total: (memory - reserved) / 1024, allocated: used / 1024, free: (memory - reserved - used) / 1024} : null;
+  return {cpu, ram};
+}
 const stateNames = {R: 'RUNNING', PD: 'PENDING', CG: 'COMPLETING', S: 'SUSPENDED', CF: 'CONFIGURING', CD: 'COMPLETED', F: 'FAILED', CA: 'CANCELLED', TO: 'TIMEOUT'};
 const stateLabels = {RUNNING: 'Running', PENDING: 'Pending', COMPLETING: 'Completing', SUSPENDED: 'Suspended', CONFIGURING: 'Configuring', COMPLETED: 'Completed', FAILED: 'Failed', CANCELLED: 'Cancelled', TIMEOUT: 'Timed out'};
 Object.assign(reasons, {ReqNodeNotAvail: 'Requested node unavailable', QOSMaxGRESPerUser: 'User GPU limit', JobHeldUser: 'Held by user', DependencyNeverSatisfied: 'Dependency cannot be satisfied', BeginTime: 'Waiting for scheduled start'});
@@ -28,7 +38,7 @@ function normalizeSnapshot(snapshot) {
       const util = validNumber(g.gpu_utilization), memory = validNumber(g.vram_total_mb), memoryUsed = validNumber(g.vram_total_used_mb), processes = g.processes || [];
       return {index: g.id, uuid: g.uuid, model: g.gpu_name || 'Unknown model', util: !stale && !g.collection_error && util !== null && util >= 0 && util <= 100 ? util : null, memory: memory !== null && memory > 0 ? memory / 1024 : null, memoryUsed: memoryUsed !== null && memoryUsed >= 0 && (memory === null || memoryUsed <= memory) ? memoryUsed / 1024 : null, temp: null, allocated: processes.length > 0, processes, error: g.collection_error, jobRecords: isCloud ? [] : resolveGpuJobs(processes, jobs)};
     });
-    return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
+    return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, slurmResources: slurmResources(s), receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
   }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
 }
 const sampleNote = $('.sample-note');
@@ -99,6 +109,24 @@ function resourceMarkup(label, value) {
   const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
   return `<div class="resource-row"><div class="resource-line"><span class="metric-label">${esc(label)}</span><strong class="metric-value">${percent(usable)}</strong></div>${meterMarkup(usable)}</div>`;
 }
+function allocationStatus(n, resource) {
+  if (!n.slurmFresh) return 'Stale';
+  if (/DOWN|DRAIN|FAIL|MAINT|UNKNOWN|NOT_RESPONDING|POWER|REBOOT|FUTURE|\*/.test(n.state)) return 'Unavailable';
+  return resource ? '' : 'Not reported';
+}
+const allocationNumber = value => value.toLocaleString('en-US', {maximumFractionDigits: 1});
+function allocationDescription(n, key) {
+  const resource = n.slurmResources[key], status = allocationStatus(n, resource);
+  if (status) return status;
+  const {total, allocated, free} = resource, unit = key === 'ram' ? ' GiB' : '';
+  const other = total - allocated - free;
+  return `${allocationNumber(allocated)}${unit} allocated · ${allocationNumber(free)}${unit} free · ${allocationNumber(total)}${unit} total${other > 0 ? ` · ${allocationNumber(other)} unavailable` : ''} · Slurm`;
+}
+function allocationMarkup(n, key) {
+  const resource = n.slurmResources[key], status = allocationStatus(n, resource), unit = key === 'ram' ? ' GiB' : '';
+  const value = status || `${allocationNumber(resource.free)}${unit} Free<span class="allocation-total"> / ${allocationNumber(resource.total)}</span>`;
+  return `<div class="resource-row" title="${esc(allocationDescription(n, key))}"><div class="resource-line"><span class="metric-label">${key.toUpperCase()}</span><strong class="metric-value">${value}</strong></div>${meterMarkup(status ? null : 100 * resource.allocated / resource.total)}</div>`;
+}
 function nodeBadgeClass(n) {
   if (n.stale) return 'badge-down drain';
   if (n.isCloud) return 'badge-mixed cloud';
@@ -141,7 +169,7 @@ renderNodes = function() {
         <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge badge ${nodeBadgeClass(n)}">${esc(n.state)}${(n.stale || (!n.isCloud && !n.slurmFresh)) ? ' · stale' : ''}</span></div>
         <div class="node-model">${esc(models || 'No GPU report')}${n.gpus.length ? ` × ${n.gpus.length}` : ''}</div>
         <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-slot ${g.util === null ? 'unavailable' : g.allocated ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Process observed' : 'No process observed'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
-        <div class="resource-metrics">${resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null)}${resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null)}</div>
+        <div class="resource-metrics" aria-label="${n.isCloud ? 'Host utilization' : 'Slurm resource allocation'}">${n.isCloud ? resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null) + resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null) : allocationMarkup(n, 'cpu') + allocationMarkup(n, 'ram')}</div>
         ${storageMarkup(n)}
       </button>
       ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p>${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
@@ -171,8 +199,8 @@ showNode = function(id) {
   if (!n) return;
   const memory = n.raw;
   const context = n.isCloud ? 'Standalone cloud node · no Slurm' : `${n.state}${n.slurmFresh ? '' : ' · Slurm data stale'}`;
-  const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', n.cpu !== null ? `${n.cpuAllocated ?? '—'} / ${n.cpu}${n.slurmFresh ? '' : ' (stale)'}` : 'Not reported');
-  const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'Jobs are linked using the Slurm IDs of processes observed on each GPU. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable.';
+  const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', allocationDescription(n, 'cpu')) + detailItem('Slurm RAM allocation', allocationDescription(n, 'ram'));
+  const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'CPU and RAM summary bars show Slurm allocations, not measured usage. Free capacity is unallocated; job constraints, reservations and scheduling policies can still prevent immediate scheduling. GPU jobs are linked using the Slurm IDs of observed processes. A reserved GPU may have no process yet. Missing IDs or ambiguous matches are shown as unavailable.';
   openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 3 minutes old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
     ${storageMarkup(n)}<p class="storage-note">Free space is available to users and excludes filesystem reserves. 1 TiB = 1,024 GiB.</p>
     <p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>

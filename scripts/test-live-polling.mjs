@@ -262,4 +262,111 @@ for (const cause of ['liveState.snapshot.nodes[0].receivedAt=Date.now()-180000',
   }
 }
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, and card/detail metric bounds/zero/stale/error handling.');
+// Server CPU/RAM summaries represent Slurm reservations, not the collector's
+// measured utilization. Scheduler idle counts exclude unavailable/Other CPUs.
+const allocations = browser();
+await flush();
+const resourceFixture = {
+  name: 'devbox', state: 'MIXED', cpus: 64, alloc_cpus: 60, idle_cpus: 4,
+  real_memory: 512000, alloc_memory: 432128
+};
+const renderAllocations = (overrides = {}, code = '') => allocations.evaluate(`
+  liveState.error = null;
+  liveState.snapshot.nodes[0].receivedAt = Date.now();
+  liveState.snapshot.slurm.receivedAt = Date.now();
+  liveState.snapshot.slurm.data.sinfo = [${JSON.stringify({...resourceFixture, ...overrides})}];
+  Object.assign(liveState.snapshot.nodes[0].data, {cpu_percent: 1, ram_percent: 2});
+  ${code}; normalizeSnapshot(liveState.snapshot); renderNodes();`);
+const resources = () => JSON.parse(allocations.evaluate('JSON.stringify(nodes[0].slurmResources)'));
+// Extract a complete resource row without depending on whether text values have
+// nested spans, then inspect its text and allocated-capacity meter separately.
+const resourceRow = label => {
+  const html = allocations.element('#node-grid').innerHTML;
+  const labelAt = html.indexOf(`>${label}</span>`);
+  assert.ok(labelAt >= 0, `Missing ${label} summary`);
+  const start = html.lastIndexOf('<div class="resource-row', labelAt);
+  assert.ok(start >= 0, `Missing ${label} resource row`);
+  let depth = 0;
+  for (const tag of html.slice(start).matchAll(/<\/?div\b[^>]*>/g)) {
+    depth += tag[0].startsWith('</') ? -1 : 1;
+    if (depth === 0) return html.slice(start, start + tag.index + tag[0].length);
+  }
+  assert.fail(`Unclosed ${label} resource row`);
+};
+const rowText = label => resourceRow(label).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+const assertNoFree = (label, reason) => {
+  assert.match(rowText(label), new RegExp(reason));
+  assert.doesNotMatch(rowText(label), /\bFree\b/);
+  assert.doesNotMatch(resourceRow(label), /width:[\d.]+%/);
+};
+
+renderAllocations();
+assert.deepEqual(resources(), {
+  cpu: {total: 64, allocated: 60, free: 4},
+  ram: {total: 500, allocated: 422, free: 78}
+});
+assert.match(rowText('CPU'), /4 Free\s*\/\s*64/);
+assert.match(rowText('RAM'), /78 GiB Free\s*\/\s*500/);
+assert.match(resourceRow('CPU'), /60 allocated · 4 free · 64 total · Slurm/);
+assert.match(resourceRow('CPU'), /width:93\.75%/);
+assert.match(resourceRow('RAM'), /width:84\.4%/);
+assert.doesNotMatch(rowText('CPU'), /1%/);
+assert.doesNotMatch(rowText('RAM'), /2%/);
+
+for (const [allocated, free] of [[0, 64], [64, 0], [60, 0]]) {
+  renderAllocations({alloc_cpus: allocated, idle_cpus: free});
+  assert.deepEqual(resources().cpu, {total: 64, allocated, free});
+  assert.match(rowText('CPU'), new RegExp(`${free} Free\\s*\\/\\s*64`));
+}
+for (const [allocated, free] of [[0, 500], [512000, 0]]) {
+  renderAllocations({alloc_memory: allocated});
+  assert.deepEqual(resources().ram, {total: 500, allocated: allocated / 1024, free});
+  assert.match(rowText('RAM'), new RegExp(`${free} GiB Free\\s*\\/\\s*500`));
+}
+renderAllocations({real_memory: 522240, mem_spec_limit: 10240});
+assert.deepEqual(resources().ram, {total: 500, allocated: 422, free: 78});
+
+for (const invalid of [
+  {cpus: null}, {cpus: 0}, {cpus: -1}, {cpus: '64'}, {cpus: 64.5},
+  {alloc_cpus: null}, {alloc_cpus: -1}, {alloc_cpus: 65}, {alloc_cpus: 60.5},
+  {idle_cpus: null}, {idle_cpus: -1}, {idle_cpus: 5}, {idle_cpus: 0.5}
+]) {
+  renderAllocations(invalid);
+  assert.equal(resources().cpu, null, JSON.stringify(invalid));
+  assertNoFree('CPU', 'Not reported');
+  assert.match(rowText('RAM'), /78 GiB Free/);
+}
+for (const invalid of [
+  {real_memory: null}, {real_memory: 0}, {real_memory: -1}, {real_memory: '512000'},
+  {alloc_memory: null}, {alloc_memory: -1}, {alloc_memory: 512001},
+  {mem_spec_limit: -1}, {mem_spec_limit: 512000}, {mem_spec_limit: 512001},
+  {mem_spec_limit: 100000}
+]) {
+  renderAllocations(invalid);
+  assert.equal(resources().ram, null, JSON.stringify(invalid));
+  assertNoFree('RAM', 'Not reported');
+  assert.match(rowText('CPU'), /4 Free/);
+}
+for (const field of ['cpus', 'alloc_cpus', 'idle_cpus', 'real_memory', 'alloc_memory']) {
+  renderAllocations({}, `delete liveState.snapshot.slurm.data.sinfo[0].${field}`);
+  assertNoFree(['cpus', 'alloc_cpus', 'idle_cpus'].includes(field) ? 'CPU' : 'RAM', 'Not reported');
+}
+
+for (const state of ['DOWN', 'MIXED+DRAIN', 'FAIL', 'MAINT', 'UNKNOWN', 'NOT_RESPONDING', 'IDLE*']) {
+  renderAllocations({state});
+  assertNoFree('CPU', 'Unavailable');
+  assertNoFree('RAM', 'Unavailable');
+}
+for (const cause of [
+  'liveState.snapshot.slurm.receivedAt = Date.now() - 180000',
+  'liveState.error = "Request failed"'
+]) {
+  renderAllocations({}, cause);
+  assertNoFree('CPU', 'Stale');
+  assertNoFree('RAM', 'Stale');
+}
+renderAllocations({}, 'liveState.snapshot.nodes[0].receivedAt = Date.now() - 180000');
+assert.match(rowText('CPU'), /4 Free\s*\/\s*64/);
+assert.match(rowText('RAM'), /78 GiB Free\s*\/\s*500/);
+
+console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and Slurm CPU/RAM allocation capacity/idle/reserves/invalid/state/freshness handling.');

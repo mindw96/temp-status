@@ -119,6 +119,7 @@ section[id]{scroll-margin-top:24px}
 .resource-line{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .resource-line .metric-label{min-width:0;font-size:11px;letter-spacing:.06em}
 .resource-line .metric-value{flex-shrink:0;font-size:12px;color:var(--metric-calm)}
+.allocation-total{color:var(--text-tertiary);font-weight:400}
 .meter.is-unavailable,.meter.is-unknown{background:var(--meter-track)}
 .meter.is-unavailable>span,.meter.is-unknown>span{display:none}
 .node-stats{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--text-tertiary)}

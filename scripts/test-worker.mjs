@@ -33,9 +33,30 @@ node.gpus[0].processes=[
   {pid:104,slurm_job_id:'130'},
 ];
 assert.equal((await call('/api/report/node','POST',node,reportHeaders)).status,200);
-assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:[],accounting:{jobs:[]}},reportHeaders)).status,200);
+const slurmAllocationFields=['real_memory','alloc_memory','cpus_other','mem_spec_limit'];
+const slurmReport={sinfo:[
+  {name:'unit-node',state:'MIXED',cpus:64,alloc_cpus:60,idle_cpus:4,cpus_other:0,
+    real_memory:1536000,alloc_memory:327680,mem_spec_limit:1024,ignored:'must not be stored'},
+  {name:'zero-node',...Object.fromEntries(slurmAllocationFields.map(key=>[key,0]))},
+  {name:'missing-node'},
+  ...[null,'0',true,{},[],NaN,Infinity].map((value,index)=>({name:`invalid-${index}`,
+    ...Object.fromEntries(slurmAllocationFields.map(key=>[key,value]))})),
+],squeue:[],accounting:{jobs:[]}};
+assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
 let snapshot=await (await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
 assert.equal(snapshot.nodes.length,1);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,0);assert.equal(snapshot.nodes[0].data.gpus[1].gpu_utilization,null);assert.deepEqual(snapshot.history,[]);
+// Preserve scheduler allocation data through authenticated ingestion and storage,
+// including real zero values; missing or invalid readings must stay unknown.
+const slurmNode=snapshot.slurm.data.sinfo[0];
+assert.equal(slurmNode.cpus,64);assert.equal(slurmNode.alloc_cpus,60);assert.equal(slurmNode.idle_cpus,4);
+assert.deepEqual(slurmAllocationFields.map(key=>slurmNode[key]),[1536000,327680,0,1024]);
+assert.equal(Object.hasOwn(slurmNode,'ignored'),false);
+assert.equal(Object.hasOwn(snapshot.slurm.data,'accounting'),false);
+assert.deepEqual(snapshot.slurm.data.squeue,[]);
+assert.ok(slurmAllocationFields.every(key=>snapshot.slurm.data.sinfo[1][key]===0));
+for(const entry of snapshot.slurm.data.sinfo.slice(2)){
+  assert.ok(slurmAllocationFields.every(key=>entry[key]===null),entry.name);
+}
 // Available space excludes reserved blocks; a full disk remains zero, not missing.
 assert.equal(snapshot.nodes[0].data.free_disk_gb,15);
 assert.equal(snapshot.nodes[0].data.free_subdisk_gb,0);
@@ -198,4 +219,4 @@ assert.ok(queries.every(sql=>/\breports\b/.test(sql)));
 
 if(process.argv[2]){const real=JSON.parse(readFileSync(process.argv[2],'utf8'));assert.equal((await call('/api/report/node','POST',real.node,reportHeaders)).status,200);assert.equal((await call('/api/report/slurm','POST',real.slurm,reportHeaders)).status,200);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.slurm.data.squeue.length,real.slurm.squeue.length);assert.equal(snapshot.nodes.find(n=>n.data.server_name===real.node.server_name).data.gpus.length,real.node.gpus.length);console.log('Real agent fixture: both reports accepted and retrieved.');}
 assert.equal((await call('/')).status,200);assert.equal((await call('/api/unknown')).status,404);
-console.log('PASS: authentication, input validation, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, retired rental exclusion and ingestion rejection, no history I/O, UTC quota recovery, failure handling, assets.');
+console.log('PASS: authentication, input validation, Slurm CPU/RAM allocation ingestion and zero/missing/invalid values, bounded GPU job names, empty jobs, zero vs missing metrics, storage update, cloud GPU normalization and coexistence, retired rental exclusion and ingestion rejection, no history I/O, UTC quota recovery, failure handling, assets.');
