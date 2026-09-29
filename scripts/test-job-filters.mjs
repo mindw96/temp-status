@@ -327,6 +327,50 @@ for (const [state, raw, expected] of [
   assert.ok(element('#dialog-content').innerHTML.includes(`<dt>Slurm allocated GPUs</dt><dd>${expected}</dd>`));
 }
 
+// Allocation owns the card even with zero utilization and no GPU processes.
+// Node3 deliberately has an NVML index that differs from its GRES index.
+const ownerQueue = [
+  job(54901, 'ryujh', 'server2', 'RUNNING', {req_gpus: '2', alloc_gpus: '2',
+    gpu_allocations: [{node: 'server2', gres_indices: [0, 2]}]}),
+  job(54902, 'ryujh', 'server2', 'RUNNING', {req_gpus: '2', alloc_gpus: '2',
+    gpu_allocations: [{node: 'server2', gres_indices: [3, 5]}]}),
+  job(60000, 'alice', 'ubuntu', 'RUNNING', {gpu_allocations: [{node: 'ubuntu', gres_indices: [2]}]}),
+  job(60001, 'pending-user', '(Resources)', 'PENDING', {gpu_allocations: [{node: 'server2', gres_indices: [1]}]})
+];
+report(ownerQueue);
+evaluate(`liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus =
+  Array.from({length: 8}, (_, id) => ({id, minor_number: id, slurm_gres_index: id,
+    gpu_utilization: 0, vram_total_mb: 49152, vram_total_used_mb: 4,
+    processes: id === 0 ? [{pid: 10, slurm_job_id: '54901'}] : []}));
+liveState.snapshot.nodes.find(n => n.data.server_name === 'ubuntu').data.gpus =
+  [2, 3, 0, 1].map((minor, id) => ({id, minor_number: minor, slurm_gres_index: minor, processes: []}));
+normalizeSnapshot(liveState.snapshot); render();`);
+assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'server2').gpus.map(g => g.allocationRecords.map(r => r.jobId))")),
+  [['54901'], [], ['54901'], ['54902'], [], ['54902'], [], []]);
+assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'ubuntu').gpus.map(g => g.allocationRecords.map(r => r.jobId))")),
+  [['60000'], [], [], []]);
+const idleMarkup = () => evaluate("gpuBlockMarkup(nodes.find(n => n.id === 'server2'), nodes.find(n => n.id === 'server2').gpus[2])");
+assert.match(idleMarkup(), /data-source="allocation"/);
+assert.match(idleMarkup(), /54901/); assert.match(idleMarkup(), /ryujh/);
+assert.match(idleMarkup(), />0%<\/span>/);
+assert.doesNotMatch(idleMarkup(), /No process observed|Observed: ryujh/);
+assert.equal(evaluate("nodes.find(n => n.id === 'server2').gpus[2].allocated"), true);
+evaluate('showJob("54901")');
+assert.match(element('#dialog-content').innerHTML, /<dt>Allocated GPU devices<\/dt><dd>Server2 \/ GPU 0, Server2 \/ GPU 2<\/dd>/);
+assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed processes<\/dt><dd>1 GPU · Server2 \/ GPU 0<\/dd>/);
+// A fresh node with a missing map cannot use its display index as a substitute.
+evaluate("delete liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index; normalizeSnapshot(liveState.snapshot);");
+assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
+assert.match(idleMarkup(), /Allocation unavailable/);
+evaluate("liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index = 2; liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1; normalizeSnapshot(liveState.snapshot);");
+assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
+assert.match(idleMarkup(), /Slurm data stale/);
+// Ending a job clears its allocation on the next snapshot, even if an older
+// node report still contains process information for that job.
+evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.slurm.data.squeue = liveState.snapshot.slurm.data.squeue.filter(j => j.job_id !== '54901'); normalizeSnapshot(liveState.snapshot);");
+assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
+assert.match(idleMarkup(), /No allocation reported/);
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);

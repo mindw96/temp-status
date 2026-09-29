@@ -24,7 +24,7 @@ assert.equal((await call('/api/report/slurm')).status,405);
 const node={server_name:'unit-node',cpu_percent:12,
   disk_path:'/',total_disk_gb:100,used_disk_gb:80,free_disk_gb:15,disk_percent:84.2,
   subdisk_path:'/data',total_subdisk_gb:1000,used_subdisk_gb:950,free_subdisk_gb:0,subdisk_percent:100,
-  gpus:[{id:0,gpu_name:'A6000',gpu_utilization:0,vram_total_mb:49152,vram_total_used_mb:0,processes:[]},{id:1,collection_error:'NVML read failed',processes:[]}]};
+  gpus:[{id:0,slurm_gres_index:2,gpu_name:'A6000',gpu_utilization:0,vram_total_mb:49152,vram_total_used_mb:0,processes:[]},{id:1,slurm_gres_index:0,collection_error:'NVML read failed',processes:[]}]};
 // Names must survive ingestion and storage even when no matching queue job exists.
 node.gpus[0].processes=[
   {pid:101,slurm_job_id:'123_4',slurm_job_ids:['123_4','127'],slurm_job_name:'train <alpha> & evaluation'},
@@ -43,6 +43,7 @@ const slurmReport={sinfo:[
     ...Object.fromEntries(slurmAllocationFields.map(key=>[key,value]))})),
 ],squeue:['total','node','cpu',undefined,'unknown',{}].map((scope,index)=>({
   job_id:String(index+1),req_cpus:'2',req_mem:'4G',req_mem_scope:scope,req_gpus:'2',alloc_gpus:'2',
+  gpu_allocations:index===0?[{node:'unit-node',gres_indices:[2,0]}]:undefined,
 })),accounting:{jobs:[]}};
 assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
 let snapshot=await (await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
@@ -72,6 +73,39 @@ assert.deepEqual(storedProcesses[0].slurm_job_ids,['123_4','127']);
 assert.equal(storedProcesses[1].slurm_job_name,'x'.repeat(500));
 assert.equal(storedProcesses[2].slurm_job_name,'');
 assert.equal(storedProcesses[3].slurm_job_name,'');
+// The scheduler GRES index need not equal the physical GPU ordinal. Preserve
+// the verified map exactly, including index zero and GPUs without processes.
+assert.deepEqual(snapshot.nodes[0].data.gpus.map(g=>[g.id,g.slurm_gres_index]),[[0,2],[1,0]]);
+assert.deepEqual(snapshot.slurm.data.squeue[0].gpu_allocations,[{node:'unit-node',gres_indices:[2,0]}]);
+assert.ok(snapshot.slurm.data.squeue.slice(1).every(job=>job.gpu_allocations===null));
+const indexValues=[0,255,undefined,null,'0',true,{},[],NaN,Infinity,-1,256,1.5];
+assert.equal((await call('/api/report/node','POST',{...node,gpus:indexValues.map((value,id)=>({id,slurm_gres_index:value,processes:[]}))},reportHeaders)).status,200);
+snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
+assert.deepEqual(snapshot.nodes[0].data.gpus.map(g=>g.slurm_gres_index),indexValues.map(value=>Number.isInteger(value)&&value>=0&&value<=255?value:null));
+const validAllocation={node:'unit-node',gres_indices:[2,0]};
+const allIndices=Array.from({length:256},(_,index)=>index);
+const allNodes=Array.from({length:256},(_,index)=>({node:`node-${index}`,gres_indices:[0]}));
+const allocationCases=[
+  ['zero',[],[]],
+  ['trimmed',[{node:' unit-node ',gres_indices:[2,0],ignored:'drop'}],[validAllocation]],
+  ['empty-indices',[{node:'unit-node',gres_indices:[]}],[{node:'unit-node',gres_indices:[]}]],
+  ['max-indices',[{node:'unit-node',gres_indices:allIndices}],[{node:'unit-node',gres_indices:allIndices}]],
+  ['max-nodes',allNodes,allNodes],
+  ['max-name',[{node:'n'.repeat(128),gres_indices:[255]}],[{node:'n'.repeat(128),gres_indices:[255]}]],
+  ...[undefined,null,{},true,'[]'].map((value,index)=>[`invalid-list-${index}`,value,null]),
+  ['too-many-nodes',[...allNodes,{node:'node-256',gres_indices:[0]}],null],
+  ...[null,[],{},'node',true].map((value,index)=>[`invalid-entry-${index}`,[validAllocation,value],null]),
+  ...[undefined,null,0,'','  ','n'.repeat(129)].map((value,index)=>[`invalid-node-${index}`,[{node:value,gres_indices:[0]}],null]),
+  ['duplicate-node',[validAllocation,{node:' unit-node ',gres_indices:[1]}],null],
+  ...[undefined,null,{},'0',true].map((value,index)=>[`invalid-indices-${index}`,[{node:'unit-node',gres_indices:value}],null]),
+  ...[null,'0',true,{},[],NaN,Infinity,-1,256,1.5].map((value,index)=>[`invalid-index-${index}`,[validAllocation,{node:'other',gres_indices:[0,value]}],null]),
+  ['duplicate-index',[{node:'unit-node',gres_indices:[0,0]}],null],
+  ['too-many-indices',[{node:'unit-node',gres_indices:[...allIndices,0]}],null],
+];
+assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:allocationCases.map(([job_id,gpu_allocations])=>({job_id,gpu_allocations}))},reportHeaders)).status,200);
+snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
+for(const [index,[name,,expected]] of allocationCases.entries())assert.deepEqual(snapshot.slurm.data.squeue[index].gpu_allocations,expected,name);
+assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
 node.gpus[0].gpu_utilization=50;await call('/api/report/node','POST',node,reportHeaders);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.nodes.length,1);assert.deepEqual(snapshot.history,[]);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,50);
 const publicEnv={...env,SNAPSHOT_AUTH_MODE:'public'};
 const publicSnapshot=await worker.fetch(new Request('https://local.test/api/snapshot'),publicEnv,{});

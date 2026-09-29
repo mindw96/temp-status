@@ -1,5 +1,18 @@
 'use strict';
 
+// GRES indices come from Slurm; each node collector maps them to NVIDIA device
+// minors. Never equate the displayed NVML index with the scheduler's index.
+function resolveAllocatedGpuJobs(node, gresIndex, jobs) {
+  if (typeof node !== 'string' || !Number.isInteger(gresIndex) || gresIndex < 0 || gresIndex > 255) return [];
+  const active = new Set(['RUNNING', 'COMPLETING', 'SUSPENDED', 'CONFIGURING', 'STAGE_OUT', 'R', 'CG', 'S', 'CF', 'SO']);
+  return (Array.isArray(jobs) ? jobs : []).filter(job => job && active.has(job.state)
+    && Array.isArray(job.raw?.gpu_allocations)
+    && job.raw.gpu_allocations.some(allocation => allocation?.node === node
+      && Array.isArray(allocation.gres_indices) && allocation.gres_indices.includes(gresIndex)))
+    .map(job => ({jobId: job.id, name: job.name, job, allocated: true,
+      users: typeof job.raw?.user === 'string' && job.raw.user.trim() ? [job.raw.user] : [], processCount: 0}));
+}
+
 // Resolve reported process identities only. GPU positions, users, and node names
 // are not sufficient evidence of a Slurm allocation.
 function resolveGpuJobs(processes, jobs) {

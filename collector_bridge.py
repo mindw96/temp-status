@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import stat
 import sys
@@ -85,6 +86,137 @@ def slurm_gpu_count(tres):
     return sum(counts.values()) if counts else None
 
 
+
+
+MAX_GPU_INDICES = 256
+_NODE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_ACTIVE_STATES = {"RUNNING", "R", "SUSPENDED", "S", "COMPLETING", "CG",
+                  "CONFIGURING", "CF", "STAGE_OUT", "SO"}
+
+
+def _allocation_integer(value):
+    if isinstance(value, dict):
+        if value.get("set") is not True or value.get("infinite") is not False:
+            return None
+        value = value.get("number")
+    return value if type(value) is int and value >= 0 else None
+
+
+def _allocation_active(job):
+    state = job.get("job_state")
+    states = state if isinstance(state, list) else re.split(r"[+,\s]+", state or "") if isinstance(state, str) else []
+    states = {value.upper() for value in states if isinstance(value, str)}
+    return bool(states & _ACTIVE_STATES) and not bool(states & {"PENDING", "PD"})
+
+
+def _allocation_single_allocated_node(job):
+    """A single allocated node has no ambiguous GRES-detail-to-node ordering."""
+    resources = job.get("job_resources")
+    resources = resources if isinstance(resources, dict) else {}
+    nodes = resources.get("nodes")
+    nodes = nodes if isinstance(nodes, dict) else {}
+    allocation = nodes.get("allocation")
+    if not isinstance(allocation, list) or len(allocation) != 1:
+        return None
+    entry = allocation[0]
+    name = entry.get("name") if isinstance(entry, dict) else None
+    if not isinstance(name, str) or not _NODE_NAME.fullmatch(name):
+        return None
+    # These fields all describe the allocation, never required_nodes/batch_host.
+    for count in (nodes.get("count"), job.get("node_count")):
+        if count is not None and _allocation_integer(count) != 1:
+            return None
+    for listed in (nodes.get("list"), job.get("nodes")):
+        if listed is not None and listed != name:
+            return None
+    if entry.get("index") is not None and _allocation_integer(entry["index"]) != 0:
+        return None
+    return name
+
+
+def _allocation_split_gres(text):
+    """Split GRES entries without splitting commas inside an IDX bitmap."""
+    if not isinstance(text, str) or len(text) > 16384:
+        return None
+    depth, start, entries = 0, 0, []
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+            if depth > 1:
+                return None
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif char == "," and depth == 0:
+            entries.append(text[start:index].strip())
+            start = index + 1
+    if depth:
+        return None
+    entries.append(text[start:].strip())
+    return entries
+
+
+def _allocation_gpu_indices(text):
+    entries = _allocation_split_gres(text)
+    if not entries:
+        return None
+    selected = set()
+    for entry in entries:
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_/-]*)(?::([^:(),\s]+))?:(\d+)(?:\(([^()]*)\))?", entry)
+        if match is None:
+            return None
+        if match[1] != "gpu":
+            continue
+        if len(match[3]) > 4:
+            return None
+        count = int(match[3])
+        if count > MAX_GPU_INDICES or match[4] is None or not match[4].startswith("IDX:"):
+            return None
+        bitmap = match[4][4:]
+        group = set()
+        if not bitmap and count == 0:
+            continue
+        for item in bitmap.split(","):
+            part = re.fullmatch(r"(\d{1,4})(?:-(\d{1,4}))?", item)
+            if part is None:
+                return None
+            first, last = int(part[1]), int(part[2] or part[1])
+            if first > last or last >= MAX_GPU_INDICES:
+                return None
+            for index in range(first, last + 1):
+                if index in group or index in selected:
+                    return None
+                group.add(index)
+        if len(group) != count:
+            return None
+        selected.update(group)
+    return sorted(selected)
+
+
+def slurm_gpu_allocations(job, allocated_gpus):
+    """Return [{node, gres_indices}], [] for explicit zero, or None if unknown.
+
+    allocated_gpus is the validated AllocTRES GPU total from the caller. A
+    request count, process count or bare node name cannot identify allocated
+    devices. Multi-node details are intentionally not zipped to node names:
+    older/newer Slurm schemas can omit node slots without naming their owner.
+    """
+    if (not isinstance(job, dict) or not _allocation_active(job)
+            or type(allocated_gpus) is not int or not 0 <= allocated_gpus <= MAX_GPU_INDICES):
+        return None
+    details = job.get("gres_detail")
+    if allocated_gpus == 0 and details in (None, []):
+        return []
+    node = _allocation_single_allocated_node(job)
+    if node is None or not isinstance(details, list) or len(details) != 1:
+        return None
+    indices = _allocation_gpu_indices(details[0])
+    if indices is None or len(indices) != allocated_gpus:
+        return None
+    return [{"node": node, "gres_indices": indices}] if indices else []
+
+
 def slurm_job_request(job):
     """Keep requested and allocated TRES separate and retain minimum RAM scope."""
     tres = job.get("tres_req_str")
@@ -114,6 +246,9 @@ def slurm_job_request(job):
             result.update(req_mem=f"{node_memory:g}M", req_mem_scope="node")
         elif cpu_memory is not None:
             result.update(req_mem=f"{cpu_memory:g}M", req_mem_scope="cpu")
+    allocations = slurm_gpu_allocations(job, slurm_gpu_count(job.get("tres_alloc_str")))
+    if allocations is not None:
+        result["gpu_allocations"] = allocations
     return result
 
 
@@ -201,6 +336,107 @@ def install_storage_reporting(module, kind):
     module.build_payload = build_payload
 
 
+def slurm_gpu_minor_order(config):
+    """Read an unambiguous explicit NVIDIA File order from the local GRES file.
+
+    GRES indices enumerate configured devices; they are not NVML GPU indices.
+    Unsupported conditional, included, MIG or count-only configurations are left
+    unavailable rather than assigning ownership to a guessed physical device.
+    """
+    if not isinstance(config, str):
+        return None
+    minors = []
+    for line in config.splitlines():
+        try:
+            tokens = shlex.split(line, comments=True)
+        except ValueError:
+            return None
+        if not tokens:
+            continue
+        fields = {}
+        for token in tokens:
+            key, separator, value = token.partition("=")
+            key = key.lower()
+            if separator != "=" or not key or not value or key in fields:
+                return None
+            fields[key] = value
+        if "include" in fields or "nodename" in fields:
+            return None
+        if "autodetect" in fields and fields["autodetect"].lower() not in ("off", "nvml", "nvidia"):
+            return None
+        if fields.get("name", "").lower() != "gpu":
+            continue
+        if ("multiplefiles" in fields or "file" not in fields
+                or "countonly" in fields.get("flags", "").lower().split(",")):
+            return None
+        devices = fields["file"]
+        files = list(re.finditer(r"/dev/nvidia(\d+|\[[0-9,-]+\])", devices))
+        if not files or ",".join(match.group() for match in files) != devices:
+            return None
+        line_minors = []
+        for match in files:
+            expression = match.group(1).strip("[]")
+            for item in expression.split(","):
+                values = item.split("-")
+                if (len(values) not in (1, 2) or any(not re.fullmatch(r"[0-9]+", value) for value in values)
+                        or any(len(value) > 5 for value in values)):
+                    return None
+                start, end = int(values[0]), int(values[-1])
+                if not 0 <= start <= end <= 65535 or end - start >= 256:
+                    return None
+                line_minors.extend(range(start, end + 1))
+                if len(line_minors) > 256:
+                    return None
+        count = fields.get("count")
+        if count is not None and (not re.fullmatch(r"[0-9]{1,3}", count) or int(count) != len(line_minors)):
+            return None
+        minors.extend(line_minors)
+        if len(minors) > 256:
+            return None
+    # Slurm requires device File entries in increasing numeric order. A changed
+    # or unsupported configuration must not silently reshuffle existing jobs.
+    if not minors or any(previous >= current for previous, current in zip(minors, minors[1:])):
+        return None
+    return minors
+
+
+def install_slurm_gpu_mapping(module, kind):
+    """Attach the verified GRES index while retaining the agent's NVML identity."""
+    if kind != "node":
+        return
+    original_build_payload = module.build_payload
+
+    def build_payload():
+        payload = original_build_payload()
+        gpus = payload.get("gpus") if isinstance(payload, dict) else None
+        if not isinstance(gpus, list):
+            return payload
+        for gpu in gpus:
+            if isinstance(gpu, dict):
+                gpu.pop("slurm_gres_index", None)
+        try:
+            minors = slurm_gpu_minor_order(Path("/etc/slurm/gres.conf").read_text())
+        except (OSError, UnicodeError):
+            return payload
+        if minors is None or len(minors) != len(gpus):
+            return payload
+        by_minor = {}
+        for gpu in gpus:
+            if not isinstance(gpu, dict):
+                return payload
+            minor = slurm_number(gpu.get("minor_number"))
+            if minor is None or not minor.is_integer() or minor in by_minor:
+                return payload
+            by_minor[int(minor)] = gpu
+        if set(by_minor) != set(minors):
+            return payload
+        for index, minor in enumerate(minors):
+            by_minor[minor]["slurm_gres_index"] = index
+        return payload
+
+    module.build_payload = build_payload
+
+
 def install_report_backoff(module, interval):
     """Let the original agent loop slow down on failed or quota-limited posts."""
     original_post = module.SESSION.post
@@ -277,6 +513,7 @@ def main():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     install_storage_reporting(module, args.kind)
+    install_slurm_gpu_mapping(module, args.kind)
     install_slurm_job_requests(module, args.kind)
     if auth_mode == "sites":
         module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})

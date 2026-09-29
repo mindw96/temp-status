@@ -43,7 +43,9 @@ Job 상세창의 **Requested CPUs**와 **Requested RAM**은 Slurm 요청량입�
 
 GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아닙니다. 화면은 `vram_total_used_mb / vram_total_mb`를 사용합니다. 저장·표시 단위는 원래 바이트 계산에 맞춰 MiB/GiB로 해석합니다. `vram_utilization`을 메모리 용량 점유율로 쓰지 않습니다.
 
-기존 payload에는 정확한 GPU GRES 할당, 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각이 없습니다. 따라서 프로세스가 관측된 GPU를 할당 GPU로 표시하지 않으며, 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
+GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. 수집기는 `gres_detail`의 IDX와 명시적 할당 노드를 읽고, 각 노드의 `/etc/slurm/gres.conf` File 순서를 NVIDIA `minor_number`에 연결합니다. NVIDIA 표시 번호를 GRES 번호로 가정하지 않으므로 Server3처럼 순서가 다른 경우에도 해당 물리 장치에 연결됩니다. 할당된 GPU에는 프로세스·VRAM 사용이 없어도 사용자와 Job을 표시하며, 사용률·VRAM은 실제 측정값을 유지합니다. 매핑이 불명확하거나 보고가 오래되면 현재 할당을 추정하지 않습니다. 프로세스 정보만 있는 경우에는 `Observed:`로 구분합니다. 현재 파서는 명시적으로 한 노드에 연결되는 할당을 지원하며, 노드별 GRES 대응이 불명확한 다중 노드 보고는 미확인으로 처리합니다. 작업 상세의 할당 장치와 프로세스 관측 장치는 별도로 표시합니다.
+
+노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각은 수집하지 않습니다. 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
 
 ## 기존 수집기를 보존하는 연결
 
@@ -99,6 +101,8 @@ node scripts/test-worker.mjs
 node scripts/test-gpu-jobs.mjs
 node scripts/test-job-filters.mjs
 python3 scripts/test-collector-bridge.py
+python3 scripts/test-slurm-allocations.py
+python3 scripts/test-gres-device-mapping.py
 pnpm deploy:check
 node scripts/preview.mjs
 ```

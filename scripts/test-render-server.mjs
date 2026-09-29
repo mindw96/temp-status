@@ -52,10 +52,10 @@ try {
     assert.equal((await post(kind, {}, null)).status, 401);
     assert.equal((await post(kind, {}, 'wrong-token')).status, 401);
   }
-  const node = {server_name: 'test-node', cpu_percent: 20, gpus: [{id: 0, gpu_name: 'Test GPU', gpu_utilization: 40, vram_total_mb: 81920, vram_total_used_mb: 12288, processes: [{pid: 42, username: 'test-user', slurm_job_id: '123', slurm_job_name: 'test-job'}]}]};
+  const node = {server_name: 'test-node', cpu_percent: 20, gpus: [{id: 0, slurm_gres_index: 2, gpu_name: 'Test GPU', gpu_utilization: 40, vram_total_mb: 81920, vram_total_used_mb: 12288, processes: [{pid: 42, username: 'test-user', slurm_job_id: '123', slurm_job_name: 'test-job'}]}, {id: 2, slurm_gres_index: 0, gpu_utilization: 0, vram_total_used_mb: 4, processes: []}]};
   const slurm = {sinfo: [{name: 'test-node', state: 'mixed', cpus: 64, alloc_cpus: 60, idle_cpus: 4,
     cpus_other: 0, real_memory: 512000, alloc_memory: 432128, mem_spec_limit: 0,
-    ignored: 'must not be stored'}], squeue: [{job_id: '123', name: 'test-job', user: 'test-user', job_state: 'R', req_cpus: '2', req_mem: '4G', req_mem_scope: 'total', req_gpus: '2', alloc_gpus: '2'}]};
+    ignored: 'must not be stored'}], squeue: [{job_id: '123', name: 'test-job', user: 'test-user', job_state: 'R', req_cpus: '2', req_mem: '4G', req_mem_scope: 'total', req_gpus: '2', alloc_gpus: '2', gpu_allocations: [{node: ' test-node ', gres_indices: [2, 0]}]}]};
   const cloud = {server: {name: 'test-cloud', type: 'cloud'}, system: {cpu_count: 8}, gpus: [{index: 0, name: 'Cloud GPU', utilization_gpu: 80, memory_used: 100, memory_total: 81920, processes: []}]};
   assert.equal((await post('node', node)).status, 200);
   assert.equal((await post('slurm', slurm)).status, 200);
@@ -68,6 +68,8 @@ try {
   assert.equal(snapshot.nodes.find(n => n.data.server_name === 'test-cloud').data.source_type, 'cloud');
   assert.equal(snapshot.slurm.data.squeue[0].job_id, '123');
   assert.deepEqual(['req_cpus', 'req_mem', 'req_mem_scope', 'req_gpus', 'alloc_gpus'].map(key => snapshot.slurm.data.squeue[0][key]), ['2', '4G', 'total', '2', '2']);
+  assert.deepEqual(snapshot.nodes.find(n => n.data.server_name === 'test-node').data.gpus.map(g => [g.id, g.slurm_gres_index]), [[0, 2], [2, 0]]);
+  assert.deepEqual(snapshot.slurm.data.squeue[0].gpu_allocations, [{node: 'test-node', gres_indices: [2, 0]}]);
   assert.deepEqual(snapshot.history, []);
   const allocationFields = ['real_memory', 'alloc_memory', 'cpus_other', 'mem_spec_limit'];
   const allocation = snapshot.slurm.data.sinfo[0];
@@ -85,6 +87,29 @@ try {
     assert.deepEqual(allocationFields.map(key => normalized[key]), allocationFields.map(() => value === 0 ? 0 : null));
     assert.equal(Object.hasOwn(normalized, 'ignored'), false);
   }
+  // Round-trip a reserved GPU with no processes, then unknown/invalid mappings.
+  // The HTTP adapter must use the same all-or-unknown sanitation as the Worker.
+  const indexValues = [0, 255, undefined, null, '0', true, {}, [], NaN, Infinity, -1, 256, 1.5];
+  assert.equal((await post('node', {...node, gpus: indexValues.map((value, id) => ({id, slurm_gres_index: value, processes: []}))})).status, 200);
+  const sanitizedGPUs = (await getSnapshot()).nodes.find(n => n.data.server_name === 'test-node').data.gpus;
+  assert.deepEqual(sanitizedGPUs.map(g => g.slurm_gres_index), indexValues.map(value => Number.isInteger(value) && value >= 0 && value <= 255 ? value : null));
+  const validMap = [{node: 'test-node', gres_indices: [2, 0]}];
+  const fullIndices = [{node: 'test-node', gres_indices: Array.from({length: 256}, (_, index) => index)}];
+  const fullNodes = Array.from({length: 256}, (_, index) => ({node: `node-${index}`, gres_indices: [0]}));
+  const mappingCases = [
+    [undefined, null], [null, null], [[], []], [validMap, validMap],
+    [fullIndices, fullIndices], [fullNodes, fullNodes],
+    [[...fullNodes, {node: 'extra', gres_indices: [0]}], null],
+    [[{node: 'test-node', gres_indices: [...fullIndices[0].gres_indices, 0]}], null],
+    [[...validMap, null], null], [[...validMap, {node: ' test-node ', gres_indices: [1]}], null],
+    ...[null, '0', true, -1, 256, 1.5].map(value => [[...validMap, {node: 'other', gres_indices: [value]}], null]),
+    [[{node: 'test-node', gres_indices: [0, 0]}], null],
+    [[{node: 'n'.repeat(129), gres_indices: [0]}], null],
+    [[{node: ' ', gres_indices: [0]}], null],
+  ];
+  assert.equal((await post('slurm', {sinfo: [], squeue: mappingCases.map(([gpu_allocations], index) => ({job_id: String(index), gpu_allocations}))})).status, 200);
+  assert.deepEqual((await getSnapshot()).slurm.data.squeue.map(job => job.gpu_allocations), mappingCases.map(([, expected]) => expected));
+  assert.equal((await post('node', node)).status, 200);
   assert.equal((await post('slurm', slurm)).status, 200);
   const compressed = await raw(base, '/api/snapshot', {headers: {'Accept-Encoding': 'gzip'}});
   assert.equal(compressed.headers['content-encoding'], 'gzip');
