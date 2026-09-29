@@ -85,16 +85,18 @@ def enrich_requests(payload, report=None, error=None):
     return result, calls
 
 
-many_jobs = {'squeue': [{'job_id': str(i), 'req_cpus': '', 'req_mem': ''} for i in range(1, 210)],
+many_jobs = {'squeue': [{'job_id': str(i), 'req_cpus': '', 'req_mem': '', 'req_gpus': ''}
+                       for i in range(1, 210)],
              'sinfo': [{'hostname': 'server1', 'alloc_memory': 123}]}
-many_report = {'jobs': [{'job_id': i, 'tres_req_str': 'cpu=4,mem=8G,node=1',
-                        'tres_alloc_str': 'cpu=64,mem=128G', 'cpus': optional(64)}
+many_report = {'jobs': [{'job_id': i, 'tres_req_str': 'cpu=4,mem=8G,node=1,gres/gpu=2',
+                        'tres_alloc_str': 'cpu=64,mem=128G,gres/gpu=4', 'cpus': optional(64)}
                        for i in range(1, 210)]}
 enriched, calls = enrich_requests(many_jobs, many_report)
 assert calls == ['build', 'query']
 assert len(enriched['squeue']) == 209
 assert all(job['req_cpus'] == '4' and job['req_mem'] == '8G'
-           and job['req_mem_scope'] == 'total' for job in enriched['squeue'])
+           and job['req_mem_scope'] == 'total' and job['req_gpus'] == '2'
+           and job['alloc_gpus'] == '4' for job in enriched['squeue'])
 # The original builder's node allocation calculation is not rerun or modified.
 assert enriched['sinfo'] == [{'hostname': 'server1', 'alloc_memory': 123}]
 
@@ -121,6 +123,51 @@ for invalid in (optional(16, present=False), optional(16, infinite=True),
 assert bridge.slurm_job_request({'tres_req_str': 'cpu=invalid,mem=invalid',
                                 'cpus': optional(6), 'memory_per_cpu': optional(1024)}) == {
     'req_cpus': '6', 'req_mem': '1024M', 'req_mem_scope': 'cpu'}
+
+# Job 54901 reserves two GPUs even when only one GPU has an observed process.
+# Per-node GRES and its IDX values must not become NVIDIA device identities.
+job_54901 = {'job_id': 54901, 'cpus': optional(16), 'memory_per_node': optional(122880),
+             'tres_req_str': 'cpu=16,mem=120G,node=1,billing=16,gres/gpu=2',
+             'tres_alloc_str': 'cpu=16,mem=120G,node=1,billing=16,gres/gpu=2',
+             'tres_per_node': 'gres/gpu:a6000:2', 'gres_detail': ['gpu:a6000:2(IDX:0,2)']}
+gpu_result, gpu_calls = enrich_requests({'squeue': [{'job_id': '54901', 'req_gpus': ''}]},
+                                       {'jobs': [job_54901]})
+assert gpu_calls == ['build', 'query']
+assert gpu_result['squeue'] == [{'job_id': '54901', 'req_cpus': '16', 'req_mem': '120G',
+                               'req_mem_scope': 'total', 'req_gpus': '2', 'alloc_gpus': '2'}]
+for tres, expected in (
+        ('cpu=16,gres/gpu=2', 2),
+        ('gres/gpu=2,gres/gpu:a6000=2', 2),
+        ('gres/gpu:a100=2,gres/gpu:v100=1', 3),
+        ('gres/gpu:a100=2,gres/gpu:v100=1,gres/gpu=3', 3),
+        ('gres/gpu=0', 0),
+        ('gres/gpu:a100=0', 0),
+        ('gres/gpuutil=100,gres/gpumem=4096,gres/mps=20,gres/gpu=2', 2),
+        ('cpu=4,gres/gpuutil=100,gres/mps=20', None),
+        ('', None), (None, None), (True, None),
+        ('gres/gpu=2,gres/gpu=2', None),
+        ('gres/gpu=1,gres/gpu=2', None),
+        ('gres/gpu:a100=2,gres/gpu:a100=2', None),
+        ('gres/gpu:a100=2,gres/gpu:v100=invalid', None),
+        ('gres/gpu=invalid,gres/gpu:a100=2', None),
+        ('gres/gpu=2,gres/gpu:v100=invalid', None),
+        ('gres/gpu:=2', None),
+        ('gres/gpu', None),
+        ('gres/gpu:a100', None)):
+    assert bridge.slurm_gpu_count(tres) == expected, tres
+for invalid in ('-1', '1.5', '1e3', 'NaN', 'inf', 'true', '', '2=3'):
+    assert bridge.slurm_gpu_count('gres/gpu=' + invalid) is None
+assert bridge.slurm_job_request({'tres_req_str': 'gres/gpu=2', 'tres_alloc_str': ''}) == {'req_gpus': '2'}
+assert bridge.slurm_job_request({'tres_req_str': '', 'tres_alloc_str': 'gres/gpu=2'}) == {'alloc_gpus': '2'}
+assert bridge.slurm_job_request({'tres_req_str': 'gres/gpu=0', 'tres_alloc_str': 'gres/gpu=0'}) == {
+    'req_gpus': '0', 'alloc_gpus': '0'}
+assert bridge.slurm_job_request({'tres_per_node': 'gres/gpu:a6000:2',
+                                'gres_detail': ['gpu:a6000:2(IDX:0,2)']}) == {}
+# A failed or unavailable bulk GPU field preserves what the source did report.
+gpu_original = {'squeue': [{'job_id': '54901', 'req_gpus': '2', 'alloc_gpus': '2'}]}
+for raw_job in ({'job_id': 54901}, {'job_id': 54901, 'tres_req_str': 'gres/gpu=invalid',
+                                 'tres_alloc_str': 'gres/gpu=1,gres/gpu=2'}):
+    assert enrich_requests(json.loads(json.dumps(gpu_original)), {'jobs': [raw_job]})[0] == gpu_original
 
 # Match numeric jobs, opaque SLUIDs, exact individual array tasks and exact
 # aggregate expressions. Never let a source-provided parent alias match siblings.
@@ -227,4 +274,4 @@ else: raise AssertionError('Network error must propagate')
 assert module.REPORT_INTERVAL_SEC == 30
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
-print('PASS: bulk Slurm requests beyond 200 jobs, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')
+print('PASS: bulk Slurm requests beyond 200 jobs, separate requested/allocated GPU totals without typed duplication, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')

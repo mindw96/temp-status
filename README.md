@@ -43,7 +43,7 @@ Job 상세창의 **Requested CPUs**와 **Requested RAM**은 Slurm 요청량입�
 
 GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아닙니다. 화면은 `vram_total_used_mb / vram_total_mb`를 사용합니다. 저장·표시 단위는 원래 바이트 계산에 맞춰 MiB/GiB로 해석합니다. `vram_utilization`을 메모리 용량 점유율로 쓰지 않습니다.
 
-기존 payload에는 정확한 GPU GRES 할당, 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각이 없습니다. 따라서 프로세스가 관측된 GPU를 할당 GPU로 표시하지 않으며, 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. Slurm 요청 GPU는 에이전트 보고값 그대로 보여주고 할당 합계에 쓰지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
+기존 payload에는 정확한 GPU GRES 할당, 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각이 없습니다. 따라서 프로세스가 관측된 GPU를 할당 GPU로 표시하지 않으며, 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
 
 ## 기존 수집기를 보존하는 연결
 

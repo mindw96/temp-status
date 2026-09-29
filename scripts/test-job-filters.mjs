@@ -303,6 +303,30 @@ evaluate('showJob("47")');
 assert.match(element('#dialog-content').innerHTML, /<dt>Requested RAM<\/dt><dd>32 GiB total<\/dd>/);
 assert.match(element('#dialog-content').innerHTML, /<dt>Requested CPUs<\/dt><dd>Not reported<\/dd>/);
 
+// Requested and allocated GPUs must not be derived from the number of devices
+// with matching processes. Multiple processes on one device still mean one GPU.
+report([job(54901, 'alice', 'server2', 'RUNNING', {req_gpus: '2', alloc_gpus: '2'})]);
+evaluate(`liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus = [
+  {id: 0, processes: [{pid: 10, slurm_job_id: '54901'}, {pid: 11, slurm_job_id: '54901'}]},
+  {id: 2, processes: []}
+]; normalizeSnapshot(liveState.snapshot); showJob('54901');`);
+assert.match(element('#dialog-content').innerHTML, /<dt>Requested GPUs<\/dt><dd>2<\/dd>/);
+assert.match(element('#dialog-content').innerHTML, /<dt>Slurm allocated GPUs<\/dt><dd>2<\/dd>/);
+assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed processes<\/dt><dd>1 GPU · Server2 \/ GPU 0<\/dd>/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /Server2 \/ GPU 2/);
+evaluate(`liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1; showJob('54901');`);
+assert.match(element('#dialog-content').innerHTML, /Unavailable while Slurm data is stale/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /1 GPU ·/);
+for (const [state, raw, expected] of [
+  ['RUNNING', {req_gpus: '0', alloc_gpus: '0'}, '0'],
+  ['RUNNING', {req_gpus: '2'}, 'Not reported'],
+  ['PENDING', {req_gpus: '2'}, 'Not allocated yet']
+]) {
+  report([job(48, 'alice', 'server2', state, raw)]);
+  evaluate('showJob("48")');
+  assert.ok(element('#dialog-content').innerHTML.includes(`<dt>Slurm allocated GPUs</dt><dd>${expected}</dd>`));
+}
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);

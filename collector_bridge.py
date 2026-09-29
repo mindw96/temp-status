@@ -60,8 +60,33 @@ def slurm_job_identities(job):
     return identities - {""}
 
 
+def slurm_gpu_count(tres):
+    """Read total GPU TRES without counting generic and typed totals twice."""
+    if not isinstance(tres, str):
+        return None
+    counts = {}
+    for entry in tres.split(","):
+        key, separator, value = entry.strip().partition("=")
+        key, value = key.strip(), value.strip()
+        if key != "gres/gpu" and not key.startswith("gres/gpu:"):
+            continue
+        # A duplicate or malformed GPU entry makes this total ambiguous. Do not
+        # substitute a partial sum or turn unavailable data into zero GPUs.
+        if (not re.fullmatch(r"gres/gpu(?::[^\s,=]+)?", key)
+                or separator != "=" or not re.fullmatch(r"[0-9]+", value)
+                or key in counts):
+            return None
+        try:
+            counts[key] = int(value)
+        except ValueError:
+            return None
+    if "gres/gpu" in counts:
+        return counts["gres/gpu"]
+    return sum(counts.values()) if counts else None
+
+
 def slurm_job_request(job):
-    """Prefer aggregate requested TRES; retain the scope of minimum RAM requests."""
+    """Keep requested and allocated TRES separate and retain minimum RAM scope."""
     tres = job.get("tres_req_str")
     fields = dict(re.findall(r"(?:^|,)\s*(cpu|mem)=([^,\s]+)", tres)) if isinstance(tres, str) else {}
     result = {}
@@ -70,6 +95,10 @@ def slurm_job_request(job):
         cpus = slurm_number(job.get("cpus"))
     if cpus is not None and cpus.is_integer():
         result["req_cpus"] = str(int(cpus))
+    for field, source in (("req_gpus", "tres_req_str"), ("alloc_gpus", "tres_alloc_str")):
+        gpus = slurm_gpu_count(job.get(source))
+        if gpus is not None:
+            result[field] = str(gpus)
 
     node_memory = slurm_number(job.get("memory_per_node"))
     cpu_memory = slurm_number(job.get("memory_per_cpu"))
