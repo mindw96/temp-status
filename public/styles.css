@@ -140,8 +140,11 @@ section[id]{scroll-margin-top:24px}
 .gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:1.3em;font-size:12px;line-height:1.3}
 .gpu-job-index{font-size:12px;font-weight:400;color:var(--text-primary);white-space:nowrap}
 .gpu-card-header .gpu-job-index{flex-shrink:0}
-.gpu-metrics{display:flex;align-items:baseline;justify-content:flex-end;flex-wrap:wrap;gap:2px 8px;margin-top:5px;min-width:0;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
-.gpu-metric{white-space:nowrap}
+.gpu-metrics{display:grid;grid-template-columns:auto minmax(16px,1fr) auto;align-items:center;gap:2px 6px;margin-top:5px;min-width:0;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
+.gpu-metric{display:contents;white-space:nowrap}
+.gpu-metric-value{text-align:right}
+.gpu-meter{display:block;min-width:16px;height:4px;border-radius:100px;overflow:hidden;background:var(--meter-track)}
+.gpu-meter>span{display:block;height:100%;border-radius:inherit;background:var(--accent-blue)}
 .gpu-metric strong{font-weight:400;color:var(--link)}
 .gpu-memory{color:var(--text-secondary)}
 .gpu-job-items{display:grid;gap:4px;min-width:0}
@@ -275,7 +278,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 #dialog-content .node-storage{border:1px solid var(--divider);border-radius:12px;padding:12px 15px}
 
 @media(min-width:1024px){.node-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-/* Three lines per GPU: device and owner, job name, measured usage. */
+/* Device and owner, job name, then separate UTIL and VRAM meter rows. */
 @media(min-width:1024px){
   .gpu-jobs-summary{padding:8px 20px 16px}
   .gpu-jobs-caption{margin-bottom:6px}
@@ -291,7 +294,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .node-summary{padding-inline:14px}
   .gpu-jobs-summary{padding-inline:12px}
   .gpu-job-row.gpu-block{padding-inline:8px}
-  .gpu-metrics{font-size:clamp(9px,.9vw,10px);gap:2px}
+  .gpu-metrics{font-size:clamp(9px,.9vw,10px);column-gap:4px}
   .gpu-card-header{gap:5px}
   .gpu-card-header .gpu-job-meta{gap:3px}
   .storage-row{font-size:10px;gap:5px}

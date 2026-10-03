@@ -387,22 +387,25 @@ const renderMetrics = code => metrics.evaluate(`${code}; normalizeSnapshot(liveS
 renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:0,vram_total_used_mb:0})');
 const gpuCard = () => metrics.evaluate('gpuBlockMarkup(nodes[0], nodes[0].gpus[0])');
 assert.match(visibleText(gpuCard()), /UTIL 0% VRAM 0% \(0 \/ 1 GiB\)/);
-assert.doesNotMatch(gpuCard(), /class="meter|gpu-vram-badge/);
+assert.equal([...gpuCard().matchAll(/role="meter"/g)].length, 2);
+assert.equal([...gpuCard().matchAll(/aria-valuenow="0"/g)].length, 2);
 assert.match(metrics.element('#dialog-content').innerHTML, /0\.0 \/ 1\.0 GiB/);
 assert.match(metrics.element('#dialog-content').innerHTML, /0%/);
 renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:99,vram_total_used_mb:30720,vram_total_mb:49152})');
 assert.match(visibleText(gpuCard()), /UTIL 99% VRAM 63% \(30 \/ 48 GiB\)/);
+assert.match(gpuCard(), /aria-label="UTIL"[^>]*aria-valuenow="99"/);
+assert.match(gpuCard(), /aria-label="VRAM"[^>]*aria-valuenow="62\.5"/);
 renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {vram_total_used_mb:2048,vram_total_mb:1024})');
 assert.equal(metrics.evaluate('nodes[0].gpus[0].memoryUsed'), null);
 for (const selector of ['#node-grid', '#dialog-content']) {
-  assert.match(metrics.element(selector).innerHTML, /VRAM —/);
+  assert.match(visibleText(metrics.element(selector).innerHTML), /VRAM —/);
   assert.doesNotMatch(metrics.element(selector).innerHTML, /2(?:\.0)? \/ 1(?:\.0)? GiB|200%/);
 }
 for (const value of ['null', 'NaN', '-1', '101']) {
   renderMetrics(`Object.assign(liveState.snapshot.nodes[0].data, {cpu_percent:${value},ram_percent:${value}});
     liveState.snapshot.nodes[0].data.gpus[0].gpu_utilization=${value}`);
   assert.match(metrics.element('#node-grid').innerHTML, /Not reported/);
-  assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /class="meter/);
+  assert.doesNotMatch(gpuCard(), /aria-valuenow=|style="width:/);
   assert.match(visibleText(gpuCard()), /UTIL — VRAM —/);
   assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /--p:|NaN%|101%|-1%|>0%/);
   assert.match(metrics.element('#dialog-content').innerHTML, /Compute —/);
@@ -411,9 +414,10 @@ for (const cause of ['liveState.snapshot.nodes[0].receivedAt=Date.now()-180000',
   renderMetrics(`liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now();
     Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:77,vram_total_used_mb:512,collection_error:null}); ${cause}`);
   for (const selector of ['#node-grid', '#dialog-content']) {
-    assert.match(metrics.element(selector).innerHTML, /VRAM —/);
+    assert.match(visibleText(metrics.element(selector).innerHTML), /VRAM —/);
     assert.doesNotMatch(metrics.element(selector).innerHTML, /77%|0\.5 \/ 1(?:\.0)? GiB|--p:/);
   }
+  assert.doesNotMatch(gpuCard(), /aria-valuenow=|style="width:/);
 }
 
 // Server CPU/RAM summaries represent Slurm reservations, not the collector's
@@ -463,7 +467,7 @@ assert.equal(rowText('CPU'), 'CPU 4 / 64');
 assert.equal(rowText('RAM'), 'RAM 78 / 500 GiB');
 assert.match(resourceRow('CPU'), /60 allocated · 4 free · 64 total · Slurm/);
 assert.match(resourceRow('RAM'), /422 GiB allocated · 78 GiB free · 500 GiB total · Slurm/);
-assert.doesNotMatch(allocations.element('#node-grid').innerHTML, /class="meter|width:[\d.]+%/);
+for (const label of ['CPU', 'RAM']) assert.doesNotMatch(resourceRow(label), /class="meter|role="meter"|width:[\d.]+%/);
 assert.doesNotMatch(rowText('CPU'), /1%/);
 assert.doesNotMatch(rowText('RAM'), /2%/);
 

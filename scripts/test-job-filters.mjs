@@ -357,7 +357,7 @@ assert.doesNotMatch(element('#node-grid').innerHTML, /class="gpu-blocks|class="g
 assert.equal(cardOccupied(idleMarkup()), true, 'A reserved, idle GPU highlights its detail card');
 assert.match(idleMarkup(), /data-source="allocation"/);
 assert.match(idleMarkup(), /54901/); assert.match(idleMarkup(), /ryujh/);
-assert.match(idleMarkup(), /UTIL <strong>0%<\/strong>/);
+assert.match(idleMarkup(), /aria-label="UTIL"[^>]*aria-valuenow="0"/);
 assert.match(idleMarkup(), /류정환\(ryujh\)/);
 assert.doesNotMatch(idleMarkup(), /No process observed|Observed: ryujh/);
 assert.equal(evaluate("nodes.find(n => n.id === 'server2').gpus[2].allocated"), true);
@@ -399,7 +399,7 @@ assert.equal([...sharedCard.matchAll(/class="gpu-job-name"/g)].length, 2);
 assert.match(sharedCard, />Long training job 54901<\/span>/);
 assert.match(sharedCard, />Long training job 54902<\/span>/);
 assert.ok(sharedCard.lastIndexOf('class="gpu-job-name"') < sharedCard.indexOf('class="gpu-metrics"'));
-assert.doesNotMatch(sharedCard, /class="meter/);
+assert.equal([...sharedCard.matchAll(/role="meter"/g)].length, 2);
 evaluate('showJob("54901")');
 assert.match(element('#dialog-content').innerHTML, /<dt>Allocated GPU devices<\/dt><dd>Server2 \/ GPU 0, Server2 \/ GPU 2<\/dd>/);
 assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed processes<\/dt><dd>1 GPU · Server2 \/ GPU 0<\/dd>/);

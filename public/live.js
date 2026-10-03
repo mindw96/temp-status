@@ -140,14 +140,21 @@ function allocationMarkup(n, key) {
   const value = status || `${compactGiB(resource.free)}<span class="allocation-total"> / ${compactGiB(resource.total)}${unit}</span>`;
   return `<div class="resource-row" title="${esc(allocationDescription(n, key))}"><div class="resource-line"><span class="metric-label">${key.toUpperCase()}</span><strong class="metric-value">${value}</strong></div></div>`;
 }
+function gpuMetricMarkup(label, value, capacity = '') {
+  const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
+  const meter = usable === null
+    ? '<span class="gpu-meter is-unavailable" aria-hidden="true"></span>'
+    : `<span class="gpu-meter" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%" aria-hidden="true"></span></span>`;
+  return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong>${capacity ? ` <span class="gpu-memory">${esc(capacity)}</span>` : ''}</span></div>`;
+}
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
   const occupied = !n.stale && ((!n.isCloud && n.slurmFresh && g.allocated) || (!g.error && g.processes.length > 0));
   const util = available ? g.util : null;
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
-  const vram = memoryAvailable ? `VRAM <strong>${percent(vramPercent)}</strong> <span class="gpu-memory">(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)</span>` : 'VRAM —';
-  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics"><span class="gpu-metric">UTIL <strong>${percent(util)}</strong></span><span class="gpu-metric gpu-vram">${vram}</span></div></div>`;
+  const capacity = memoryAvailable ? `(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)` : '';
+  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent, capacity)}</div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
