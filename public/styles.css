@@ -156,7 +156,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-card-header .gpu-job-id{flex-shrink:0;max-width:45%}
 .gpu-job-separator{flex-shrink:0;font-size:11px;color:var(--text-tertiary)}
 .gpu-job-user{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;color:var(--text-secondary)}
-.gpu-job-name{display:block;font-size:14px;font-weight:400;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpu-job-name{display:block;font-size:12px;font-weight:400;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gpu-card-header+.gpu-job-name{margin-top:2px}
 .gpu-job-status{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--pending-text)}
 .gpu-job-link:hover .gpu-job-name{color:var(--link);text-decoration:underline}
