@@ -4,6 +4,10 @@ import vm from 'node:vm';
 
 const source = await Promise.all(['app.js', 'gpu-jobs.js', 'live.js'].map(name =>
   readFile(new URL(`../public/${name}`, import.meta.url), 'utf8')));
+const page = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+assert.doesNotMatch(page, /class="sample-note"|class="node-key"|id="sample-details"|Slurm snapshot/);
+assert.equal([...page.matchAll(/id="retry-live"/g)].length, 1);
+assert.match(page, /id="nodes"[^>]*><div class="section-heading">[\s\S]*?id="nodes-title">GPU nodes<\/h2>[\s\S]*?<button[^>]*id="retry-live"[^>]*>Refresh now<\/button><\/div>/);
 const flush = async () => {for (let i = 0; i < 12; i++) await Promise.resolve();};
 
 // Run the actual browser scripts against a small DOM and controllable browser
@@ -12,8 +16,10 @@ function browser({hidden = false, holdRequest = false} = {}) {
   let now = Date.parse('2026-09-22T10:00:00Z'), timerId = 0;
   const timers = new Map(), elements = new Map(), listeners = new Map(), requests = [], responses = [];
   const element = selector => {
+    assert.ok(!['.sample-note', '.node-key', '#sample-details', '.table-footer>span:last-child'].includes(selector),
+      `Removed status UI must not be accessed: ${selector}`);
     if (!elements.has(selector)) elements.set(selector, {
-      innerHTML: '', textContent: '', disabled: false, addEventListener() {}, showModal() {},
+      innerHTML: '', textContent: '', disabled: false, hidden: false, addEventListener() {}, showModal() {},
       classList: {toggle() {}}, setAttribute() {}
     });
     return elements.get(selector);
@@ -83,6 +89,8 @@ const hidden = browser({hidden: true});
 await flush();
 assert.equal(hidden.requests.length, 0);
 assert.equal(hidden.timers.size, 0);
+assert.equal(hidden.element('#connection-status').hidden, false);
+assert.match(hidden.element('#connection-status').textContent, /Waiting for collectors/);
 await hidden.advance(600000);
 assert.equal(hidden.requests.length, 0);
 await hidden.visibility(false);
@@ -94,7 +102,8 @@ assert.equal(hidden.state().error, null);
 const healthy = browser();
 await flush();
 assert.equal(healthy.requests.length, 1);
-assert.match(healthy.element('.sample-note').innerHTML, /Auto-refresh every 30 seconds/);
+assert.equal(healthy.element('#connection-status').hidden, true);
+assert.equal(healthy.element('#connection-status').textContent, '');
 assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 5s');
 assert.equal(healthy.element('#retry-live').disabled, true);
 await healthy.advance(4000);
@@ -102,8 +111,9 @@ assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 1s');
 await healthy.element('#retry-live').onclick();
 assert.equal(healthy.requests.length, 1);
 await healthy.advance(1000);
-assert.equal(healthy.element('#retry-live').textContent, 'Refresh now ↗');
+assert.equal(healthy.element('#retry-live').textContent, 'Refresh now');
 assert.equal(healthy.element('#retry-live').disabled, false);
+assert.match(healthy.element('#retry-live').title, /every 30 seconds/);
 await healthy.advance(24999);
 assert.equal(healthy.requests.length, 1);
 await healthy.advance(1);
@@ -137,6 +147,8 @@ assert.equal(healthy.requests.at(-1).at - healthy.requests.at(-2).at, 5000);
 const inFlight = browser({holdRequest: true});
 await flush();
 assert.equal(inFlight.state().loading, true);
+assert.equal(inFlight.element('#retry-live').textContent, 'Refreshing…');
+assert.equal(inFlight.element('#retry-live').disabled, true);
 await inFlight.visibility(true);
 assert.equal(inFlight.requests[0].signal.aborted, true);
 assert.equal(inFlight.state().loading, false);
@@ -166,6 +178,9 @@ failures.responses.push({status: 503, body: {error: 'storage_quota_exceeded', re
 await failures.element('#retry-live').onclick(); await flush();
 assert.equal(failures.state().errorKind, 'quota');
 assert.match(failures.state().error, /09:00:00 KST/);
+assert.equal(failures.element('#connection-status').hidden, false);
+assert.match(failures.element('#connection-status').textContent, /Showing last received data; live status is unavailable/);
+assert.match(failures.element('#connection-status').textContent, /Automatic retry within 5 minutes, or use Refresh now/);
 assert.equal(failures.evaluate('nodes[0].stale'), true);
 assert.equal(failures.evaluate('nodes[0].gpus[0].util'), null);
 assert.equal(failures.state().snapshot.nodes.length, 1);
@@ -177,6 +192,8 @@ assert.equal(failures.requests.length, 3);
 assert.equal(failures.state().error, null);
 assert.equal(failures.state().failureCount, 0);
 assert.equal(failures.evaluate('nodes[0].stale'), false);
+assert.equal(failures.element('#connection-status').hidden, true);
+assert.equal(failures.element('#connection-status').textContent, '');
 for (const [expectedDelay, response] of [
   [120000, {status: 503, body: {error: 'storage_unavailable'}}],
   [240000, {status: 200, invalidJSON: true}],
@@ -186,7 +203,24 @@ for (const [expectedDelay, response] of [
   await failures.element('#retry-live').onclick(); await flush();
   assert.equal(failures.state().nextAttemptAt - failures.requests.at(-1).at, expectedDelay);
   assert.equal(failures.state().snapshot.nodes.length, 1);
+  assert.equal(failures.element('#connection-status').hidden, false);
+  assert.match(failures.element('#connection-status').textContent, /live status is unavailable/);
 }
+
+// Removing the always-on banner must not conceal initial failures or make a
+// sample view look live. The relocated control still opens sample information.
+const connection = browser({hidden: true});
+connection.evaluate('liveState.error = "Request failed"; renderConnection();');
+assert.equal(connection.element('#connection-status').hidden, false);
+assert.match(connection.element('#connection-status').textContent, /Request failed Live data is unavailable/);
+connection.evaluate('liveState.mode = "demo"; renderConnection();');
+assert.equal(connection.element('#connection-status').hidden, false);
+assert.match(connection.element('#connection-status').textContent, /All values and names are fictional/);
+assert.equal(connection.element('#retry-live').textContent, 'Data source');
+assert.equal(connection.element('#retry-live').disabled, false);
+await connection.element('#retry-live').onclick();
+assert.match(connection.element('#dialog-content').innerHTML, /<h2 id="dialog-title">Collector connection<\/h2>/);
+assert.equal(connection.requests.length, 0);
 
 // The 3-minute boundary and help text agree, including reports that age while
 // hidden. No extra network reads are needed just to evaluate freshness.
@@ -394,4 +428,4 @@ for (const [value, expected] of [[0, '0%'], [45, '45%'], [100, '100%'], [null, '
   assert.doesNotMatch(markup, /class="meter|width:[\d.]+%/);
 }
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');
+console.log('PASS: relocated refresh control and error-only connection status, hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');

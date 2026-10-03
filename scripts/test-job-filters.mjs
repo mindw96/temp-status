@@ -8,6 +8,8 @@ const elements = new Map(), tools = new Map();
 let requests = 0;
 function element(selector) {
   assert.notEqual(selector, '#partition-filter', 'The removed partition control must not be accessed');
+  assert.ok(!['.sample-note', '.node-key', '#sample-details', '.table-footer>span:last-child'].includes(selector),
+    `Removed status UI must not be accessed: ${selector}`);
   if (!elements.has(selector)) {
     const listeners = new Map();
     elements.set(selector, {innerHTML: '', textContent: '', value: '', disabled: false,
@@ -364,6 +366,25 @@ const ownerAt = singleCard.indexOf('class="gpu-job-meta"');
 const nameAt = singleCard.indexOf('class="gpu-job-name"');
 const metricsAt = singleCard.indexOf('class="gpu-metrics"');
 assert.ok(gpuAt >= 0 && gpuAt < ownerAt && ownerAt < nameAt && nameAt < metricsAt);
+// An unallocated GPU reserves the same job-name line without inventing a job
+// or user. Keep the reason accessible and keep real warnings visible.
+const vacantCard = evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2');
+  return gpuBlockMarkup(node, node.gpus[1]);
+})()`);
+assert.match(vacantCard, /<span class="gpu-card-header"><span class="gpu-job-index gpu-id">GPU 1<\/span><\/span>/);
+assert.match(vacantCard, /<span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;<\/span>/);
+assert.match(vacantCard, /<span class="sr-only">No allocation reported<\/span>/);
+assert.doesNotMatch(vacantCard, /data-job=|gpu-job-id|gpu-job-user|gpu-job-status/);
+assert.ok(vacantCard.indexOf('gpu-job-placeholder') < vacantCard.indexOf('class="gpu-metrics"'));
+assert.equal(evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2');
+  return gpuJobsMarkup(node, node.gpus[1]);
+})()`), '<span class="gpu-job-empty">No allocation reported</span>');
+assert.match(evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2');
+  return gpuBlockMarkup(node, {...node.gpus[1], error: 'unavailable'});
+})()`), /<span class="gpu-job-status">GPU report unavailable<\/span>/);
 const sharedCard = evaluate(`(() => {
   const node = nodes.find(n => n.id === 'server2'), gpu = node.gpus[2];
   return gpuBlockMarkup(node, {...gpu, jobRecords: [...gpu.jobRecords, ...node.gpus[3].jobRecords]});
@@ -381,10 +402,10 @@ assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed proce
 // A fresh node with a missing map cannot use its display index as a substitute.
 evaluate("delete liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index; normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
-assert.match(idleMarkup(), /Allocation unavailable/);
+assert.match(idleMarkup(), /<span class="gpu-job-status">Allocation unavailable<\/span>/);
 evaluate("liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index = 2; liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1; normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
-assert.match(idleMarkup(), /Slurm data stale/);
+assert.match(idleMarkup(), /<span class="gpu-job-status">Slurm data stale<\/span>/);
 // Ending a job clears its allocation on the next snapshot, even if an older
 // node report still contains process information for that job.
 evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.slurm.data.squeue = liveState.snapshot.slurm.data.squeue.filter(j => j.job_id !== '54901'); normalizeSnapshot(liveState.snapshot);");
@@ -484,4 +505,4 @@ element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, and verified all-device FULL badge semantics.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, and verified all-device FULL badge semantics.');

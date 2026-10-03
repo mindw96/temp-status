@@ -44,36 +44,46 @@ function normalizeSnapshot(snapshot) {
     return {id, isCloud, total: gpus.length, allocated: gpus.filter(g => g.allocated).length, state: isCloud ? 'CLOUD' : s?.state?.toUpperCase() || 'UNKNOWN', gpus, cpu: isCloud ? validNumber(raw.cpu_count) : s?.cpus ?? null, cpuAllocated: s?.alloc_cpus ?? null, slurmResources: slurmResources(s), receivedAt: report?.receivedAt, stale, raw, partitions: [], slurmFresh: isCloud ? null : fresh(snapshot.slurm?.receivedAt)};
   }).sort((a, b) => nodeOrder(a.id) - nodeOrder(b.id));
 }
-const sampleNote = $('.sample-note');
+const connectionStatus = $('#connection-status');
 function renderConnection() {
-  const demo = liveState.mode === 'demo', snap = liveState.snapshot, hasData = !!(snap?.slurm || snap?.nodes?.length), staleNodes = nodes.filter(n => n.stale).length;
-  const message = demo ? 'Sample cluster. All values and names are fictional.' : liveState.error ? `${liveState.error} ${hasData ? 'Showing last received data; live status is unavailable.' : 'Live data is unavailable.'}${liveState.errorKind === 'quota' ? ' Automatic retry within 5 minutes, or use Refresh now.' : ''}` : !hasData ? 'Waiting for collectors. This dashboard checks for reports every 30 seconds.' : `Slurm: ${ageText(snap.slurm?.receivedAt)} · ${snap.nodes.length}/${nodes.length} nodes reporting · Auto-refresh every 30 seconds${staleNodes ? ` · ${staleNodes} stale or missing` : ''}`;
-  sampleNote.innerHTML = `${icon(demo ? 'flask' : liveState.error ? 'info' : 'activity')}<span>${esc(message)}</span><button id="retry-live">${demo ? 'Data source' : 'Refresh now'} ↗</button>`;
+  const demo = liveState.mode === 'demo', snap = liveState.snapshot, hasData = !!(snap?.slurm || snap?.nodes?.length);
+  const message = demo ? 'Sample cluster. All values and names are fictional.' : liveState.error ? `${liveState.error} ${hasData ? 'Showing last received data; live status is unavailable.' : 'Live data is unavailable.'}${liveState.errorKind === 'quota' ? ' Automatic retry within 5 minutes, or use Refresh now.' : ''}` : !hasData ? 'Waiting for collectors. This dashboard checks for reports every 30 seconds.' : '';
+  connectionStatus.textContent = message;
+  connectionStatus.hidden = !message;
   $('#retry-live').onclick = () => demo ? showDataInfo() : loadSnapshot({force: true});
   renderRefreshControl();
   const times = demo ? [] : [snap?.slurm?.receivedAt, ...(snap?.nodes || []).map(n => n.receivedAt)].filter(Number.isFinite);
   $('.snapshot').innerHTML = `${icon('clock')}<span>${demo ? 'Sep 22, 10:40 KST · Sample' : times.length ? clockText(Math.max(...times)) : 'No reports received'}</span>`;
-  $('.node-key').innerHTML = demo ? '<span><i class="green-dot"></i>Healthy</span><span><i class="amber-dot"></i>Maintenance</span>' : '<span><i class="green-dot"></i>Reporting</span><span><i class="amber-dot"></i>Stale / missing</span>';
-  $('.table-footer>span:last-child').textContent = demo ? 'Slurm · Sample snapshot' : `Slurm: ${ageText(snap?.slurm?.receivedAt)}`;
 }
 function renderRefreshControl() {
   clearTimeout(refreshControlTimer);
   const button = $('#retry-live');
-  if (!button || liveState.mode === 'demo') return;
+  if (!button) return;
+  if (liveState.mode === 'demo') {
+    button.disabled = false;
+    button.textContent = 'Data source';
+    button.title = 'About the sample data.';
+    return;
+  }
   const remaining = liveState.lastAttemptAt === null ? 0 : Math.max(0, liveState.lastAttemptAt + MANUAL_COOLDOWN_MS - Date.now());
   button.disabled = liveState.loading || remaining > 0;
-  button.textContent = liveState.loading ? 'Refreshing…' : remaining > 0 ? `Refresh in ${Math.ceil(remaining / 1000)}s` : 'Refresh now ↗';
-  button.title = liveState.loading ? 'A refresh is in progress.' : remaining > 0 ? 'Please wait 5 seconds between refreshes.' : 'Fetch the latest reports now.';
+  button.textContent = liveState.loading ? 'Refreshing…' : remaining > 0 ? `Refresh in ${Math.ceil(remaining / 1000)}s` : 'Refresh now';
+  button.title = liveState.loading ? 'A refresh is in progress.' : remaining > 0 ? 'Please wait 5 seconds between refreshes.' : 'Fetch the latest reports now. Automatically refreshes every 30 seconds.';
   if (!document.hidden && !liveState.loading && remaining > 0) refreshControlTimer = setTimeout(renderRefreshControl, Math.min(1000, remaining));
 }
 // GPU indices from Slurm GRES do not necessarily match NVML device indices.
 // Prefer verified device allocations; process IDs provide an explicit fallback.
 function gpuJobsMarkup(n, g, compactCard = false) {
   const index = compactCard ? `<span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span>` : '';
-  const empty = message => `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}<span class="gpu-job-empty">${message}</span>`;
+  const empty = (message, idle = false) => compactCard
+    ? `<div class="gpu-job-unlinked gpu-job-vacant" title="${esc(message)}"><span class="gpu-card-header">${index}${idle ? '' : `<span class="gpu-job-status">${esc(message)}</span>`}</span><span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;</span><span class="sr-only">${esc(message)}</span></div>`
+    : `<span class="gpu-job-empty">${esc(message)}</span>`;
   if (g.error && !g.allocationRecords?.length) return empty('GPU report unavailable');
-  if (n.isCloud) return `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}${cloudProcessesMarkup(n, g)}`;
-  if (!g.jobRecords.length) return empty(n.stale ? 'GPU data stale' : !n.slurmFresh ? 'Slurm data stale' : !Number.isInteger(g.gresIndex) ? 'Allocation unavailable' : 'No allocation reported');
+  if (n.isCloud) return !g.processes.length ? empty(n.stale ? 'No process in last report' : 'No process observed', !n.stale) : `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}${cloudProcessesMarkup(n, g)}`;
+  if (!g.jobRecords.length) {
+    const mapped = Number.isInteger(g.gresIndex) && g.gresIndex >= 0, idle = !n.stale && n.slurmFresh && mapped;
+    return empty(n.stale ? 'GPU data stale' : !n.slurmFresh ? 'Slurm data stale' : !mapped ? 'Allocation unavailable' : 'No allocation reported', idle);
+  }
   return g.jobRecords.map((record, position) => {
     const user = record.users.map(displayUserName).join(', ') || 'User unavailable', source = record.allocated ? 'Slurm allocated' : 'Observed process';
     const userLabel = record.allocated ? user : `Observed: ${user}`;

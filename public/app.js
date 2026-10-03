@@ -163,7 +163,6 @@ document.querySelectorAll('[data-state]').forEach(b=>b.addEventListener('click',
 document.addEventListener('click',e=>{const node=e.target.closest('[data-node]'),job=e.target.closest('[data-job]');if(node)showNode(node.dataset.node);if(job)showJob(job.dataset.job);});
 $('#close-dialog').addEventListener('click',()=>$('#detail-dialog').close());
 $('#detail-dialog').addEventListener('click',e=>{if(e.target===$('#detail-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
-$('#sample-details').addEventListener('click',showDataInfo);
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#detail-dialog').open){e.preventDefault();$('#job-search').focus();$('#jobs').scrollIntoView({behavior:'smooth'});}});
 mountIcons();
 if (document.modelContext?.registerTool) {
