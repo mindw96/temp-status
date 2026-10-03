@@ -259,7 +259,8 @@ for (const selector of ['#node-grid', '#dialog-content']) {
 for (const value of ['null', 'NaN', '-1', '101']) {
   renderMetrics(`Object.assign(liveState.snapshot.nodes[0].data, {cpu_percent:${value},ram_percent:${value}});
     liveState.snapshot.nodes[0].data.gpus[0].gpu_utilization=${value}`);
-  assert.match(metrics.element('#node-grid').innerHTML, /is-unavailable/);
+  assert.match(metrics.element('#node-grid').innerHTML, /Not reported/);
+  assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /class="meter/);
   assert.match(visibleText(gpuCard()), /UTIL — VRAM —/);
   assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /--p:|NaN%|101%|-1%|>0%/);
   assert.match(metrics.element('#dialog-content').innerHTML, /Compute —/);
@@ -290,7 +291,7 @@ const renderAllocations = (overrides = {}, code = '') => allocations.evaluate(`
   ${code}; normalizeSnapshot(liveState.snapshot); renderNodes();`);
 const resources = () => JSON.parse(allocations.evaluate('JSON.stringify(nodes[0].slurmResources)'));
 // Extract a complete resource row without depending on whether text values have
-// nested spans, then inspect its text and allocated-capacity meter separately.
+// nested spans, then inspect its visible text and explanatory tooltip separately.
 const resourceRow = label => {
   const html = allocations.element('#node-grid').innerHTML;
   const labelAt = html.indexOf(`>${label}</span>`);
@@ -308,7 +309,7 @@ const rowText = label => resourceRow(label).replace(/<[^>]*>/g, ' ').replace(/\s
 const assertNoFree = (label, reason) => {
   assert.match(rowText(label), new RegExp(reason));
   assert.doesNotMatch(rowText(label), /\bFree\b/);
-  assert.doesNotMatch(resourceRow(label), /width:[\d.]+%/);
+  assert.doesNotMatch(resourceRow(label), /class="meter|width:[\d.]+%/);
 };
 
 renderAllocations();
@@ -316,26 +317,32 @@ assert.deepEqual(resources(), {
   cpu: {total: 64, allocated: 60, free: 4},
   ram: {total: 500, allocated: 422, free: 78}
 });
-assert.match(rowText('CPU'), /4 Free\s*\/\s*64/);
-assert.match(rowText('RAM'), /78 GiB Free\s*\/\s*500/);
+assert.equal(rowText('CPU'), 'CPU 4 / 64');
+assert.equal(rowText('RAM'), 'RAM 78 / 500 GiB');
 assert.match(resourceRow('CPU'), /60 allocated · 4 free · 64 total · Slurm/);
-assert.match(resourceRow('CPU'), /width:93\.75%/);
-assert.match(resourceRow('RAM'), /width:84\.4%/);
+assert.match(resourceRow('RAM'), /422 GiB allocated · 78 GiB free · 500 GiB total · Slurm/);
+assert.doesNotMatch(allocations.element('#node-grid').innerHTML, /class="meter|width:[\d.]+%/);
 assert.doesNotMatch(rowText('CPU'), /1%/);
 assert.doesNotMatch(rowText('RAM'), /2%/);
 
 for (const [allocated, free] of [[0, 64], [64, 0], [60, 0]]) {
   renderAllocations({alloc_cpus: allocated, idle_cpus: free});
   assert.deepEqual(resources().cpu, {total: 64, allocated, free});
-  assert.match(rowText('CPU'), new RegExp(`${free} Free\\s*\\/\\s*64`));
+  assert.equal(rowText('CPU'), `CPU ${free} / 64`);
 }
 for (const [allocated, free] of [[0, 500], [512000, 0]]) {
   renderAllocations({alloc_memory: allocated});
   assert.deepEqual(resources().ram, {total: 500, allocated: allocated / 1024, free});
-  assert.match(rowText('RAM'), new RegExp(`${free} GiB Free\\s*\\/\\s*500`));
+  assert.equal(rowText('RAM'), `RAM ${free} / 500 GiB`);
 }
 renderAllocations({real_memory: 522240, mem_spec_limit: 10240});
 assert.deepEqual(resources().ram, {total: 500, allocated: 422, free: 78});
+renderAllocations({cpus: 128, alloc_cpus: 36, idle_cpus: 92,
+  real_memory: 1536000, alloc_memory: 221184});
+assert.equal(rowText('CPU'), 'CPU 92 / 128');
+assert.equal(rowText('RAM'), 'RAM 1284 / 1500 GiB');
+renderAllocations({real_memory: 512512, alloc_memory: 432128});
+assert.equal(rowText('RAM'), 'RAM 78.5 / 500.5 GiB');
 
 for (const invalid of [
   {cpus: null}, {cpus: 0}, {cpus: -1}, {cpus: '64'}, {cpus: 64.5},
@@ -345,7 +352,7 @@ for (const invalid of [
   renderAllocations(invalid);
   assert.equal(resources().cpu, null, JSON.stringify(invalid));
   assertNoFree('CPU', 'Not reported');
-  assert.match(rowText('RAM'), /78 GiB Free/);
+  assert.equal(rowText('RAM'), 'RAM 78 / 500 GiB');
 }
 for (const invalid of [
   {real_memory: null}, {real_memory: 0}, {real_memory: -1}, {real_memory: '512000'},
@@ -356,7 +363,7 @@ for (const invalid of [
   renderAllocations(invalid);
   assert.equal(resources().ram, null, JSON.stringify(invalid));
   assertNoFree('RAM', 'Not reported');
-  assert.match(rowText('CPU'), /4 Free/);
+  assert.equal(rowText('CPU'), 'CPU 4 / 64');
 }
 for (const field of ['cpus', 'alloc_cpus', 'idle_cpus', 'real_memory', 'alloc_memory']) {
   renderAllocations({}, `delete liveState.snapshot.slurm.data.sinfo[0].${field}`);
@@ -377,7 +384,14 @@ for (const cause of [
   assertNoFree('RAM', 'Stale');
 }
 renderAllocations({}, 'liveState.snapshot.nodes[0].receivedAt = Date.now() - 180000');
-assert.match(rowText('CPU'), /4 Free\s*\/\s*64/);
-assert.match(rowText('RAM'), /78 GiB Free\s*\/\s*500/);
+assert.equal(rowText('CPU'), 'CPU 4 / 64');
+assert.equal(rowText('RAM'), 'RAM 78 / 500 GiB');
 
-console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and Slurm CPU/RAM allocation capacity/idle/reserves/invalid/state/freshness handling.');
+// Standalone utilization retains its percentage semantics without restoring bars.
+for (const [value, expected] of [[0, '0%'], [45, '45%'], [100, '100%'], [null, '—'], [-1, '—'], [101, '—']]) {
+  const markup = allocations.evaluate(`resourceMarkup('CPU', ${JSON.stringify(value)})`);
+  assert.equal(visibleText(markup), `CPU ${expected}`);
+  assert.doesNotMatch(markup, /class="meter|width:[\d.]+%/);
+}
+
+console.log('PASS: hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');

@@ -391,6 +391,66 @@ evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.s
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /No allocation reported/);
 
+// FULL describes all verified device reservations, independently of measured
+// utilization and node CPU state. Keep the underlying Slurm state untouched.
+const fullQueue = [job(61000, 'mindw', 'server2', 'RUNNING', {req_gpus: '4', alloc_gpus: '4',
+  gpu_allocations: [{node: 'server2', gres_indices: [0, 1, 2, 3]}]})];
+const renderFullNode = (code = '') => {
+  evaluate('liveState.error = null');
+  report(fullQueue, ['server2']);
+  evaluate(`liveState.snapshot.nodes[0].data.gpus =
+    [2, 3, 0, 1].map((gres, id) => ({id, slurm_gres_index: gres,
+      gpu_utilization: 0, vram_total_mb: 49152, vram_total_used_mb: 4, processes: []}));
+    ${code}; normalizeSnapshot(liveState.snapshot); renderNodes();`);
+};
+const renderedBadge = () => {
+  const match = element('#node-grid').innerHTML.match(/<span class="state-badge badge ([^"]*)"[^>]*>([^<]*)<\/span>/);
+  assert.ok(match, 'Node state badge must render');
+  return {classes: match[1], label: match[2]};
+};
+renderFullNode();
+assert.equal(renderedBadge().label, 'FULL');
+assert.match(renderedBadge().classes, /badge-full/);
+assert.match(element('#node-grid').innerHTML, /All 4 GPUs allocated by Slurm · Node state: MIXED/);
+assert.equal(evaluate('nodes[0].state'), 'MIXED');
+assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.util)')), [0, 0, 0, 0]);
+assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.processes.length)')), [0, 0, 0, 0]);
+assert.match(element('#node-grid').innerHTML, /민동욱\(mindw\)/);
+
+// Missing activity metrics do not erase a fresh, verified allocation.
+renderFullNode('liveState.snapshot.nodes[0].data.gpus.forEach(g => {g.gpu_utilization = null; g.vram_total_used_mb = null;})');
+assert.equal(renderedBadge().label, 'FULL');
+
+for (const [reason, code] of [
+  ['one free GPU', 'liveState.snapshot.slurm.data.squeue[0].gpu_allocations[0].gres_indices = [0, 1, 2]'],
+  ['process activity alone', `liveState.snapshot.slurm.data.squeue[0].gpu_allocations = [];
+    liveState.snapshot.nodes[0].data.gpus.forEach(g => {g.gpu_utilization = 100; g.vram_total_used_mb = 49152; g.processes = [{pid: g.id + 1, slurm_job_id: '61000', username: 'mindw'}];})`],
+  ['duplicate device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = 2'],
+  ['missing device map', 'delete liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index'],
+  ['negative device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = -1'],
+  ['noninteger device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = 1.5'],
+  ['string device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = "3"'],
+  ['no GPU devices', 'liveState.snapshot.nodes[0].data.gpus = []'],
+  ['missing node report', 'liveState.snapshot.nodes = []'],
+  ['missing Slurm report', 'liveState.snapshot.slurm = null'],
+  ['stale node report', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1'],
+  ['stale Slurm report', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1'],
+  ['failed refresh', 'liveState.error = "Request failed"'],
+  ['cloud node', 'liveState.snapshot.nodes[0].data.source_type = "cloud"'],
+  ['pending job', 'liveState.snapshot.slurm.data.squeue[0].job_state = "PENDING"'],
+  ['completed job', 'liveState.snapshot.slurm.data.squeue[0].job_state = "COMPLETED"']
+]) {
+  renderFullNode(code);
+  assert.doesNotMatch(renderedBadge().label, /FULL/, reason);
+  assert.doesNotMatch(renderedBadge().classes, /badge-full/, reason);
+}
+for (const status of ['DOWN', 'MIXED+DRAIN', 'FAIL', 'MAINT', 'UNKNOWN', 'NOT_RESPONDING', 'POWER_DOWN', 'REBOOT', 'FUTURE', 'ALLOCATED*']) {
+  renderFullNode(`liveState.snapshot.slurm.data.sinfo[0].state = ${JSON.stringify(status)}`);
+  assert.equal(renderedBadge().label, status);
+  assert.equal(evaluate('nodes[0].state'), status);
+}
+evaluate('liveState.error = null');
+
 // Display names do not change account identities, filtering, or job ownership.
 element('#reset-job-filters').dispatch('click');
 const namedJobs = [job(701, 'mindw', 'devbox'), job(702, 'kimjh', 'server2'),
@@ -424,4 +484,4 @@ element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping and seven columns.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, and verified all-device FULL badge semantics.');

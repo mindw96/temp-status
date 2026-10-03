@@ -37,7 +37,7 @@ Slurm jobs의 **User**와 **Server** 선택은 검색어·작업 상태와 함�
 
 Job 상세창의 **Requested CPUs**와 **Requested RAM**은 Slurm 요청량입니다. 수집기 래퍼는 `squeue --json`을 한 번 일괄 조회해 원본 에이전트의 200개 상세 조회 한도와 무관하게 요청량을 보완합니다. RAM은 요청 TRES의 전체량을 우선 사용하며, 노드당·CPU당 값만 보고되면 그 범위를 표시합니다. `--mem=0`에 해당하는 노드 메모리 요청은 **All node memory**로, 누락된 값은 **Not reported**로 표시합니다. 원본 에이전트 파일은 수정하지 않습니다.
 
-서버 요약의 CPU·RAM은 Slurm 할당 기준입니다. CPU는 `idle_cpus`를 남은 수량으로 표시하며(`4 Free / 64`), `Other` 상태 CPU를 여유 자원으로 더하지 않습니다. RAM은 Slurm `real_memory`에서 `alloc_memory`와 보고된 시스템 예약량(`mem_spec_limit`)을 제외하고 MiB를 GiB로 변환합니다. 막대는 할당 비율이고, 마우스를 올리거나 서버 상세를 열면 할당량·여유량·총량을 확인할 수 있습니다. 이 수치는 OS의 실제 사용률이 아니며, 작업 조건·예약·스케줄링 정책에 따라 즉시 실행 가능한 양과 다를 수 있습니다. Slurm 보고가 오래됐거나 누락된 경우, 노드가 DOWN·DRAIN 등인 경우에는 여유량을 확정해 표시하지 않습니다. 저장공간과 개별 GPU 카드의 실제 측정값은 유지합니다.
+서버 요약의 CPU·RAM은 Slurm 할당 기준입니다. CPU는 `idle_cpus`를 남은 수량으로 표시하며(`4 / 64`), `Other` 상태 CPU를 여유 자원으로 더하지 않습니다. RAM은 Slurm `real_memory`에서 `alloc_memory`와 보고된 시스템 예약량(`mem_spec_limit`)을 제외하고 MiB를 GiB로 변환합니다. CPU·RAM은 막대 없이 `남은 용량 / 전체 용량`으로 표시합니다(`CPU 92 / 128`, `RAM 1284 / 1500 GiB`). 마우스를 올리거나 서버 상세를 열면 할당량·여유량·총량을 확인할 수 있습니다. 이 수치는 OS의 실제 사용률이 아니며, 작업 조건·예약·스케줄링 정책에 따라 즉시 실행 가능한 양과 다를 수 있습니다. Slurm 보고가 오래됐거나 누락된 경우, 노드가 DOWN·DRAIN 등인 경우에는 여유량을 확정해 표시하지 않습니다. 저장공간과 개별 GPU 카드의 실제 측정값은 유지합니다.
 
 `POST /api/report/node`와 `POST /api/report/slurm`는 기존 연구실 에이전트 JSON 형식을 받습니다. `POST /api/report/cloud-gpu`는 `server`, `system`, `gpus` 형식의 독립 클라우드 노드를 지원합니다. 운영 종료된 노드의 보고는 저장하지 않습니다. `X-Status-Token`은 수신 서버의 비밀 환경 변수 `STATUS_REPORT_TOKEN`과 일치해야 합니다. 공개 열람을 선택해도 데이터 전송 인증은 유지됩니다. 토큰은 소스, URL, 브라우저 JS, Git에 넣지 않습니다. 기존 비공개 Sites로 전송하는 경우에만 별도의 `OAI-Sites-Authorization: Bearer ...` 헤더가 추가로 필요합니다.
 
@@ -47,7 +47,7 @@ GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아�
 
 GPU 카드는 `GPU 번호 · Job ID - 사용자`, `작업명`, `UTIL 사용률 · VRAM 점유율 (사용 / 전체 GiB)`의 3줄 구조입니다. 하나의 GPU에 작업이 여러 개면 모든 작업을 표시하며, 전체 작업명과 정보는 클릭해서 확인할 수 있습니다.
 
-GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. 수집기는 `gres_detail`의 IDX와 명시적 할당 노드를 읽고, 각 노드의 `/etc/slurm/gres.conf` File 순서를 NVIDIA `minor_number`에 연결합니다. NVIDIA 표시 번호를 GRES 번호로 가정하지 않으므로 Server3처럼 순서가 다른 경우에도 해당 물리 장치에 연결됩니다. 할당된 GPU에는 프로세스·VRAM 사용이 없어도 사용자와 Job을 표시하며, 사용률·VRAM은 실제 측정값을 유지합니다. 매핑이 불명확하거나 보고가 오래되면 현재 할당을 추정하지 않습니다. 프로세스 정보만 있는 경우에는 `Observed:`로 구분합니다. 현재 파서는 명시적으로 한 노드에 연결되는 할당을 지원하며, 노드별 GRES 대응이 불명확한 다중 노드 보고는 미확인으로 처리합니다. 작업 상세의 할당 장치와 프로세스 관측 장치는 별도로 표시합니다.
+GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. 모든 GPU에 확인된 Slurm 할당이 있고 노드와 Slurm 보고가 최신이면 서버 상태 배지에 `FULL`을 표시합니다. 사용률·프로세스 수로 FULL을 판단하지 않으며, 오래된 보고·불명확한 GRES 매핑·DOWN/DRAIN 등 상태는 FULL로 덮어쓰지 않습니다. 원본 Slurm 상태는 배지 툴팁과 서버 상세에 유지합니다. 수집기는 `gres_detail`의 IDX와 명시적 할당 노드를 읽고, 각 노드의 `/etc/slurm/gres.conf` File 순서를 NVIDIA `minor_number`에 연결합니다. NVIDIA 표시 번호를 GRES 번호로 가정하지 않으므로 Server3처럼 순서가 다른 경우에도 해당 물리 장치에 연결됩니다. 할당된 GPU에는 프로세스·VRAM 사용이 없어도 사용자와 Job을 표시하며, 사용률·VRAM은 실제 측정값을 유지합니다. 매핑이 불명확하거나 보고가 오래되면 현재 할당을 추정하지 않습니다. 프로세스 정보만 있는 경우에는 `Observed:`로 구분합니다. 현재 파서는 명시적으로 한 노드에 연결되는 할당을 지원하며, 노드별 GRES 대응이 불명확한 다중 노드 보고는 미확인으로 처리합니다. 작업 상세의 할당 장치와 프로세스 관측 장치는 별도로 표시합니다.
 
 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각은 수집하지 않습니다. 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
 
