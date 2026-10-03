@@ -352,6 +352,9 @@ assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'server2').gpus.map(g 
 assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'ubuntu').gpus.map(g => g.allocationRecords.map(r => r.jobId))")),
   [['60000'], [], [], []]);
 const idleMarkup = () => evaluate("gpuBlockMarkup(nodes.find(n => n.id === 'server2'), nodes.find(n => n.id === 'server2').gpus[2])");
+const cardOccupied = markup => markup.match(/^<div class="([^"]*)"/)[1].split(/\s+/).includes('occupied');
+assert.doesNotMatch(element('#node-grid').innerHTML, /class="gpu-blocks|class="gpu-slot/);
+assert.equal(cardOccupied(idleMarkup()), true, 'A reserved, idle GPU highlights its detail card');
 assert.match(idleMarkup(), /data-source="allocation"/);
 assert.match(idleMarkup(), /54901/); assert.match(idleMarkup(), /ryujh/);
 assert.match(idleMarkup(), /UTIL <strong>0%<\/strong>/);
@@ -372,6 +375,7 @@ const vacantCard = evaluate(`(() => {
   const node = nodes.find(n => n.id === 'server2');
   return gpuBlockMarkup(node, node.gpus[1]);
 })()`);
+assert.equal(cardOccupied(vacantCard), false, 'An unallocated GPU without processes stays neutral');
 assert.match(vacantCard, /<span class="gpu-card-header"><span class="gpu-job-index gpu-id">GPU 1<\/span><\/span>/);
 assert.match(vacantCard, /<span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;<\/span>/);
 assert.match(vacantCard, /<span class="sr-only">No allocation reported<\/span>/);
@@ -403,14 +407,17 @@ assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed proce
 evaluate("delete liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index; normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /<span class="gpu-job-status">Allocation unavailable<\/span>/);
+assert.equal(cardOccupied(idleMarkup()), false, 'Missing device mapping cannot invent an allocation highlight');
 evaluate("liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index = 2; liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1; normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /<span class="gpu-job-status">Slurm data stale<\/span>/);
+assert.equal(cardOccupied(idleMarkup()), false, 'Stale Slurm ownership cannot keep an idle GPU highlighted');
 // Ending a job clears its allocation on the next snapshot, even if an older
 // node report still contains process information for that job.
 evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.slurm.data.squeue = liveState.snapshot.slurm.data.squeue.filter(j => j.job_id !== '54901'); normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /No allocation reported/);
+assert.equal(cardOccupied(idleMarkup()), false, 'Ending an idle job clears the card highlight');
 
 // Model badges describe reported hardware, independently of reservations or
 // activity. Removing the state badge must not alter allocation ownership.
@@ -439,11 +446,35 @@ assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.processes.length)')), 
 assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [true, true, true, true]);
 assert.match(element('#node-grid').innerHTML, /민동욱\(mindw\)/);
 
+const firstCard = () => evaluate('gpuBlockMarkup(nodes[0], nodes[0].gpus[0])');
+assert.equal(cardOccupied(firstCard()), true);
+
 // Missing activity metrics do not erase a fresh, verified allocation.
 renderFullNode('liveState.snapshot.nodes[0].data.gpus.forEach(g => {g.gpu_utilization = null; g.vram_total_used_mb = null;})');
 assert.equal(renderedBadge(), 'A6000 × 4');
 assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [true, true, true, true]);
 assert.match(element('#node-grid').innerHTML, /민동욱\(mindw\)/);
+assert.equal(cardOccupied(firstCard()), true, 'Missing activity metrics do not erase allocation color');
+renderFullNode('liveState.snapshot.nodes[0].data.gpus[0].collection_error = "GPU metrics unavailable"');
+assert.equal(cardOccupied(firstCard()), true, 'A metrics error does not erase verified Slurm ownership');
+assert.match(firstCard(), /data-source="allocation"/);
+
+// A process is an explicit observation, not a reservation. Only a fresh,
+// error-free node report may keep this fallback highlighted.
+for (const [reason, code, expected] of [
+  ['fresh process', '', true],
+  ['stale node', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1', false],
+  ['failed refresh', 'liveState.error = "Request failed"', false],
+  ['GPU collection error', 'liveState.snapshot.nodes[0].data.gpus[0].collection_error = "unavailable"', false],
+  ['stale Slurm, fresh process', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1', true]
+]) {
+  renderFullNode(`liveState.snapshot.slurm.data.squeue[0].gpu_allocations = [];
+    liveState.snapshot.nodes[0].data.gpus[0].processes = [{pid: 10, slurm_job_id: '61000', username: 'mindw'}];
+    ${code}`);
+  assert.equal(cardOccupied(firstCard()), expected, reason);
+  assert.doesNotMatch(firstCard(), /data-source="allocation"/, reason);
+  if (expected) assert.match(firstCard(), /Observed: 민동욱\(mindw\)/, reason);
+}
 
 // Mixed inventories count each model separately; missing reports never imply
 // installed hardware. Compacting must preserve distinct model identities.
@@ -540,4 +571,4 @@ element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, and compact hardware badges without changing allocation ownership.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');

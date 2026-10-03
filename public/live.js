@@ -138,11 +138,12 @@ function allocationMarkup(n, key) {
 }
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
+  const occupied = !n.stale && ((!n.isCloud && n.slurmFresh && g.allocated) || (!g.error && g.processes.length > 0));
   const util = available ? g.util : null;
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
   const vram = memoryAvailable ? `VRAM <strong>${percent(vramPercent)}</strong> <span class="gpu-memory">(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)</span>` : 'VRAM —';
-  return `<div class="gpu-job-row gpu-block" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics"><span class="gpu-metric">UTIL <strong>${percent(util)}</strong></span><span class="gpu-metric gpu-vram">${vram}</span></div></div>`;
+  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics"><span class="gpu-metric">UTIL <strong>${percent(util)}</strong></span><span class="gpu-metric gpu-vram">${vram}</span></div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
@@ -170,7 +171,7 @@ renderNodes = function() {
     return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
       <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
         <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="node-model-badge" title="${esc(modelLabel)}">${esc(modelLabel)}</span></div>
-        <div class="gpu-blocks">${n.gpus.length ? n.gpus.map(g => `<span class="gpu-slot ${g.util === null ? 'unavailable' : g.occupied ? 'occupied' : ''}" title="GPU ${esc(g.index)} · ${g.util === null ? 'No fresh metrics' : g.allocated ? 'Slurm allocated' : g.occupied ? 'Process observed' : 'No allocation reported'}">${esc(g.index)}</span>`).join('') : '<span class="node-no-gpu">Waiting for the node collector</span>'}</div>
+        ${n.gpus.length ? '' : '<p class="node-no-gpu">Waiting for the node collector</p>'}
         <div class="resource-metrics" aria-label="${n.isCloud ? 'Host utilization' : 'Slurm resources: free / total'}">${n.isCloud ? resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null) + resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null) : allocationMarkup(n, 'cpu') + allocationMarkup(n, 'ram')}</div>
         ${storageMarkup(n)}
       </button>
