@@ -130,13 +130,15 @@ section[id]{scroll-margin-top:24px}
 .storage-note{margin:9px 0 20px;font-size:12px;line-height:1.6;color:var(--text-tertiary)}
 
 /* Per-GPU tiles also carry the occupancy indication. */
-.gpu-jobs-summary{padding:8px 20px 16px;border-top:1px solid var(--divider)}
+.gpu-jobs-summary{padding:8px 20px 16px;border-top:1px solid var(--divider);background:#f6f6f6}
+:root[data-theme='dark'] .gpu-jobs-summary{background:transparent}
 .gpu-jobs-caption{margin-bottom:11px;font-size:11px;line-height:1.6;color:var(--text-tertiary)}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
 .gpu-job-row.gpu-block{min-width:0;padding:9px 10px;margin:5px 0 0;font-weight:400;background:transparent;border-color:transparent}
-.gpu-job-row.gpu-block.occupied{background:#eef3f8}
-.gpu-job-row.gpu-block.unallocated{background:rgba(0,0,0,.045)}
+.gpu-job-row.gpu-block.occupied{background:#fff}
+.gpu-job-row.gpu-block.unallocated{background:#ebebeb}
+:root:not([data-theme='dark']) .gpu-job-row.gpu-block.unallocated{box-shadow:none}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(255,255,255,.08)}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.unallocated{background:transparent}
 .gpu-job-row:first-of-type{margin-top:0}
@@ -148,6 +150,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-metric-value{display:contents}
 .gpu-meter,.storage-meter{display:block;min-width:16px;height:4px;border-radius:100px;overflow:hidden;background:var(--meter-track)}
 .gpu-meter>span,.storage-meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,hsl(var(--usage-meter-hue),80%,44%),hsl(var(--usage-meter-hue),85%,50%))}
+.gpu-job-row.unallocated .gpu-meter,.gpu-job-row.unallocated .gpu-meter>span{background:transparent}
 .gpu-metric strong{text-align:right;font-weight:400;color:var(--link)}
 .gpu-memory{grid-column:1/-1;min-height:1.4em;text-align:right;white-space:nowrap;color:var(--text-secondary)}
 .gpu-job-items{display:grid;gap:4px;min-width:0}
