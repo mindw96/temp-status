@@ -22,6 +22,20 @@ const displayUserName=value=>{
   const username=String(value??'');
   return Object.hasOwn(userDisplayNames,username)?`${userDisplayNames[username]}(${username})`:username;
 };
+// Compact display names only; preserve collected models and scheduler metadata.
+function compactGpuModel(value) {
+  return String(value ?? '').replace(/\b(?:NVIDIA|NVL|Blackwell)\b/gi, '')
+    .replace(/\b(?:Server|Workstation)\s+Edition\b/gi, '')
+    .replace(/\bRTX\s+(A\d+)\b/gi, '$1').replace(/\s+/g, ' ').trim() || 'Unknown model';
+}
+function nodeGpuModelLabel(n) {
+  const counts = new Map();
+  for (const gpu of n.gpus) {
+    const model = compactGpuModel(gpu.model || partitionMeta[n.partition]?.model);
+    counts.set(model, (counts.get(model) || 0) + 1);
+  }
+  return [...counts].map(([model, count]) => `${model} × ${count}`).join(' / ') || 'No GPU report';
+}
 let partitionMeta={accelerated:{model:'NVIDIA H100',label:'H100 · 80 GB'},compute:{model:'NVIDIA A100',label:'A100 · 80 GB'},interactive:{model:'NVIDIA RTX 4090',label:'RTX 4090 · 24 GB'}};
 const nodeSpecs=[['gpu-01','accelerated',8,8,'ALLOCATED',[96,94,93,92,91,93,89,88],68,128,128],['gpu-02','accelerated',8,6,'MIXED',[93,91,89,91,90,90,0,0],65,128,96],['gpu-03','compute',4,4,'ALLOCATED',[83,82,81,78],62,64,64],['gpu-04','compute',4,2,'MIXED',[76,60,0,0],57,64,32],['gpu-05','interactive',4,2,'MIXED',[10,14,0,0],43,32,16],['gpu-06','interactive',4,0,'DRAINED',[null,null,null,null],null,32,0]];
 let nodes=nodeSpecs.map(([id,partition,total,allocated,state,utils,temp,cpu,cpuAllocated])=>({id,partition,total,allocated,state,cpu,cpuAllocated,reason:state==='DRAINED'?'GPU driver maintenance':null,gpus:utils.map((util,index)=>({index,util,allocated:index<allocated,memory:partition==='interactive'?24:80,memoryUsed:util===null?null:index<allocated?Math.round((partition==='interactive'?24:80)*(.65+(index%3)*.08)):0,temp:temp===null?null:temp-index%3}))}));
@@ -35,7 +49,7 @@ const currentJobs=()=>jobs;
 const average=values=>values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
 const percent=v=>v===null?'—':`${Math.round(v)}%`;
 function getMetrics(){const ns=currentNodes(),js=currentJobs(),gpu=ns.flatMap(n=>n.gpus),known=gpu.filter(g=>g.util!==null);return{total:gpu.length,allocated:gpu.filter(g=>g.allocated).length,idle:ns.filter(n=>!n.state.includes('DRAIN')).reduce((sum,n)=>sum+n.total-n.allocated,0),unavailable:gpu.length-known.length,util:average(known.map(g=>g.util)),running:js.filter(j=>j.state==='RUNNING').length,pending:js.filter(j=>j.state==='PENDING').length,normal:ns.filter(n=>!n.state.includes('DRAIN')).length,nodes:ns.length};}
-function renderNodes(){const ns=currentNodes();$('#node-count').textContent=ns.length;$('#node-grid').innerHTML=ns.map(n=>{const util=average(n.gpus.map(g=>g.util).filter(v=>v!==null)),mem=n.gpus.some(g=>g.memoryUsed===null)?null:n.gpus.reduce((s,g)=>s+g.memoryUsed,0),memTotal=n.gpus.reduce((s,g)=>s+g.memory,0),temp=n.gpus[0].temp;return`<button class="node ${n.state==='DRAINED'?'drain-node':''}" data-node="${n.id}" aria-label="${esc(displayNodeName(n.id))} details, ${n.state}, ${n.allocated} of ${n.total} GPUs allocated"><div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="state-badge ${n.state==='MIXED'?'mixed':n.state==='DRAINED'?'drain':''}">${n.state}</span></div><div class="node-model">${partitionMeta[n.partition].model} <span>× ${n.total}</span></div><div class="gpu-blocks" aria-hidden="true">${n.gpus.map(g=>`<span class="gpu-slot ${g.allocated?'occupied':g.util===null?'unavailable':''}">${g.index}</span>`).join('')}</div><div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${mem===null?'—':Math.round(mem/memTotal*100)+'%'}</strong></span><span class="temperature">${icon('thermometer')}<strong>${temp===null?'—':temp+'°C'}</strong></span></div><div class="node-detail-line"><span>${n.reason||`${n.allocated} / ${n.total} GPUs allocated`}</span><span>${n.partition}</span></div></button>`;}).join('');}
+function renderNodes(){const ns=currentNodes();$('#node-count').textContent=ns.length;$('#node-grid').innerHTML=ns.map(n=>{const util=average(n.gpus.map(g=>g.util).filter(v=>v!==null)),mem=n.gpus.some(g=>g.memoryUsed===null)?null:n.gpus.reduce((s,g)=>s+g.memoryUsed,0),memTotal=n.gpus.reduce((s,g)=>s+g.memory,0),temp=n.gpus[0].temp;return`<button class="node ${n.state==='DRAINED'?'drain-node':''}" data-node="${n.id}" aria-label="${esc(displayNodeName(n.id))} details, ${n.state}, ${n.allocated} of ${n.total} GPUs allocated"><div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="node-model-badge" title="${esc(nodeGpuModelLabel(n))}">${esc(nodeGpuModelLabel(n))}</span></div><div class="gpu-blocks" aria-hidden="true">${n.gpus.map(g=>`<span class="gpu-slot ${g.allocated?'occupied':g.util===null?'unavailable':''}">${g.index}</span>`).join('')}</div><div class="node-stats"><span>Compute <strong>${percent(util)}</strong></span><span>VRAM <strong>${mem===null?'—':Math.round(mem/memTotal*100)+'%'}</strong></span><span class="temperature">${icon('thermometer')}<strong>${temp===null?'—':temp+'°C'}</strong></span></div><div class="node-detail-line"><span>${n.reason||`${n.allocated} / ${n.total} GPUs allocated`}</span><span>${n.partition}</span></div></button>`;}).join('');}
 // Match a collected Slurm hostlist against one known node. Numeric ranges are
 // tested in place, so even a very large range never expands into an array.
 function hostlistContains(hostlist, hostname) {

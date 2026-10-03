@@ -412,35 +412,62 @@ evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.s
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /No allocation reported/);
 
-// FULL describes all verified device reservations, independently of measured
-// utilization and node CPU state. Keep the underlying Slurm state untouched.
+// Model badges describe reported hardware, independently of reservations or
+// activity. Removing the state badge must not alter allocation ownership.
 const fullQueue = [job(61000, 'mindw', 'server2', 'RUNNING', {req_gpus: '4', alloc_gpus: '4',
   gpu_allocations: [{node: 'server2', gres_indices: [0, 1, 2, 3]}]})];
 const renderFullNode = (code = '') => {
   evaluate('liveState.error = null');
   report(fullQueue, ['server2']);
   evaluate(`liveState.snapshot.nodes[0].data.gpus =
-    [2, 3, 0, 1].map((gres, id) => ({id, slurm_gres_index: gres,
+    [2, 3, 0, 1].map((gres, id) => ({id, slurm_gres_index: gres, gpu_name: 'NVIDIA RTX A6000',
       gpu_utilization: 0, vram_total_mb: 49152, vram_total_used_mb: 4, processes: []}));
     ${code}; normalizeSnapshot(liveState.snapshot); renderNodes();`);
 };
 const renderedBadge = () => {
-  const match = element('#node-grid').innerHTML.match(/<span class="state-badge badge ([^"]*)"[^>]*>([^<]*)<\/span>/);
-  assert.ok(match, 'Node state badge must render');
-  return {classes: match[1], label: match[2]};
+  const html = element('#node-grid').innerHTML;
+  const match = html.match(/<span class="node-model-badge"[^>]*>([^<]*)<\/span>/);
+  assert.ok(match, 'Reported GPU model and count must render in the header');
+  assert.doesNotMatch(html, /class="state-badge|class="node-model"/);
+  return match[1];
 };
 renderFullNode();
-assert.equal(renderedBadge().label, 'FULL');
-assert.match(renderedBadge().classes, /badge-full/);
-assert.match(element('#node-grid').innerHTML, /All 4 GPUs allocated by Slurm · Node state: MIXED/);
+assert.equal(renderedBadge(), 'A6000 × 4');
 assert.equal(evaluate('nodes[0].state'), 'MIXED');
 assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.util)')), [0, 0, 0, 0]);
 assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.processes.length)')), [0, 0, 0, 0]);
+assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [true, true, true, true]);
 assert.match(element('#node-grid').innerHTML, /민동욱\(mindw\)/);
 
 // Missing activity metrics do not erase a fresh, verified allocation.
 renderFullNode('liveState.snapshot.nodes[0].data.gpus.forEach(g => {g.gpu_utilization = null; g.vram_total_used_mb = null;})');
-assert.equal(renderedBadge().label, 'FULL');
+assert.equal(renderedBadge(), 'A6000 × 4');
+assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [true, true, true, true]);
+assert.match(element('#node-grid').innerHTML, /민동욱\(mindw\)/);
+
+// Mixed inventories count each model separately; missing reports never imply
+// installed hardware. Compacting must preserve distinct model identities.
+for (const [model, expected] of [
+  ['NVIDIA RTX A6000', 'A6000 × 4'],
+  ['NVIDIA H200 NVL', 'H200 × 4'],
+  ['NVIDIA RTX PRO 6000 Blackwell Server Edition', 'RTX PRO 6000 × 4'],
+  ['NVIDIA RTX 6000 Ada Generation', 'RTX 6000 Ada Generation × 4'],
+  ['', 'Unknown model × 4']
+]) {
+  renderFullNode(`liveState.snapshot.nodes[0].data.gpus.forEach(g => {g.gpu_name = ${JSON.stringify(model)}})`);
+  assert.equal(renderedBadge(), expected);
+}
+renderFullNode(`liveState.snapshot.nodes[0].data.gpus.forEach((g, index) => {
+  g.gpu_name = index < 2 ? (index ? 'RTX A6000' : 'NVIDIA RTX A6000') : 'NVIDIA H200 NVL';
+})`);
+assert.equal(renderedBadge(), 'A6000 × 2 / H200 × 2');
+for (const code of ['liveState.snapshot.nodes[0].data.gpus = []', 'liveState.snapshot.nodes = []']) {
+  renderFullNode(code);
+  assert.equal(renderedBadge(), 'No GPU report');
+}
+renderFullNode('liveState.snapshot.nodes[0].data.gpus[0].gpu_name = "<script> & \\"model\\""');
+assert.match(element('#node-grid').innerHTML, /&lt;script&gt; &amp; &quot;model&quot; × 1/);
+assert.doesNotMatch(element('#node-grid').innerHTML, /<script>/);
 
 for (const [reason, code] of [
   ['one free GPU', 'liveState.snapshot.slurm.data.squeue[0].gpu_allocations[0].gres_indices = [0, 1, 2]'],
@@ -451,8 +478,6 @@ for (const [reason, code] of [
   ['negative device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = -1'],
   ['noninteger device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = 1.5'],
   ['string device map', 'liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = "3"'],
-  ['no GPU devices', 'liveState.snapshot.nodes[0].data.gpus = []'],
-  ['missing node report', 'liveState.snapshot.nodes = []'],
   ['missing Slurm report', 'liveState.snapshot.slurm = null'],
   ['stale node report', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1'],
   ['stale Slurm report', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1'],
@@ -462,13 +487,19 @@ for (const [reason, code] of [
   ['completed job', 'liveState.snapshot.slurm.data.squeue[0].job_state = "COMPLETED"']
 ]) {
   renderFullNode(code);
-  assert.doesNotMatch(renderedBadge().label, /FULL/, reason);
-  assert.doesNotMatch(renderedBadge().classes, /badge-full/, reason);
+  assert.equal(renderedBadge(), 'A6000 × 4', reason);
+  if (['missing Slurm report', 'stale node report', 'stale Slurm report', 'failed refresh'].includes(reason)) {
+    assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [false, false, false, false], reason);
+    assert.doesNotMatch(element('#node-grid').innerHTML, /data-source="allocation"/, reason);
+    assert.match(element('#node-grid').innerHTML, /GPU data stale|Slurm data stale/, reason);
+  }
 }
 for (const status of ['DOWN', 'MIXED+DRAIN', 'FAIL', 'MAINT', 'UNKNOWN', 'NOT_RESPONDING', 'POWER_DOWN', 'REBOOT', 'FUTURE', 'ALLOCATED*']) {
   renderFullNode(`liveState.snapshot.slurm.data.sinfo[0].state = ${JSON.stringify(status)}`);
-  assert.equal(renderedBadge().label, status);
+  assert.equal(renderedBadge(), 'A6000 × 4');
   assert.equal(evaluate('nodes[0].state'), status);
+  evaluate('showNode("server2")');
+  assert.ok(element('#dialog-content').innerHTML.includes(status));
 }
 evaluate('liveState.error = null');
 
@@ -499,10 +530,14 @@ element('#reset-job-filters').dispatch('click');
 
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
+evaluate('renderNodes()');
+assert.equal(renderedBadge(), 'H100 × 8');
+assert.match(element('#node-grid').innerHTML, />RTX 4090 × 4<\/span>/);
+assert.doesNotMatch(element('#node-grid').innerHTML, /NVIDIA/);
 assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);
 assert.doesNotMatch(element('#job-rows').innerHTML, /partition-chip/);
 element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, and verified all-device FULL badge semantics.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, and compact hardware badges without changing allocation ownership.');
