@@ -353,20 +353,31 @@ for (const selector of ['#node-grid', '#dialog-content']) {
   const html = storage.element(selector).innerHTML;
   assert.match(visibleText(html), /Main disk: \/ 94% \(15 \/ 1759 GiB\)/);
   assert.match(visibleText(html), /Data disk: \/data 91% \(591 \/ 14194 GiB\)/);
+  assert.deepEqual([...html.matchAll(/class="storage-meter"[^>]*aria-valuenow="([^"]+)"/g)].map(match => Number(match[1])), [1655 / 1759 * 100, 12887 / 14194 * 100]);
   assert.doesNotMatch(html, /\(104 \/|\(1307 \/|storage-heading/);
 }
 const markup = raw => storage.evaluate(`storageMarkup({raw:${JSON.stringify(raw)}, stale:false})`);
 assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:100, free_disk_gb:0})), /100% \(0 \/ 100 GiB\)/);
+assert.match(markup({total_disk_gb:100, used_disk_gb:0, free_disk_gb:95}), /aria-valuenow="0"/);
 assert.match(markup({total_disk_gb:100, used_disk_gb:50, free_disk_gb:null}), /Not reported/);
 assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:50})), /50% \(— \/ 100 GiB\)/);
-assert.doesNotMatch(markup({total_disk_gb:100, used_disk_gb:50}), /\(50 \/|Data disk|class="meter|storage-heading/);
+assert.match(markup({total_disk_gb:100, used_disk_gb:50}), /aria-valuenow="50"/);
+assert.doesNotMatch(markup({total_disk_gb:100, used_disk_gb:50}), /\(50 \/|Data disk|storage-heading/);
 for (const free of [-1, 101, '50']) {
   const html = markup({total_disk_gb:100, free_disk_gb:free});
   assert.match(html, /Not reported/);
   assert.match(visibleText(html), /\(— \/ 100 GiB\)/);
 }
-for (const used of [-1, 101, '50', null]) assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:used, free_disk_gb:5})), /— \(5 \/ 100 GiB\)/);
-for (const total of [0, -1, '100', null]) assert.match(visibleText(markup({total_disk_gb:total, used_disk_gb:50, free_disk_gb:5})), /— \(5 \/ — GiB\)/);
+for (const used of [-1, 101, '50', null]) {
+  const html = markup({total_disk_gb:100, used_disk_gb:used, free_disk_gb:5});
+  assert.match(visibleText(html), /— \(5 \/ 100 GiB\)/);
+  assert.doesNotMatch(html, /aria-valuenow=|style="width:/);
+}
+for (const total of [0, -1, '100', null]) {
+  const html = markup({total_disk_gb:total, used_disk_gb:50, free_disk_gb:5});
+  assert.match(visibleText(html), /— \(5 \/ — GiB\)/);
+  assert.doesNotMatch(html, /aria-valuenow=|style="width:/);
+}
 assert.match(markup({total_disk_gb:100, free_disk_gb:0.5}), /\(0\.5 \/ 100 GiB\)/);
 assert.match(markup({total_disk_gb:4096, free_disk_gb:2048}), /\(2048 \/ 4096 GiB\)/);
 assert.match(markup({total_disk_gb:100, free_disk_gb:1, disk_path:'/<script>bad</script>'}), /&lt;script&gt;/);
@@ -375,6 +386,8 @@ for (const selector of ['#node-grid', '#dialog-content']) {
   const html = storage.element(selector).innerHTML;
   assert.match(html, /Stale report/); assert.match(html, /Awaiting fresh data/);
   assert.doesNotMatch(html, /\(15 \/ 1759 GiB\)|\(591 \/ 14194 GiB\)/);
+  assert.doesNotMatch(html, /class="storage-meter"[^>]*aria-valuenow=/);
+  assert.equal([...html.matchAll(/class="storage-meter is-unavailable"/g)].length, 2);
 }
 storage.evaluate('liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot); renderNodes();');
 assert.match(storage.element('#node-grid').innerHTML, /Stale report/);

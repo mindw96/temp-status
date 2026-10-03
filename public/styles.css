@@ -117,6 +117,8 @@ section[id]{scroll-margin-top:24px}
 
 /* Storage continues to report available space, including missing/stale values. */
 .node-storage{display:grid;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid var(--divider)}
+.storage-disk{min-width:0}
+.storage-meter{margin-top:4px}
 .storage-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;font-size:11px;line-height:1.5}
 .storage-label{display:flex;gap:3px;min-width:0;white-space:nowrap;color:var(--text-secondary)}
 .storage-label>span:first-child{flex-shrink:0}
@@ -143,8 +145,8 @@ section[id]{scroll-margin-top:24px}
 .gpu-metrics{display:grid;grid-template-columns:auto minmax(16px,1fr) auto auto;align-items:center;gap:2px 6px;margin-top:5px;min-width:0;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
 .gpu-metric{display:contents;white-space:nowrap}
 .gpu-metric-value{display:contents}
-.gpu-meter{display:block;min-width:16px;height:4px;border-radius:100px;overflow:hidden;background:var(--meter-track)}
-.gpu-meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,hsl(var(--gpu-meter-hue),80%,44%),hsl(var(--gpu-meter-hue),85%,50%))}
+.gpu-meter,.storage-meter{display:block;min-width:16px;height:4px;border-radius:100px;overflow:hidden;background:var(--meter-track)}
+.gpu-meter>span,.storage-meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,hsl(var(--usage-meter-hue),80%,44%),hsl(var(--usage-meter-hue),85%,50%))}
 .gpu-metric strong{text-align:right;font-weight:400;color:var(--link)}
 .gpu-memory{color:var(--text-secondary)}
 .gpu-job-items{display:grid;gap:4px;min-width:0}

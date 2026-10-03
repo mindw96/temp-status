@@ -140,14 +140,18 @@ function allocationMarkup(n, key) {
   const value = status || `${compactGiB(resource.free)}<span class="allocation-total"> / ${compactGiB(resource.total)}${unit}</span>`;
   return `<div class="resource-row" title="${esc(allocationDescription(n, key))}"><div class="resource-line"><span class="metric-label">${key.toUpperCase()}</span><strong class="metric-value">${value}</strong></div></div>`;
 }
-function gpuMetricMarkup(label, value, capacity = '') {
+function usageMeterMarkup(label, value, className) {
   const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
   // Blend through the 30% and 70% boundaries instead of abruptly switching colors.
   const blend = (start, end) => Math.max(0, Math.min(1, (usable - start) / (end - start)));
   const hue = usable === null ? null : 140 - 108 * blend(25, 35) - 32 * blend(65, 75);
-  const meter = usable === null
-    ? '<span class="gpu-meter is-unavailable" aria-hidden="true"></span>'
-    : `<span class="gpu-meter" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%;--gpu-meter-hue:${hue}" aria-hidden="true"></span></span>`;
+  return usable === null
+    ? `<span class="${esc(className)} is-unavailable" aria-hidden="true"></span>`
+    : `<span class="${esc(className)}" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%;--usage-meter-hue:${hue}" aria-hidden="true"></span></span>`;
+}
+function gpuMetricMarkup(label, value, capacity = '') {
+  const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
+  const meter = usageMeterMarkup(label, usable, 'gpu-meter');
   return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong> <span class="gpu-memory">${esc(capacity)}</span></span></div>`;
 }
 function gpuBlockMarkup(n, g) {
@@ -171,10 +175,11 @@ function storageMarkup(n) {
     // reserved by the filesystem that ordinary users cannot write to.
     const free = validNumber(disk.free) !== null && disk.free >= 0 && (total === null || disk.free <= total) ? disk.free : null;
     const used = validNumber(disk.used) !== null && disk.used >= 0 && total !== null && disk.used <= total ? disk.used : null;
-    const usage = percent(used === null ? null : used / total * 100);
+    const usagePercent = used === null ? null : used / total * 100;
+    const usage = percent(usagePercent);
     const capacity = `${free === null ? '—' : compactGiB(free)} / ${total === null ? '—' : compactGiB(total)} GiB`;
     const description = n.stale ? 'Stale report · Awaiting fresh data' : `${usage} used · ${capacity} free / total${free === null || total === null ? ' · Not reported' : ''}`;
-    return `<div class="storage-row" title="${esc(description)}"><span class="storage-label"><span>${disk.label}:</span> <span class="storage-path" title="${esc(disk.path || 'Path not reported')}">${esc(disk.path || '—')}</span></span><span class="storage-values">${n.stale ? '<span class="storage-stale">Stale report</span>' : `<strong>${usage}</strong> <span>(${capacity})</span>`}</span></div>`;
+    return `<div class="storage-disk"><div class="storage-row" title="${esc(description)}"><span class="storage-label"><span>${disk.label}:</span> <span class="storage-path" title="${esc(disk.path || 'Path not reported')}">${esc(disk.path || '—')}</span></span><span class="storage-values">${n.stale ? '<span class="storage-stale">Stale report</span>' : `<strong>${usage}</strong> <span>(${capacity})</span>`}</span></div>${usageMeterMarkup(`${disk.label} usage`, n.stale ? null : usagePercent, 'storage-meter')}</div>`;
   }).join('') : `<p class="storage-empty">${n.stale ? 'Awaiting fresh data' : 'Not reported'}</p>`}</div>`;
 }
 renderNodes = function() {
