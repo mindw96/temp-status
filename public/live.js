@@ -142,10 +142,13 @@ function allocationMarkup(n, key) {
 }
 function gpuMetricMarkup(label, value, capacity = '') {
   const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
+  // Blend through the 30% and 70% boundaries instead of abruptly switching colors.
+  const blend = (start, end) => Math.max(0, Math.min(1, (usable - start) / (end - start)));
+  const hue = usable === null ? null : 140 - 108 * blend(25, 35) - 32 * blend(65, 75);
   const meter = usable === null
     ? '<span class="gpu-meter is-unavailable" aria-hidden="true"></span>'
-    : `<span class="gpu-meter" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%" aria-hidden="true"></span></span>`;
-  return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong>${capacity ? ` <span class="gpu-memory">${esc(capacity)}</span>` : ''}</span></div>`;
+    : `<span class="gpu-meter" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%;--gpu-meter-hue:${hue}" aria-hidden="true"></span></span>`;
+  return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong> <span class="gpu-memory">${esc(capacity)}</span></span></div>`;
 }
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
