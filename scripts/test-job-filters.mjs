@@ -371,6 +371,31 @@ evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.s
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /No allocation reported/);
 
+// Display names do not change account identities, filtering, or job ownership.
+element('#reset-job-filters').dispatch('click');
+const namedJobs = [job(701, 'mindw', 'devbox'), job(702, 'kimjh', 'server2'),
+  job(703, 'phdkimjh', 'server2'), job(704, 'guest-user', 'ubuntu')];
+report(namedJobs);
+assert.equal(evaluate('Object.keys(userDisplayNames).length'), 28);
+assert.equal(evaluate('displayUserName("mindw")'), '민동욱(mindw)');
+assert.equal(evaluate('displayUserName("phdkimjh")'), '김정환(phdkimjh)');
+for (const unknown of ['guest-user', 'constructor', '__proto__', 'Mindw']) {
+  assert.equal(evaluate(`displayUserName(${JSON.stringify(unknown)})`), unknown);
+}
+assert.match(element('#job-user-filter').innerHTML, /value="mindw">민동욱\(mindw\)<\/option>/);
+assert.match(element('#job-rows').innerHTML, /김지호\(kimjh\)/);
+assert.match(element('#job-rows').innerHTML, /guest-user/);
+for (const search of ['민동욱', 'mindw', '민동욱(mindw)']) assert.deepEqual(apply({search}).visibleJobIds, ['701']);
+assert.deepEqual(apply({search: '김정환', server: 'server2'}).visibleJobIds, ['703']);
+assert.deepEqual(apply({search: '', server: '', user: 'mindw'}).visibleJobIds, ['701']);
+assert.equal(evaluate('state.user'), 'mindw');
+assert.deepEqual(plain(evaluate('jobs.map(j => j.user)')), ['mindw', 'kimjh', 'phdkimjh', 'guest-user']);
+evaluate('showJob("703")');
+assert.match(element('#dialog-content').innerHTML, /김정환\(phdkimjh\)/);
+report([job(704, 'guest-user', 'ubuntu')]);
+assert.match(element('#job-user-filter').innerHTML, /value="mindw">민동욱\(mindw\) · No current jobs/);
+element('#reset-job-filters').dispatch('click');
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);
