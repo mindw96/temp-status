@@ -157,11 +157,17 @@ function gpuMetricMarkup(label, value, capacity = '') {
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
   const occupied = !n.stale && ((!n.isCloud && n.slurmFresh && g.allocated) || (!g.error && g.processes.length > 0));
+  const mapped = Number.isInteger(g.gresIndex) && g.gresIndex >= 0 && g.gresIndex <= 255;
+  // Missing allocation maps must not make a potentially reserved GPU look free.
+  const unallocated = available && !occupied && !n.isCloud && n.slurmFresh && mapped
+    && !jobs.some(job => ['RUNNING', 'COMPLETING', 'SUSPENDED', 'CONFIGURING', 'STAGE_OUT'].includes(job.state)
+      && jobMatchesServer(job, n.id) && (Number(job.raw?.alloc_gpus) > 0 || Number(job.raw?.req_gpus) > 0)
+      && !Array.isArray(job.raw?.gpu_allocations));
   const util = available ? g.util : null;
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
   const capacity = memoryAvailable ? `(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)` : '';
-  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent, capacity)}</div></div>`;
+  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}${unallocated ? ' unallocated' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent, capacity)}</div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};

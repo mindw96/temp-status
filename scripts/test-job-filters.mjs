@@ -353,8 +353,10 @@ assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'ubuntu').gpus.map(g =
   [['60000'], [], [], []]);
 const idleMarkup = () => evaluate("gpuBlockMarkup(nodes.find(n => n.id === 'server2'), nodes.find(n => n.id === 'server2').gpus[2])");
 const cardOccupied = markup => markup.match(/^<div class="([^"]*)"/)[1].split(/\s+/).includes('occupied');
+const cardUnallocated = markup => markup.match(/^<div class="([^"]*)"/)[1].split(/\s+/).includes('unallocated');
 assert.doesNotMatch(element('#node-grid').innerHTML, /class="gpu-blocks|class="gpu-slot/);
 assert.equal(cardOccupied(idleMarkup()), true, 'A reserved, idle GPU highlights its detail card');
+assert.equal(cardUnallocated(idleMarkup()), false, 'A reserved GPU with no process is not gray');
 assert.match(idleMarkup(), /data-source="allocation"/);
 assert.match(idleMarkup(), /54901/); assert.match(idleMarkup(), /ryujh/);
 assert.match(idleMarkup(), /aria-label="UTIL"[^>]*aria-valuenow="0"/);
@@ -375,7 +377,30 @@ const vacantCard = evaluate(`(() => {
   const node = nodes.find(n => n.id === 'server2');
   return gpuBlockMarkup(node, node.gpus[1]);
 })()`);
-assert.equal(cardOccupied(vacantCard), false, 'An unallocated GPU without processes stays neutral');
+assert.equal(cardOccupied(vacantCard), false);
+assert.equal(cardUnallocated(vacantCard), true, 'A fresh mapped GPU with no allocation is gray');
+assert.equal(cardUnallocated(evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2'), previous = jobs[0].raw.gpu_allocations;
+  jobs[0].raw.gpu_allocations = null;
+  try { return gpuBlockMarkup(node, node.gpus[1]); }
+  finally { jobs[0].raw.gpu_allocations = previous; }
+})()`)), false, 'An incomplete job allocation map cannot prove a GPU is unallocated');
+assert.equal(cardUnallocated(evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2');
+  jobs.push({state:'RUNNING', target:'server2', raw:{req_gpus:'', alloc_gpus:'', gpu_allocations:null}});
+  try { return gpuBlockMarkup(node, node.gpus[1]); }
+  finally { jobs.pop(); }
+})()`)), true, 'A job with no GPU request does not suppress an unallocated slot');
+for (const override of ["{stale:true}", "{slurmFresh:false}", "{isCloud:true}"]) {
+  assert.equal(cardUnallocated(evaluate(`(() => {
+    const node = nodes.find(n => n.id === 'server2');
+    return gpuBlockMarkup({...node,...${override}}, node.gpus[1]);
+  })()`)), false);
+}
+assert.equal(cardUnallocated(evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2');
+  return gpuBlockMarkup(node, {...node.gpus[1], error:'unavailable'});
+})()`)), false);
 assert.match(vacantCard, /<span class="gpu-card-header"><span class="gpu-job-index gpu-id">GPU 1<\/span><\/span>/);
 assert.match(vacantCard, /<span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;<\/span>/);
 assert.match(vacantCard, /<span class="sr-only">No allocation reported<\/span>/);
@@ -408,10 +433,12 @@ evaluate("delete liveState.snapshot.nodes.find(n => n.data.server_name === 'serv
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /<span class="gpu-job-status">Allocation unavailable<\/span>/);
 assert.equal(cardOccupied(idleMarkup()), false, 'Missing device mapping cannot invent an allocation highlight');
+assert.equal(cardUnallocated(idleMarkup()), false, 'A missing device mapping is not an unallocated GPU');
 evaluate("liveState.snapshot.nodes.find(n => n.data.server_name === 'server2').data.gpus[2].slurm_gres_index = 2; liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1; normalizeSnapshot(liveState.snapshot);");
 assert.doesNotMatch(idleMarkup(), /54901|ryujh/);
 assert.match(idleMarkup(), /<span class="gpu-job-status">Slurm data stale<\/span>/);
 assert.equal(cardOccupied(idleMarkup()), false, 'Stale Slurm ownership cannot keep an idle GPU highlighted');
+assert.equal(cardUnallocated(idleMarkup()), false, 'Stale Slurm ownership is not an unallocated GPU');
 // Ending a job clears its allocation on the next snapshot, even if an older
 // node report still contains process information for that job.
 evaluate("liveState.snapshot.slurm.receivedAt = Date.now(); liveState.snapshot.slurm.data.squeue = liveState.snapshot.slurm.data.squeue.filter(j => j.job_id !== '54901'); normalizeSnapshot(liveState.snapshot);");
