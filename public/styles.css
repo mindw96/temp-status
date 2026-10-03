@@ -135,6 +135,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
 .gpu-job-row.gpu-block{min-width:0;padding:9px 10px;margin:5px 0 0;font-weight:400;background:transparent;border-color:transparent}
+.gpu-job-row.gpu-block.occupied{background:#eef3f8}
 .gpu-job-row.gpu-block.unallocated{background:rgba(0,0,0,.045)}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(255,255,255,.08)}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.unallocated{background:transparent}
