@@ -174,7 +174,7 @@ renderNodes = function() {
     const modelLabel = nodeGpuModelLabel(n);
     return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
       <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
-        <div class="node-header"><div class="node-title">${icon('server')}<span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="node-model-badge" title="${esc(modelLabel)}">${esc(modelLabel)}</span></div>
+        <div class="node-header"><div class="node-title"><span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="node-model-badge" title="${esc(modelLabel)}">${esc(modelLabel)}</span></div>
         ${n.gpus.length ? '' : '<p class="node-no-gpu">Waiting for the node collector</p>'}
         <div class="resource-metrics" aria-label="${n.isCloud ? 'Host utilization' : 'Slurm resources: free / total'}">${n.isCloud ? resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null) + resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null) : allocationMarkup(n, 'cpu') + allocationMarkup(n, 'ram')}</div>
         ${storageMarkup(n)}
