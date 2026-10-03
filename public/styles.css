@@ -5,6 +5,8 @@
   color-scheme:light;
   --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --page-bg:#fff;
+  --server-surface:#f6f6f6;
+  --server-surface-hover:#f0f0f0;
   --link:#005fcc;
   --focus:#006bd6;
   --control-bg:rgba(255,255,255,.82);
@@ -23,6 +25,8 @@
 :root[data-theme='dark']{
   color-scheme:dark;
   --page-bg:#0b0d18;
+  --server-surface:transparent;
+  --server-surface-hover:var(--table-row-hover);
   --link:#8ad7ff;
   --focus:#8ad7ff;
   --accent-blue:#8ad7ff;
@@ -85,8 +89,8 @@ section[id]{scroll-margin-top:24px}
 .node{display:block;width:100%;min-width:0;text-align:left;align-self:start;color:var(--text-primary)}
 .live-node.ds-server-card{padding:0;overflow:hidden}
 .node:not(.live-node){padding:20px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:20px;backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);box-shadow:0 2px 1px var(--glass-inset) inset,0 8px 32px var(--glass-shadow),0 2px 8px var(--glass-shadow)}
-.node-summary{display:block;width:100%;padding:20px 20px 10px;text-align:left;border-radius:20px 20px 0 0}
-.node-summary:hover{background:var(--table-row-hover)}
+.node-summary{display:block;width:100%;padding:20px 20px 10px;text-align:left;border-radius:20px 20px 0 0;background:var(--server-surface)}
+.node-summary:hover{background:var(--server-surface-hover)}
 .node-summary:focus-visible{outline-offset:-4px}
 .node-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
 .node-title{display:flex;align-items:center;gap:8px;min-width:0;flex-shrink:0}
@@ -130,8 +134,7 @@ section[id]{scroll-margin-top:24px}
 .storage-note{margin:9px 0 20px;font-size:12px;line-height:1.6;color:var(--text-tertiary)}
 
 /* Per-GPU tiles also carry the occupancy indication. */
-.gpu-jobs-summary{padding:8px 20px 16px;border-top:1px solid var(--divider);background:#f6f6f6}
-:root[data-theme='dark'] .gpu-jobs-summary{background:transparent}
+.gpu-jobs-summary{padding:8px 20px 16px;border-top:1px solid var(--divider);background:var(--server-surface)}
 .gpu-jobs-caption{margin-bottom:11px;font-size:11px;line-height:1.6;color:var(--text-tertiary)}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
