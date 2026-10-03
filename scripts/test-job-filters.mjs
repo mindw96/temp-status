@@ -370,7 +370,7 @@ const gpuAt = singleCard.indexOf('>GPU 2</span>');
 const ownerAt = singleCard.indexOf('class="gpu-job-meta"');
 const nameAt = singleCard.indexOf('class="gpu-job-name"');
 const metricsAt = singleCard.indexOf('class="gpu-metrics"');
-assert.ok(gpuAt >= 0 && gpuAt < ownerAt && ownerAt < nameAt && nameAt < metricsAt);
+assert.ok(ownerAt >= 0 && ownerAt < gpuAt && gpuAt < nameAt && nameAt < metricsAt);
 // An unallocated GPU reserves the same job-name line without inventing a job
 // or user. Keep the reason accessible and keep real warnings visible.
 const vacantCard = evaluate(`(() => {

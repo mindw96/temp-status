@@ -76,7 +76,7 @@ function renderRefreshControl() {
 function gpuJobsMarkup(n, g, compactCard = false) {
   const index = compactCard ? `<span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span>` : '';
   const empty = (message, idle = false) => compactCard
-    ? `<div class="gpu-job-unlinked gpu-job-vacant" title="${esc(message)}"><span class="gpu-card-header">${index}${idle ? '' : `<span class="gpu-job-status">${esc(message)}</span>`}</span><span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;</span><span class="sr-only">${esc(message)}</span></div>`
+    ? `<div class="gpu-job-unlinked gpu-job-vacant" title="${esc(message)}"><span class="gpu-card-header">${idle ? '' : `<span class="gpu-job-status">${esc(message)}</span>`}${index}</span><span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;</span><span class="sr-only">${esc(message)}</span></div>`
     : `<span class="gpu-job-empty">${esc(message)}</span>`;
   if (g.error && !g.allocationRecords?.length) return empty('GPU report unavailable');
   if (n.isCloud) return !g.processes.length ? empty(n.stale ? 'No process in last report' : 'No process observed', !n.stale) : `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}${cloudProcessesMarkup(n, g)}`;
@@ -88,7 +88,7 @@ function gpuJobsMarkup(n, g, compactCard = false) {
     const user = record.users.map(displayUserName).join(', ') || 'User unavailable', source = record.allocated ? 'Slurm allocated' : 'Observed process';
     const userLabel = record.allocated ? user : `Observed: ${user}`;
     const meta = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? esc(record.jobId) : 'Job ID unavailable'}</span><span class="gpu-job-separator" aria-hidden="true">-</span><span class="gpu-job-user" title="${source} · User: ${esc(user)}">${esc(userLabel)}</span></span>`;
-    const content = `${compactCard ? `<span class="gpu-card-header">${position === 0 ? index : ''}${meta}</span>` : meta}<span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
+    const content = `${compactCard ? `<span class="gpu-card-header">${meta}${position === 0 ? index : ''}</span>` : meta}<span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
     return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" data-source="${record.allocated ? 'allocation' : 'process'}" title="${source} · Job ${esc(record.jobId)} · ${esc(user)} · ${esc(record.name)}" aria-label="${source} · Job ${esc(record.jobId)}: ${esc(record.name)} by ${esc(user)}, details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
   }).join('');
 }
@@ -149,10 +149,10 @@ function usageMeterMarkup(label, value, className) {
     ? `<span class="${esc(className)} is-unavailable" aria-hidden="true"></span>`
     : `<span class="${esc(className)}" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%;--usage-meter-hue:${hue}" aria-hidden="true"></span></span>`;
 }
-function gpuMetricMarkup(label, value, capacity = '') {
+function gpuMetricMarkup(label, value) {
   const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
   const meter = usageMeterMarkup(label, usable, 'gpu-meter');
-  return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong> <span class="gpu-memory">${esc(capacity)}</span></span></div>`;
+  return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong></span></div>`;
 }
 function gpuBlockMarkup(n, g) {
   const available = !n.stale && !g.error;
@@ -167,7 +167,7 @@ function gpuBlockMarkup(n, g) {
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
   const capacity = memoryAvailable ? `(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)` : '';
-  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}${unallocated ? ' unallocated' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent, capacity)}</div></div>`;
+  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}${unallocated ? ' unallocated' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent)}<span class="gpu-memory">${esc(capacity)}</span></div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
