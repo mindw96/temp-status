@@ -133,7 +133,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-jobs-caption{margin-bottom:11px;font-size:11px;line-height:1.6;color:var(--text-tertiary)}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
-.gpu-job-row.gpu-block{min-width:0;padding:7px 10px;margin:5px 0 0;font-weight:400}
+.gpu-job-row.gpu-block{min-width:0;padding:8px 10px;margin:5px 0 0;font-weight:400}
 .gpu-job-row.gpu-block.occupied{background:rgba(0,122,255,.08);border-color:transparent}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(0,122,255,.13)}
 .gpu-job-row.occupied .gpu-job-index{color:var(--link)}
@@ -196,27 +196,26 @@ section[id]{scroll-margin-top:24px}
 .table-scroll:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
 .table-scroll::-webkit-scrollbar{height:6px;width:6px}
 .table-scroll::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:6px}
-.jobs-table{table-layout:fixed;border-collapse:collapse;width:100%;min-width:1080px;text-align:left;font-size:13px}
+.jobs-table{table-layout:fixed;border-collapse:collapse;width:100%;min-width:1080px;text-align:left;font-size:12px}
 .jobs-table .job-id-column{width:160px}
 .jobs-table .job-user-column{width:140px}
 .jobs-table .job-status-column{width:120px}
 .jobs-table .job-gpus-column{width:75px}
 .jobs-table .job-target-column{width:205px}
 .jobs-table .job-details-column{width:48px}
-.jobs-table th{padding:11px 14px;border-block:1px solid var(--table-row-border);background:var(--table-header-bg);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--table-header-color);white-space:nowrap}
+.jobs-table thead th{padding:8px 14px;border-block:1px solid var(--table-row-border);background:var(--table-header-bg);font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--table-header-color);white-space:nowrap}
 /* The paginated table only scrolls horizontally; nested sticky blur can hide its labels. */
 .jobs-table thead th{position:static;backdrop-filter:none;-webkit-backdrop-filter:none}
-.jobs-table td{padding:12px 14px;border-bottom:1px solid var(--table-row-border);color:var(--text-primary);vertical-align:middle;font-variant-numeric:tabular-nums}
+.jobs-table td{padding:8px 14px;border-bottom:1px solid var(--table-row-border);color:var(--text-primary);vertical-align:middle;font-variant-numeric:tabular-nums}
 .jobs-table th:first-child,.jobs-table td:first-child{padding-left:22px}
 .jobs-table th:last-child,.jobs-table td:last-child{padding-right:22px}
 .jobs-table tr:last-child td{border-bottom:0}
 .jobs-table tbody tr:hover{background:var(--table-row-hover)}
 .jobs-table td:nth-child(1),.jobs-table td:nth-child(5),.jobs-table td:nth-child(6){white-space:normal;overflow-wrap:anywhere}
-.jobs-table td:first-child{font-size:14px}
-.jobs-table .job-name{width:100%;max-width:none;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.6;text-overflow:ellipsis;text-align:left;font-size:15px;font-weight:500;color:var(--text-primary)}
+.jobs-table .job-name{width:100%;max-width:none;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.6;text-overflow:ellipsis;text-align:left;font-size:12px;font-weight:500;color:var(--text-primary)}
 .job-name:hover{text-decoration:underline;color:var(--link)}
 .job-user{display:block;min-width:0;white-space:normal;overflow-wrap:anywhere;font-size:12px;color:var(--text-secondary)}
-.job-status{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11px;font-weight:500;color:var(--running-text);white-space:nowrap}
+.job-status{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:12px;font-weight:500;color:var(--running-text);white-space:nowrap}
 .job-status:before{content:'';width:5px;height:5px;flex-shrink:0;border-radius:50%;background:var(--accent-teal)}
 .job-status.badge-allocated{color:var(--running-text)}
 .job-status:is(.badge-running,.badge-pending,.pending),:root[data-theme='dark'] .job-status:is(.badge-running,.badge-pending,.pending){padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--text-primary);font-weight:400;gap:0}
@@ -232,13 +231,13 @@ section[id]{scroll-margin-top:24px}
 .table-arrow{display:grid;place-items:center;min-height:30px;width:26px;color:var(--text-tertiary);border-radius:6px}
 .table-arrow svg{width:15px;height:15px}
 .table-arrow:hover{color:var(--link);background:var(--table-row-hover)}
-.table-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-top:1px solid var(--divider);font-size:11px;color:var(--text-tertiary)}
+.table-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 22px;border-top:1px solid var(--divider);font-size:12px;color:var(--text-tertiary)}
 .footer-separator{padding:0 8px}
 .pagination{display:flex;align-items:center;gap:10px}
 .pagination button{display:grid;place-items:center;min-width:30px;min-height:30px;border:1px solid var(--control-border);border-radius:8px;background:var(--control-bg);font-size:15px;color:var(--text-secondary)}
 .pagination button:hover:not(:disabled){color:var(--link);background:var(--table-row-hover)}
 .pagination button:disabled{opacity:.3}
-.empty-state{text-align:center;padding:40px 20px!important;font-size:13px;color:var(--text-tertiary)!important;white-space:normal!important}
+.empty-state{text-align:center;padding:24px 20px!important;font-size:12px;color:var(--text-tertiary)!important;white-space:normal!important}
 .waiting-nodes{grid-column:1/-1;padding:36px 20px;border:1px dashed var(--control-border);border-radius:20px;background:var(--glass-bg);text-align:center;color:var(--text-tertiary)}
 .waiting-nodes .small-icon{display:flex;justify-content:center;margin-bottom:12px;color:var(--link)}
 .waiting-nodes p{margin:9px 0;font-size:13px}
@@ -280,7 +279,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 @media(min-width:1024px){
   .gpu-jobs-summary{padding:8px 20px 10px}
   .gpu-jobs-caption{margin-bottom:6px}
-  .gpu-job-row.gpu-block{padding-block:3px;margin-top:6px}
+  .gpu-job-row.gpu-block{padding-block:4px;margin-top:6px}
   .gpu-job-row.gpu-block:first-of-type{margin-top:0}
 }
 @media(min-width:1500px){main{padding:40px 44px 0}.node-grid{gap:20px}}
@@ -329,7 +328,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .jobs-table .job-status-column{width:105px}
   .jobs-table .job-target-column{width:175px}
   .jobs-table .job-id-column{width:145px}
-  .table-footer{padding:12px 16px;flex-wrap:wrap;gap:10px;font-size:10px}
+  .table-footer{padding:10px 16px;flex-wrap:wrap;gap:10px}
   dialog{padding:20px;max-height:calc(100dvh - 24px)}
   #dialog-title{font-size:23px}
   .detail-grid>div{padding:12px}
