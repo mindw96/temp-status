@@ -259,6 +259,14 @@ function validSnapshot(snapshot) {
     && data.sinfo.every(node => node && (typeof node.name === 'string' || typeof node.hostname === 'string')
       && (node.state === undefined || node.state === null || typeof node.state === 'string'));
 }
+function missingRecentReports(snapshot) {
+  const previous = liveState.snapshot;
+  if (!previous) return false;
+  const recent = report => Number.isFinite(report?.receivedAt) && Date.now() - report.receivedAt < FRESHNESS_MS;
+  const reportedNodes = new Set(snapshot.nodes.map(report => report.data.server_name));
+  return recent(previous.slurm) && !snapshot.slurm
+    || previous.nodes.some(report => recent(report) && !reportedNodes.has(report.data.server_name));
+}
 async function loadSnapshot({force = false, resume = false} = {}) {
   if (document.hidden || liveState.loading || liveState.mode !== 'live') return;
   const cooldownUntil = liveState.lastAttemptAt === null ? 0 : liveState.lastAttemptAt + MANUAL_COOLDOWN_MS;
@@ -288,6 +296,9 @@ async function loadSnapshot({force = false, resume = false} = {}) {
       throw Object.assign(new Error(), {publicMessage: response.status === 401 ? 'Authentication required.' : `Unable to refresh. Server returned ${response.status}.`});
     }
     if (!validSnapshot(snapshot)) throw Object.assign(new Error(), {publicMessage: 'Unable to refresh. Unexpected server response.'});
+    // A restarted receiver may briefly have only some collector reports. Keep
+    // the previous view marked stale until they arrive, bounded by freshness.
+    if (missingRecentReports(snapshot)) throw Object.assign(new Error(), {publicMessage: 'Waiting for fresh collector reports.', kind: 'incomplete'});
     if (liveState.mode !== 'live') return;
     liveState.error = null;
     liveState.errorKind = null;
@@ -300,10 +311,10 @@ async function loadSnapshot({force = false, resume = false} = {}) {
   } catch (error) {
     if (liveState.mode === 'live' && !request.paused) {
       liveState.error = error?.name === 'AbortError' ? 'No response within 10 seconds.' : error?.publicMessage || 'Unable to refresh. Please check your connection and try again.';
-      liveState.errorKind = error?.kind === 'quota' ? 'quota' : 'request';
+      liveState.errorKind = ['quota', 'incomplete'].includes(error?.kind) ? error.kind : 'request';
       liveState.retryAt = error?.kind === 'quota' ? error.retryAt : null;
       liveState.failureCount += 1;
-      const retryDelay = liveState.errorKind === 'quota' ? Math.min(QUOTA_RETRY_MS, Math.max(ERROR_RETRY_BASE_MS, liveState.retryAt - Date.now())) : Math.min(QUOTA_RETRY_MS, ERROR_RETRY_BASE_MS * liveState.failureCount);
+      const retryDelay = liveState.errorKind === 'incomplete' ? REFRESH_INTERVAL_MS : liveState.errorKind === 'quota' ? Math.min(QUOTA_RETRY_MS, Math.max(ERROR_RETRY_BASE_MS, liveState.retryAt - Date.now())) : Math.min(QUOTA_RETRY_MS, ERROR_RETRY_BASE_MS * liveState.failureCount);
       liveState.nextAttemptAt = Date.now() + retryDelay;
       if (liveState.snapshot) normalizeSnapshot(liveState.snapshot);
       else {nodes = []; jobs = []; partitionMeta = {};}

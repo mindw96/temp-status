@@ -133,27 +133,27 @@ section[id]{scroll-margin-top:24px}
 .gpu-jobs-caption{margin-bottom:11px;font-size:11px;line-height:1.6;color:var(--text-tertiary)}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
-.gpu-job-row.gpu-block{min-width:0;padding:7px 10px;margin:5px 0 0}
+.gpu-job-row.gpu-block{min-width:0;padding:7px 10px;margin:5px 0 0;font-weight:400}
 .gpu-job-row.gpu-block.occupied{background:rgba(0,122,255,.08);border-color:transparent}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(0,122,255,.13)}
 .gpu-job-row.occupied .gpu-job-index{color:var(--link)}
 .gpu-job-row:first-of-type{margin-top:0}
-.gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:1.3em;font-size:14px;line-height:1.3}
-.gpu-job-index{font-size:14px;font-weight:600;color:var(--text-primary);white-space:nowrap}
+.gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:1.3em;font-size:12px;line-height:1.3}
+.gpu-job-index{font-size:12px;font-weight:400;color:var(--text-primary);white-space:nowrap}
 .gpu-card-header .gpu-job-index{flex-shrink:0}
 .gpu-metrics{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-top:5px;min-width:0;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
 .gpu-metric{white-space:nowrap}
-.gpu-metric strong{font-weight:500;color:var(--link)}
+.gpu-metric strong{font-weight:400;color:var(--link)}
 .gpu-memory{color:var(--text-secondary)}
 .gpu-job-items{display:grid;gap:4px;min-width:0}
-.gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;line-height:1.3}
+.gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;font-weight:400;line-height:1.3}
 .gpu-job-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px;min-width:0}
 .gpu-card-header .gpu-job-meta{flex:1;justify-content:flex-end;flex-wrap:nowrap;gap:4px}
-.gpu-job-id{display:block;min-width:0;font-size:12px;font-weight:500;color:var(--link);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gpu-job-id{display:block;min-width:0;font-size:12px;font-weight:400;color:var(--link);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gpu-card-header .gpu-job-id{flex-shrink:0;max-width:45%}
 .gpu-job-separator{flex-shrink:0;font-size:11px;color:var(--text-tertiary)}
-.gpu-job-user{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-secondary)}
-.gpu-job-name{display:block;font-size:14px;font-weight:500;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpu-job-user{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;color:var(--text-secondary)}
+.gpu-job-name{display:block;font-size:14px;font-weight:400;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gpu-card-header+.gpu-job-name{margin-top:2px}
 .gpu-job-status{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--pending-text)}
 .gpu-job-link:hover .gpu-job-name{color:var(--link);text-decoration:underline}
@@ -218,11 +218,9 @@ section[id]{scroll-margin-top:24px}
 .job-user{display:block;min-width:0;white-space:normal;overflow-wrap:anywhere;font-size:12px;color:var(--text-secondary)}
 .job-status{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11px;font-weight:500;color:var(--running-text);white-space:nowrap}
 .job-status:before{content:'';width:5px;height:5px;flex-shrink:0;border-radius:50%;background:var(--accent-teal)}
-.job-status.pending{color:var(--pending-text)}
-.job-status.pending:before{background:var(--accent-orange)}
-.job-status.badge-running,.job-status.badge-allocated{color:var(--running-text)}
-.job-status.badge-pending{color:var(--pending-text)}
-.job-status.badge-pending::before{background:var(--accent-orange)}
+.job-status.badge-allocated{color:var(--running-text)}
+.job-status:is(.badge-running,.badge-pending,.pending),:root[data-theme='dark'] .job-status:is(.badge-running,.badge-pending,.pending){padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--text-primary);font-weight:400;gap:0}
+.job-status:is(.badge-running,.badge-pending,.pending)::before{content:none;display:none}
 .job-status.badge-mixed,.job-status.badge-completing,.job-status.badge-completed{color:var(--link)}
 .job-status.badge-mixed::before,.job-status.badge-completing::before,.job-status.badge-completed::before{background:var(--accent-blue)}
 .job-status.badge-down,.job-status.badge-drained{color:var(--danger-text)}

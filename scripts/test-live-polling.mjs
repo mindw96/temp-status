@@ -207,6 +207,114 @@ for (const [expectedDelay, response] of [
   assert.match(failures.element('#connection-status').textContent, /live status is unavailable/);
 }
 
+// A receiver restart can return a valid but incomplete snapshot before all
+// collectors have reported again. Keep the recent snapshot together, mark its
+// live metrics/allocations unavailable, and retry on the ordinary 30s cadence.
+const allocationSnapshot = client => {
+  const result = client.snapshot();
+  result.nodes[0].data.gpus[0].slurm_gres_index = 0;
+  result.slurm.data.squeue[0].gpu_allocations = [{node: 'devbox', gres_indices: [0]}];
+  return result;
+};
+for (const missing of ['all reports', 'Slurm report', 'node report', 'replaced node']) {
+  const partial = browser({hidden: true});
+  partial.responses.push({status: 200, body: allocationSnapshot(partial)});
+  await partial.visibility(false);
+  const previous = partial.state().snapshot;
+  assert.equal(partial.evaluate('nodes[0].gpus[0].allocated'), true);
+  await partial.advance(5000);
+  const incomplete = partial.snapshot();
+  incomplete.nodes[0].data.gpus[0].gpu_utilization = 88;
+  incomplete.slurm.data.squeue[0].name = 'Partial replacement';
+  if (missing === 'all reports') {incomplete.nodes = []; incomplete.slurm = null;}
+  else if (missing === 'Slurm report') incomplete.slurm = null;
+  else if (missing === 'node report') incomplete.nodes = [];
+  else incomplete.nodes[0].data.server_name = 'server2';
+  partial.responses.push({status: 200, body: incomplete});
+  await partial.element('#retry-live').onclick(); await flush();
+  assert.equal(partial.state().errorKind, 'incomplete', missing);
+  assert.equal(partial.state().snapshot, previous, `${missing}: preserve the whole snapshot`);
+  assert.equal(partial.evaluate('jobs[0].name'), 'Training');
+  assert.equal(partial.evaluate('nodes[0].stale'), true);
+  assert.equal(partial.evaluate('nodes[0].gpus[0].util'), null);
+  assert.equal(partial.evaluate('nodes[0].gpus[0].allocated'), false);
+  assert.equal(partial.evaluate('nodes[0].slurmFresh'), false);
+  assert.equal(partial.element('#connection-status').hidden, false);
+  assert.match(partial.element('#connection-status').textContent, /Waiting/i);
+  assert.match(partial.element('#connection-status').textContent, /last received data|last reports/i);
+  assert.equal(partial.state().nextAttemptAt - partial.requests.at(-1).at, 30000);
+
+  // Repeated incompleteness must not discard retained data merely because the
+  // previous read set an error, nor increase the delay to request-error backoff.
+  await partial.advance(29999);
+  assert.equal(partial.requests.length, 2);
+  partial.responses.push({status: 200, body: incomplete});
+  await partial.advance(1);
+  assert.equal(partial.requests.length, 3);
+  assert.equal(partial.state().errorKind, 'incomplete');
+  assert.equal(partial.state().snapshot, previous);
+  assert.equal(partial.state().nextAttemptAt - partial.requests.at(-1).at, 30000);
+
+  await partial.advance(29999);
+  const recovered = allocationSnapshot(partial);
+  recovered.slurm.data.squeue[0].name = 'Recovered training';
+  partial.responses.push({status: 200, body: recovered});
+  await partial.advance(1);
+  assert.equal(partial.requests.length, 4);
+  assert.equal(partial.state().snapshot, recovered);
+  assert.equal(partial.state().error, null);
+  assert.equal(partial.state().errorKind, null);
+  assert.equal(partial.state().failureCount, 0);
+  assert.equal(partial.evaluate('jobs[0].name'), 'Recovered training');
+  assert.equal(partial.evaluate('nodes[0].stale'), false);
+  assert.equal(partial.evaluate('nodes[0].gpus[0].allocated'), true);
+  assert.equal(partial.element('#connection-status').hidden, true);
+}
+
+// Reports cannot be preserved indefinitely: after their 3-minute freshness
+// window, a smaller valid snapshot is accepted even after an incomplete read.
+const expired = browser();
+await flush(); await expired.advance(5000);
+expired.responses.push({status: 200, body: {nodes: [], slurm: null}});
+await expired.element('#retry-live').onclick(); await flush();
+assert.equal(expired.state().errorKind, 'incomplete');
+await expired.visibility(true); await expired.advance(175001);
+const emptyAfterExpiry = {nodes: [], slurm: null};
+expired.responses.push({status: 200, body: emptyAfterExpiry});
+await expired.visibility(false);
+assert.equal(expired.state().snapshot, emptyAfterExpiry);
+assert.equal(expired.state().error, null);
+assert.equal(expired.evaluate('nodes.length'), 0);
+assert.equal(expired.evaluate('jobs.length'), 0);
+assert.match(expired.element('#connection-status').textContent, /Waiting for collectors/);
+
+// An explicit fresh Slurm report with an empty queue is real information. It
+// clears completed jobs instead of being mistaken for a missing collector.
+const completed = browser();
+await flush(); await completed.advance(5000);
+const noJobs = completed.snapshot();
+noJobs.slurm.data.squeue = [];
+completed.responses.push({status: 200, body: noJobs});
+await completed.element('#retry-live').onclick(); await flush();
+assert.equal(completed.state().snapshot, noJobs);
+assert.equal(completed.state().error, null);
+assert.equal(completed.evaluate('jobs.length'), 0);
+assert.equal(completed.evaluate('nodes[0].stale'), false);
+assert.match(completed.element('#job-rows').innerHTML, /No jobs in the latest report/);
+assert.equal(completed.element('#connection-status').hidden, true);
+
+// A newly opened page has nothing to retain. Empty initial startup is still a
+// normal waiting state, not a request failure or a sample-data fallback.
+const emptyStartup = browser({hidden: true});
+emptyStartup.responses.push({status: 200, body: {nodes: [], slurm: null}});
+await emptyStartup.visibility(false);
+assert.equal(emptyStartup.state().error, null);
+assert.equal(emptyStartup.state().failureCount, 0);
+assert.equal(emptyStartup.evaluate('nodes.length'), 0);
+assert.equal(emptyStartup.evaluate('jobs.length'), 0);
+assert.equal(emptyStartup.state().nextAttemptAt - emptyStartup.requests.at(-1).at, 30000);
+assert.match(emptyStartup.element('#connection-status').textContent, /Waiting for collectors/);
+
 // Removing the always-on banner must not conceal initial failures or make a
 // sample view look live. The relocated control still opens sample information.
 const connection = browser({hidden: true});
@@ -428,4 +536,4 @@ for (const [value, expected] of [[0, '0%'], [45, '45%'], [100, '100%'], [null, '
   assert.doesNotMatch(markup, /class="meter|width:[\d.]+%/);
 }
 
-console.log('PASS: relocated refresh control and error-only connection status, hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');
+console.log('PASS: relocated refresh control and error-only connection status, hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, incomplete snapshot retention/30-second recovery/expiry/empty-queue handling, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');
