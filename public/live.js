@@ -111,7 +111,11 @@ function gpuJobsCaption(n) {
   if (n.stale) return 'Last observed · GPU data stale';
   if (n.isCloud) return 'Standalone · observed GPU processes';
   if (!n.slurmFresh) return 'Observed processes · Slurm data stale';
-  return 'Slurm allocations · GPU activity';
+  return '';
+}
+function gpuJobsCaptionMarkup(n) {
+  const caption = gpuJobsCaption(n);
+  return caption ? `<p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${esc(caption)}</p>` : '';
 }
 const compactGiB = value => value.toLocaleString('en-US', {maximumFractionDigits: 1, useGrouping: false});
 function resourceMarkup(label, value) {
@@ -175,7 +179,7 @@ renderNodes = function() {
         <div class="resource-metrics" aria-label="${n.isCloud ? 'Host utilization' : 'Slurm resources: free / total'}">${n.isCloud ? resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null) + resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null) : allocationMarkup(n, 'cpu') + allocationMarkup(n, 'ram')}</div>
         ${storageMarkup(n)}
       </button>
-      ${n.gpus.length ? `<div class="gpu-jobs-summary"><p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p>${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
+      ${n.gpus.length ? `<div class="gpu-jobs-summary">${gpuJobsCaptionMarkup(n)}${n.gpus.map(g => gpuBlockMarkup(n, g)).join('')}</div>` : ''}
     </article>`;
   }).join('') : `<div class="waiting-nodes"><span class="small-icon">${icon('server')}</span><h3>${liveState.error ? 'Cluster data is unavailable' : 'Waiting for node reports'}</h3><p>${liveState.error ? 'The last request failed. The dashboard will retry automatically.' : 'Received node reports will appear here automatically.'}</p><button id="waiting-help">Collector details ↗</button></div>`;
   $('#waiting-help')?.addEventListener('click', showDataInfo);
@@ -189,7 +193,7 @@ renderJobs = function() {
   $('#total-jobs').textContent = hasSlurm ? all.length : '—';
   $('#running-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'RUNNING').length : '—';
   $('#pending-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'PENDING').length : '—';
-  $('#job-rows').innerHTML = visible.length ? visible.map((j, i) => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user"><span class="user-dot ${i % 3 === 0 ? 'lilac' : i % 3 === 1 ? 'blue' : ''}" aria-hidden="true">${esc(displayUserName(j.user).slice(0, 1).toUpperCase())}</span>${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
+  $('#job-rows').innerHTML = visible.length ? visible.map(j => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
   $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * JOBS_PER_PAGE + 1) + '–' + Math.min(liveState.page * JOBS_PER_PAGE, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;
@@ -206,7 +210,7 @@ showNode = function(id) {
   const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'CPU and RAM summaries show free / total capacity from Slurm. Free capacity is unallocated; job constraints, reservations and scheduling policies can still prevent immediate scheduling. GPU cards show the user and job assigned by Slurm, even when no process is running on the GPU. Utilization and VRAM remain measured values. Observed process labels are used only when a Slurm owner is unavailable; stale or ambiguous allocation data is not treated as current ownership.';
   openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 3 minutes old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
     ${storageMarkup(n)}<p class="storage-note">Storage shows percent used and (free / total GiB). Free space is available to users and excludes filesystem reserves.</p>
-    <p class="gpu-jobs-caption ${n.stale || (!n.isCloud && !n.slurmFresh) ? 'is-stale' : ''}">${gpuJobsCaption(n)}</p><div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
+    ${gpuJobsCaptionMarkup(n)}<div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
     <p class="dialog-note">${note} Reports older than 3 minutes, or shown during a failed refresh, are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
 };
 function requestedRam(job) {
