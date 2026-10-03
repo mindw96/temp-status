@@ -45,6 +45,8 @@ Job 상세창의 **Requested CPUs**와 **Requested RAM**은 Slurm 요청량입�
 
 GPU `vram_percent`는 프로세스 메모리의 합계이며 전체 VRAM이 아닙니다. 화면은 `vram_total_used_mb / vram_total_mb`를 사용합니다. 저장·표시 단위는 원래 바이트 계산에 맞춰 MiB/GiB로 해석합니다. `vram_utilization`을 메모리 용량 점유율로 쓰지 않습니다.
 
+GPU 카드는 `GPU 번호 · Job ID - 사용자`, `작업명`, `UTIL 사용률 · VRAM 점유율 (사용 / 전체 GiB)`의 3줄 구조입니다. 하나의 GPU에 작업이 여러 개면 모든 작업을 표시하며, 전체 작업명과 정보는 클릭해서 확인할 수 있습니다.
+
 GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. 수집기는 `gres_detail`의 IDX와 명시적 할당 노드를 읽고, 각 노드의 `/etc/slurm/gres.conf` File 순서를 NVIDIA `minor_number`에 연결합니다. NVIDIA 표시 번호를 GRES 번호로 가정하지 않으므로 Server3처럼 순서가 다른 경우에도 해당 물리 장치에 연결됩니다. 할당된 GPU에는 프로세스·VRAM 사용이 없어도 사용자와 Job을 표시하며, 사용률·VRAM은 실제 측정값을 유지합니다. 매핑이 불명확하거나 보고가 오래되면 현재 할당을 추정하지 않습니다. 프로세스 정보만 있는 경우에는 `Observed:`로 구분합니다. 현재 파서는 명시적으로 한 노드에 연결되는 할당을 지원하며, 노드별 GRES 대응이 불명확한 다중 노드 보고는 미확인으로 처리합니다. 작업 상세의 할당 장치와 프로세스 관측 장치는 별도로 표시합니다.
 
 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각은 수집하지 않습니다. 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
@@ -74,7 +76,7 @@ python collector_bridge.py slurm --config /secure/path/lattice.json --once
 
 ## 서버별 저장공간
 
-각 서버의 Storage 영역은 수집기가 확인한 파일시스템의 사용 가능한 용량과 전체 용량을 표시합니다. API의 기존 `_gb` 필드는 바이트를 `1024 ** 3`으로 나눈 GiB입니다. 화면에서 TiB로 표시하는 경우 `1024 GiB = 1 TiB`로 환산합니다. 일반 사용자가 사용할 수 없는 예약 블록이 있으므로 남은 용량을 `total - used`로 추정하지 않고, `free_disk_gb`와 `free_subdisk_gb`를 그대로 사용합니다. 측정되지 않은 값과 오래된 보고는 사용 가능한 현재 용량처럼 표시하지 않습니다.
+각 서버의 Storage 영역은 수집기가 확인한 파일시스템의 사용 가능한 용량과 전체 용량을 표시합니다. API의 기존 `_gb` 필드는 바이트를 `1024 ** 3`으로 나눈 GiB입니다. 화면은 디스크별 한 줄에 `Main disk: / 94% (15 / 1759 GiB)` 형식으로 표시하며, 퍼센트는 `used / total` 사용률이고 괄호 안은 `free / total`입니다. 저장공간의 별도 제목과 막대 그래프는 표시하지 않습니다. 일반 사용자가 사용할 수 없는 예약 블록이 있으므로 남은 용량을 `total - used`로 추정하지 않고, `free_disk_gb`와 `free_subdisk_gb`를 그대로 사용합니다. 측정되지 않은 값과 오래된 보고는 사용 가능한 현재 용량처럼 표시하지 않습니다.
 
 브리지가 원본 에이전트의 실제 `DISK_PATH`와 `SUBDISK_PATH`를 `disk_path`, `subdisk_path`로 함께 전송합니다. 2026-09-26 확인한 경로는 다음과 같으며, 서버 전체의 디스크를 합산한 값은 아닙니다.
 

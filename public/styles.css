@@ -129,20 +129,15 @@ section[id]{scroll-margin-top:24px}
 .node-detail-line{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;margin-top:14px;padding-top:11px;border-top:1px solid var(--divider);font-size:11px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
 
 /* Storage continues to report available space, including missing/stale values. */
-.node-storage{margin-top:16px;padding-top:13px;border-top:1px solid var(--divider)}
-.storage-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:3px 10px;margin-bottom:8px;font-size:11px;color:var(--text-tertiary)}
-.storage-heading>span:first-child{font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary)}
-.storage-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:5px 0}
-.storage-label{min-width:0;font-size:12px;color:var(--text-secondary)}
-.storage-path{display:block;font-size:11px;color:var(--text-tertiary);overflow-wrap:anywhere}
-.storage-values{flex-shrink:0;text-align:right}
-.storage-values strong{display:block;font-size:12px;font-weight:500;color:var(--metric-calm)}
-.storage-values>span{display:block;font-size:11px;color:var(--text-tertiary)}
+.node-storage{display:grid;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid var(--divider)}
+.storage-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;font-size:11px;line-height:1.5}
+.storage-label{display:flex;gap:3px;min-width:0;white-space:nowrap;color:var(--text-secondary)}
+.storage-label>span:first-child{flex-shrink:0}
+.storage-path{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-tertiary)}
+.storage-values{display:flex;gap:4px;flex-shrink:0;text-align:right;white-space:nowrap;color:var(--text-secondary)}
+.storage-values strong{font-weight:500;color:var(--metric-calm)}
 .storage-empty{padding:5px 0;font-size:12px;color:var(--text-tertiary)}
-.storage-entry+.storage-entry{margin-top:8px}
-.storage-entry>.meter{margin-top:3px}
-.storage-meter{margin-top:4px;margin-bottom:5px}
-.node-storage.is-stale .storage-heading>span,.node-storage.is-stale .storage-values strong{color:var(--pending-text)}
+.storage-stale{color:var(--pending-text)}
 .storage-note{margin:9px 0 20px;font-size:12px;line-height:1.6;color:var(--text-tertiary)}
 
 /* Per-GPU tiles use the reference component, without colliding with summary slots. */
@@ -150,21 +145,23 @@ section[id]{scroll-margin-top:24px}
 .gpu-jobs-caption{margin-bottom:11px;font-size:11px;line-height:1.6;color:var(--text-tertiary)}
 .gpu-jobs-caption.is-stale{color:var(--pending-text)}
 .gpu-jobs-heading{display:none}
-.gpu-job-row{min-width:0}
+.gpu-job-row.gpu-block{min-width:0;padding:7px 10px;margin:5px 0 0}
 .gpu-job-row:first-of-type{margin-top:0}
-.gpu-job-row .gpu-header{margin-bottom:7px}
+.gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
 .gpu-job-index{font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap}
-.gpu-vram-badge{flex-shrink:1;max-width:80%;font-size:11px;white-space:normal;text-align:right}
-.gpu-util-row{display:flex;align-items:center;gap:7px;margin:2px 0 8px;min-width:0}
-.gpu-util-row .meter{flex:1;min-width:0;margin-top:0}
-.gpu-util-label{width:30px;font-size:10px;flex-shrink:0}
-.gpu-util-pct{width:34px;flex-shrink:0;color:var(--link);font-variant-numeric:tabular-nums}
-.gpu-job-items{display:grid;gap:7px;min-width:0}
-.gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;line-height:1.5}
+.gpu-card-header .gpu-job-index{flex-shrink:0}
+.gpu-metrics{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-top:3px;min-width:0;font-size:11px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
+.gpu-metric{white-space:nowrap}
+.gpu-metric strong{font-weight:500;color:var(--link)}
+.gpu-memory{color:var(--text-secondary)}
+.gpu-job-items{display:grid;gap:4px;min-width:0}
+.gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;line-height:1.3}
 .gpu-job-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px;min-width:0}
-.gpu-job-id{display:block;min-width:0;font-size:13px;font-weight:500;color:var(--link);overflow-wrap:anywhere}
+.gpu-card-header .gpu-job-meta{flex:1;justify-content:flex-end;flex-wrap:nowrap;gap:4px}
+.gpu-job-id{display:block;min-width:0;font-size:13px;font-weight:500;color:var(--link);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gpu-card-header .gpu-job-id{flex-shrink:0;max-width:45%}
+.gpu-job-separator{flex-shrink:0;font-size:11px;color:var(--text-tertiary)}
 .gpu-job-user{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-tertiary)}
-.gpu-job-user::before{content:'·';margin-right:7px;color:var(--text-tertiary)}
 .gpu-job-name{display:block;font-size:14px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gpu-job-link:hover .gpu-job-name{color:var(--link);text-decoration:underline}
 .gpu-job-link:focus-visible{outline-offset:2px;border-radius:4px}
@@ -292,17 +289,12 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 #dialog-content .node-storage{border:1px solid var(--divider);border-radius:12px;padding:12px 15px}
 
 @media(min-width:1024px){.node-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-/* Compact only GPU slots: pair usage bars and keep the job information below. */
+/* Three lines per GPU: device and owner, job name, measured usage. */
 @media(min-width:1024px){
   .gpu-jobs-summary{padding:10px 20px}
   .gpu-jobs-caption{margin-bottom:6px}
-  .gpu-job-row.gpu-block{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;padding:4px 10px;margin-top:4px}
+  .gpu-job-row.gpu-block{padding-block:3px;margin-top:4px}
   .gpu-job-row.gpu-block:first-of-type{margin-top:0}
-  .gpu-job-row .gpu-header{grid-column:1/-1;margin-bottom:2px;line-height:1.3}
-  .gpu-job-row .gpu-vram-badge{padding:1px 5px}
-  .gpu-job-row .gpu-util-row{margin:1px 0;line-height:1.2}
-  .gpu-job-row .gpu-job-items{grid-column:1/-1;gap:4px}
-  .gpu-job-row .gpu-job-link,.gpu-job-row .gpu-job-unlinked{line-height:1.25}
 }
 @media(min-width:1500px){main{padding:40px 44px 0}.node-grid{gap:20px}}
 @media(max-width:1200px){main{padding:28px 24px 0}.node-grid{gap:16px}h1{font-size:32px}}
@@ -312,10 +304,11 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .node-grid{gap:12px}
   .node-summary{padding-inline:14px}
   .gpu-jobs-summary{padding-inline:12px}
-  .gpu-job-row.gpu-block{padding-inline:8px;column-gap:8px}
-  .gpu-job-row .gpu-util-row{gap:4px}
-  .gpu-job-row .gpu-util-label{width:28px}
-  .gpu-job-row .gpu-util-pct{width:30px}
+  .gpu-job-row.gpu-block{padding-inline:8px}
+  .gpu-metrics{font-size:10px;gap:2px 4px}
+  .gpu-card-header{gap:5px}
+  .gpu-card-header .gpu-job-meta{gap:3px}
+  .storage-row{font-size:10px;gap:5px}
 }
 @media(max-width:1152px){.jobs-scroll-hint{display:block}}
 @media(max-width:1050px){.jobs-tools{width:100%}.jobs-tools .search{flex:1;width:auto}}
@@ -338,7 +331,6 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .node-summary,.node:not(.live-node){padding:18px}
   .gpu-jobs-summary{padding:14px 18px 18px}
   .node-model{font-size:12px}
-  .gpu-vram-badge{font-size:11px}
   .gpu-job-user,.gpu-job-empty,.gpu-process-count{font-size:12px}
   .gpu-process-name{font-size:13px}
   .jobs-header{padding:18px 16px 0}

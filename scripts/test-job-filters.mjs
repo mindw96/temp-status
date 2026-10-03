@@ -352,9 +352,29 @@ assert.deepEqual(plain(evaluate("nodes.find(n => n.id === 'ubuntu').gpus.map(g =
 const idleMarkup = () => evaluate("gpuBlockMarkup(nodes.find(n => n.id === 'server2'), nodes.find(n => n.id === 'server2').gpus[2])");
 assert.match(idleMarkup(), /data-source="allocation"/);
 assert.match(idleMarkup(), /54901/); assert.match(idleMarkup(), /ryujh/);
-assert.match(idleMarkup(), />0%<\/span>/);
+assert.match(idleMarkup(), /UTIL <strong>0%<\/strong>/);
+assert.match(idleMarkup(), /류정환\(ryujh\)/);
 assert.doesNotMatch(idleMarkup(), /No process observed|Observed: ryujh/);
 assert.equal(evaluate("nodes.find(n => n.id === 'server2').gpus[2].allocated"), true);
+// Compact cards keep the GPU and owner ahead of the job name and put measured
+// metrics last. Multiple records must retain every link, with one GPU label.
+const singleCard = idleMarkup();
+const gpuAt = singleCard.indexOf('>GPU 2</span>');
+const ownerAt = singleCard.indexOf('class="gpu-job-meta"');
+const nameAt = singleCard.indexOf('class="gpu-job-name"');
+const metricsAt = singleCard.indexOf('class="gpu-metrics"');
+assert.ok(gpuAt >= 0 && gpuAt < ownerAt && ownerAt < nameAt && nameAt < metricsAt);
+const sharedCard = evaluate(`(() => {
+  const node = nodes.find(n => n.id === 'server2'), gpu = node.gpus[2];
+  return gpuBlockMarkup(node, {...gpu, jobRecords: [...gpu.jobRecords, ...node.gpus[3].jobRecords]});
+})()`);
+assert.deepEqual([...sharedCard.matchAll(/data-job="([^"]+)"/g)].map(match => match[1]), ['54901', '54902']);
+assert.equal([...sharedCard.matchAll(/>GPU 2<\/span>/g)].length, 1);
+assert.equal([...sharedCard.matchAll(/class="gpu-job-name"/g)].length, 2);
+assert.match(sharedCard, />Long training job 54901<\/span>/);
+assert.match(sharedCard, />Long training job 54902<\/span>/);
+assert.ok(sharedCard.lastIndexOf('class="gpu-job-name"') < sharedCard.indexOf('class="gpu-metrics"'));
+assert.doesNotMatch(sharedCard, /class="meter/);
 evaluate('showJob("54901")');
 assert.match(element('#dialog-content').innerHTML, /<dt>Allocated GPU devices<\/dt><dd>Server2 \/ GPU 0, Server2 \/ GPU 2<\/dd>/);
 assert.match(element('#dialog-content').innerHTML, /<dt>GPUs with observed processes<\/dt><dd>1 GPU · Server2 \/ GPU 0<\/dd>/);

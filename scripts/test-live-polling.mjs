@@ -202,54 +202,65 @@ assert.match(failures.element('#dialog-content').innerHTML, /at least 5 seconds/
 // reserved filesystem blocks are not available to ordinary users.
 const storage = browser();
 await flush();
+const visibleText = html => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 storage.evaluate(`Object.assign(liveState.snapshot.nodes[0].data, {
   disk_path: '/', total_disk_gb: 1759, used_disk_gb: 1655, free_disk_gb: 15,
   subdisk_path: '/data', total_subdisk_gb: 14194, used_subdisk_gb: 12887, free_subdisk_gb: 591
 }); normalizeSnapshot(liveState.snapshot); renderNodes(); showNode('devbox');`);
 for (const selector of ['#node-grid', '#dialog-content']) {
   const html = storage.element(selector).innerHTML;
-  assert.match(html, /15 GiB free/); assert.match(html, /591 GiB free/);
-  assert.match(html, /1\.72 TiB total/); assert.match(html, /13\.86 TiB total/);
-  assert.match(html, /\/data/); assert.doesNotMatch(html, /104 GiB free|1,307 GiB free/);
+  assert.match(visibleText(html), /Main disk: \/ 94% \(15 \/ 1759 GiB\)/);
+  assert.match(visibleText(html), /Data disk: \/data 91% \(591 \/ 14194 GiB\)/);
+  assert.doesNotMatch(html, /\(104 \/|\(1307 \/|storage-heading/);
 }
 const markup = raw => storage.evaluate(`storageMarkup({raw:${JSON.stringify(raw)}, stale:false})`);
-assert.match(markup({total_disk_gb:100, used_disk_gb:100, free_disk_gb:0}), /0 GiB free/);
+assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:100, free_disk_gb:0})), /100% \(0 \/ 100 GiB\)/);
 assert.match(markup({total_disk_gb:100, used_disk_gb:50, free_disk_gb:null}), /Not reported/);
-assert.doesNotMatch(markup({total_disk_gb:100, used_disk_gb:50}), /50 GiB free|Data disk/);
-for (const free of [-1, 101, '50']) assert.match(markup({total_disk_gb:100, free_disk_gb:free}), /Not reported/);
-assert.match(markup({total_disk_gb:100, free_disk_gb:0.5}), /512 MiB free/);
-assert.match(markup({total_disk_gb:4096, free_disk_gb:2048}), /2 TiB free/);
+assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:50})), /50% \(— \/ 100 GiB\)/);
+assert.doesNotMatch(markup({total_disk_gb:100, used_disk_gb:50}), /\(50 \/|Data disk|class="meter|storage-heading/);
+for (const free of [-1, 101, '50']) {
+  const html = markup({total_disk_gb:100, free_disk_gb:free});
+  assert.match(html, /Not reported/);
+  assert.match(visibleText(html), /\(— \/ 100 GiB\)/);
+}
+for (const used of [-1, 101, '50', null]) assert.match(visibleText(markup({total_disk_gb:100, used_disk_gb:used, free_disk_gb:5})), /— \(5 \/ 100 GiB\)/);
+for (const total of [0, -1, '100', null]) assert.match(visibleText(markup({total_disk_gb:total, used_disk_gb:50, free_disk_gb:5})), /— \(5 \/ — GiB\)/);
+assert.match(markup({total_disk_gb:100, free_disk_gb:0.5}), /\(0\.5 \/ 100 GiB\)/);
+assert.match(markup({total_disk_gb:4096, free_disk_gb:2048}), /\(2048 \/ 4096 GiB\)/);
 assert.match(markup({total_disk_gb:100, free_disk_gb:1, disk_path:'/<script>bad</script>'}), /&lt;script&gt;/);
 storage.evaluate('liveState.error="Request failed"; normalizeSnapshot(liveState.snapshot); renderNodes(); showNode("devbox");');
 for (const selector of ['#node-grid', '#dialog-content']) {
   const html = storage.element(selector).innerHTML;
   assert.match(html, /Stale report/); assert.match(html, /Awaiting fresh data/);
-  assert.doesNotMatch(html, /15 GiB free|591 GiB free/);
+  assert.doesNotMatch(html, /\(15 \/ 1759 GiB\)|\(591 \/ 14194 GiB\)/);
 }
 storage.evaluate('liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot); renderNodes();');
 assert.match(storage.element('#node-grid').innerHTML, /Stale report/);
 
-// The cards, meters and detail dialog must distinguish real zero usage from
+// The compact cards and detail dialog must distinguish real zero usage from
 // unavailable metrics, including impossible VRAM usage above device capacity.
 const metrics = browser();
 await flush();
 const renderMetrics = code => metrics.evaluate(`${code}; normalizeSnapshot(liveState.snapshot); renderNodes(); showNode('devbox');`);
 renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:0,vram_total_used_mb:0})');
-assert.match(metrics.element('#node-grid').innerHTML, /width:0%/);
-for (const selector of ['#node-grid', '#dialog-content']) {
-  assert.match(metrics.element(selector).innerHTML, /0\.0 \/ 1\.0 GiB/);
-  assert.match(metrics.element(selector).innerHTML, /0%/);
-}
-renderMetrics('liveState.snapshot.nodes[0].data.gpus[0].vram_total_used_mb=2048');
+const gpuCard = () => metrics.evaluate('gpuBlockMarkup(nodes[0], nodes[0].gpus[0])');
+assert.match(visibleText(gpuCard()), /UTIL 0% VRAM 0% \(0 \/ 1 GiB\)/);
+assert.doesNotMatch(gpuCard(), /class="meter|gpu-vram-badge/);
+assert.match(metrics.element('#dialog-content').innerHTML, /0\.0 \/ 1\.0 GiB/);
+assert.match(metrics.element('#dialog-content').innerHTML, /0%/);
+renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:99,vram_total_used_mb:30720,vram_total_mb:49152})');
+assert.match(visibleText(gpuCard()), /UTIL 99% VRAM 63% \(30 \/ 48 GiB\)/);
+renderMetrics('Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {vram_total_used_mb:2048,vram_total_mb:1024})');
 assert.equal(metrics.evaluate('nodes[0].gpus[0].memoryUsed'), null);
 for (const selector of ['#node-grid', '#dialog-content']) {
   assert.match(metrics.element(selector).innerHTML, /VRAM —/);
-  assert.doesNotMatch(metrics.element(selector).innerHTML, /2\.0 \/ 1\.0 GiB|200%/);
+  assert.doesNotMatch(metrics.element(selector).innerHTML, /2(?:\.0)? \/ 1(?:\.0)? GiB|200%/);
 }
 for (const value of ['null', 'NaN', '-1', '101']) {
   renderMetrics(`Object.assign(liveState.snapshot.nodes[0].data, {cpu_percent:${value},ram_percent:${value}});
     liveState.snapshot.nodes[0].data.gpus[0].gpu_utilization=${value}`);
   assert.match(metrics.element('#node-grid').innerHTML, /is-unavailable/);
+  assert.match(visibleText(gpuCard()), /UTIL — VRAM —/);
   assert.doesNotMatch(metrics.element('#node-grid').innerHTML, /--p:|NaN%|101%|-1%|>0%/);
   assert.match(metrics.element('#dialog-content').innerHTML, /Compute —/);
 }
@@ -258,7 +269,7 @@ for (const cause of ['liveState.snapshot.nodes[0].receivedAt=Date.now()-180000',
     Object.assign(liveState.snapshot.nodes[0].data.gpus[0], {gpu_utilization:77,vram_total_used_mb:512,collection_error:null}); ${cause}`);
   for (const selector of ['#node-grid', '#dialog-content']) {
     assert.match(metrics.element(selector).innerHTML, /VRAM —/);
-    assert.doesNotMatch(metrics.element(selector).innerHTML, /77%|0\.5 \/ 1\.0 GiB|--p:/);
+    assert.doesNotMatch(metrics.element(selector).innerHTML, /77%|0\.5 \/ 1(?:\.0)? GiB|--p:/);
   }
 }
 
