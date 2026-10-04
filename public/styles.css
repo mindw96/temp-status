@@ -145,7 +145,7 @@ section[id]{scroll-margin-top:24px}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(255,255,255,.08)}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.unallocated{background:transparent}
 .gpu-job-row:first-of-type{margin-top:0}
-.gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:1.3em;font-size:12px;line-height:1.3}
+.gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:18.2px;font-size:12px;line-height:1.3}
 .gpu-job-index{font-size:12px;font-weight:400;color:var(--text-primary);white-space:nowrap}
 .gpu-card-header .gpu-job-index{flex-shrink:0;margin-left:auto}
 .gpu-metrics{display:grid;grid-template-columns:auto minmax(16px,1fr) auto;align-items:center;gap:2px 6px;margin-top:5px;min-width:0;font-size:10px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
@@ -160,11 +160,11 @@ section[id]{scroll-margin-top:24px}
 .gpu-job-link,.gpu-job-unlinked{display:block;width:100%;min-width:0;text-align:left;font-weight:400;line-height:1.3}
 .gpu-job-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 7px;min-width:0}
 .gpu-card-header .gpu-job-meta{flex:1;justify-content:flex-start;flex-wrap:nowrap;gap:4px}
-.gpu-job-id{display:block;min-width:0;font-size:12px;font-weight:400;color:var(--link);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gpu-job-id{display:block;min-width:0;font-size:14px;font-weight:400;color:var(--link);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gpu-card-header .gpu-job-id{flex-shrink:0;max-width:45%}
 .gpu-job-separator{flex-shrink:0;font-size:11px;color:var(--text-tertiary)}
 .gpu-job-user{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;color:var(--text-secondary)}
-.gpu-job-name{display:block;font-size:12px;font-weight:400;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpu-job-name{display:block;font-size:14px;font-weight:400;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gpu-card-header+.gpu-job-name{margin-top:2px}
 .gpu-job-status{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--pending-text)}
 .gpu-job-link:hover .gpu-job-name{color:var(--link);text-decoration:underline}
