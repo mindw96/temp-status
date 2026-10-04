@@ -3,7 +3,7 @@
 /* Layout adapters for the supplied UNIST NLP dashboard design system. */
 :root{
   color-scheme:light;
-  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font:'Noto Sans','Noto Sans KR',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --page-bg:#fff;
   --server-surface:#f6f6f6;
   --server-surface-hover:#f0f0f0;
