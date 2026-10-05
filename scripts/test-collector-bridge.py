@@ -89,14 +89,16 @@ many_jobs = {'squeue': [{'job_id': str(i), 'req_cpus': '', 'req_mem': '', 'req_g
                        for i in range(1, 210)],
              'sinfo': [{'hostname': 'server1', 'alloc_memory': 123}]}
 many_report = {'jobs': [{'job_id': i, 'tres_req_str': 'cpu=4,mem=8G,node=1,gres/gpu=2',
-                        'tres_alloc_str': 'cpu=64,mem=128G,gres/gpu=4', 'cpus': optional(64)}
+                        'tres_alloc_str': 'cpu=64,mem=128G,gres/gpu=4', 'cpus': optional(64),
+                        'time_limit': optional(1440)}
                        for i in range(1, 210)]}
 enriched, calls = enrich_requests(many_jobs, many_report)
 assert calls == ['build', 'query']
 assert len(enriched['squeue']) == 209
 assert all(job['req_cpus'] == '4' and job['req_mem'] == '8G'
            and job['req_mem_scope'] == 'total' and job['req_gpus'] == '2'
-           and job['alloc_gpus'] == '4' for job in enriched['squeue'])
+           and job['alloc_gpus'] == '4' and job['time_limit'] == '1-00:00:00'
+           for job in enriched['squeue'])
 # The original builder's node allocation calculation is not rerun or modified.
 assert enriched['sinfo'] == [{'hostname': 'server1', 'alloc_memory': 123}]
 
@@ -123,6 +125,40 @@ for invalid in (optional(16, present=False), optional(16, infinite=True),
 assert bridge.slurm_job_request({'tres_req_str': 'cpu=invalid,mem=invalid',
                                 'cpus': optional(6), 'memory_per_cpu': optional(1024)}) == {
     'req_cpus': '6', 'req_mem': '1024M', 'req_mem_scope': 'cpu'}
+
+# Slurm reports the maximum run time in integer minutes. Infinite is a separate
+# flag, including set=false, rather than an unset value or an enormous duration.
+for minutes, expected in ((0, '00:00:00'), (1, '00:01:00'), (30, '00:30:00'),
+                          (90, '01:30:00'), (1440, '1-00:00:00'),
+                          (2160, '1-12:00:00'), (43200, '30-00:00:00')):
+    for raw in (minutes, optional(minutes)):
+        assert bridge.slurm_time_limit(raw) == expected
+        assert bridge.slurm_job_request({'time_limit': raw, 'time_minimum': optional(1),
+                                        'elapsed': 12, 'start_time': 100, 'end_time': 112}) == {
+            'time_limit': expected}
+for raw in (optional(0, present=False, infinite=True), optional(0, infinite=True),
+            'Infinity', 4294967295):
+    assert bridge.slurm_time_limit(raw) == 'UNLIMITED'
+for invalid in (None, True, False, '', '90', '01:30:00', 'NOT_SET', 'NaN',
+                -1, 1.5, float('inf'), float('nan'), 4294967294, 4294967296,
+                optional(90, present=False), optional(4294967294), optional(4294967295),
+                optional(True), optional(1.5), {'set': True, 'number': 90},
+                {'set': 'false', 'infinite': True, 'number': 0}):
+    assert bridge.slurm_time_limit(invalid) is None, invalid
+    assert bridge.slurm_job_request({'time_limit': invalid}) == {}
+assert bridge.slurm_job_request({'time_minimum': optional(90), 'elapsed': 30,
+                                'start_time': 100, 'end_time': 5500}) == {}
+# Pending and running jobs both carry the reported limit; do not derive it from
+# elapsed time or predicted scheduling dates. Unavailable queries retain source.
+timed_payload = {'squeue': [{'job_id': '21', 'state': 'PENDING'},
+                           {'job_id': '22', 'state': 'RUNNING'},
+                           {'job_id': '23', 'time_limit': '02:00:00'}]}
+timed_report = {'jobs': [{'job_id': 21, 'time_limit': optional(1440)},
+                         {'job_id': 22, 'time_limit': optional(90)},
+                         {'job_id': 23, 'time_limit': optional(0, present=False)}]}
+timed_result, timed_calls = enrich_requests(timed_payload, timed_report)
+assert timed_calls == ['build', 'query']
+assert [job['time_limit'] for job in timed_result['squeue']] == ['1-00:00:00', '01:30:00', '02:00:00']
 
 # Job 54901 reserves two GPUs even when only one GPU has an observed process.
 # Per-node GRES and its IDX values must not become NVIDIA device identities.
@@ -192,7 +228,8 @@ identity_result, _ = enrich_requests(identities_payload, identity_report)
 assert [job.get('req_cpus') for job in identity_result['squeue']] == ['1', '2', '8', '2', '2', None, None, 'original']
 assert not any('req_mem' in job for job in identity_result['squeue'][5:])
 
-original = {'squeue': [{'job_id': '123', 'req_cpus': '4', 'req_mem': '6G', 'req_mem_scope': 'total'}]}
+original = {'squeue': [{'job_id': '123', 'req_cpus': '4', 'req_mem': '6G', 'req_mem_scope': 'total',
+                        'time_limit': '01:00:00'}]}
 for report in (None, {}, {'jobs': None}, {'jobs': []}, {'errors': ['query failed'], 'jobs': [{'job_id': 123}]},
                {'jobs': [{'job_id': 999, 'tres_req_str': 'cpu=8,mem=8G'}]},
                {'jobs': [{'job_id': 123, 'cpus': optional(4, present=False)}]}):
@@ -274,4 +311,4 @@ else: raise AssertionError('Network error must propagate')
 assert module.REPORT_INTERVAL_SEC == 30
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
-print('PASS: bulk Slurm requests beyond 200 jobs, separate requested/allocated GPU totals without typed duplication, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')
+print('PASS: bulk Slurm requests beyond 200 jobs, minute-based finite/unlimited/unset time limits, separate requested/allocated GPU totals without typed duplication, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')

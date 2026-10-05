@@ -217,11 +217,42 @@ def slurm_gpu_allocations(job, allocated_gpus):
     return [{"node": node, "gres_indices": indices}] if indices else []
 
 
+def slurm_time_limit(value):
+    """Format squeue's minute-based time_limit, never elapsed/start/end times.
+
+    Slurm's optional-number JSON uses infinite=true independently of set. Its
+    complex form uses integer minutes, null, or the string "Infinity" instead.
+    Keep an unset/invalid limit unavailable rather than inventing a duration.
+    """
+    if isinstance(value, dict):
+        if type(value.get("set")) is not bool or type(value.get("infinite")) is not bool:
+            return None
+        if value["infinite"]:
+            return "UNLIMITED"
+        if not value["set"]:
+            return None
+        value = value.get("number")
+        # Wrapped finite values cannot legitimately contain sentinel numbers.
+        if type(value) is not int or not 0 <= value < 4294967294:
+            return None
+    elif value == "Infinity" or type(value) is int and value == 4294967295:
+        return "UNLIMITED"
+    elif type(value) is not int or not 0 <= value < 4294967294:
+        return None
+    days, minutes = divmod(value, 24 * 60)
+    hours, minutes = divmod(minutes, 60)
+    clock = f"{hours:02d}:{minutes:02d}:00"
+    return f"{days}-{clock}" if days else clock
+
+
 def slurm_job_request(job):
     """Keep requested and allocated TRES separate and retain minimum RAM scope."""
     tres = job.get("tres_req_str")
     fields = dict(re.findall(r"(?:^|,)\s*(cpu|mem)=([^,\s]+)", tres)) if isinstance(tres, str) else {}
     result = {}
+    time_limit = slurm_time_limit(job.get("time_limit"))
+    if time_limit is not None:
+        result["time_limit"] = time_limit
     cpus = slurm_number(fields.get("cpu"))
     if cpus is None or not cpus.is_integer():
         cpus = slurm_number(job.get("cpus"))

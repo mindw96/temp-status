@@ -305,6 +305,26 @@ evaluate('showJob("47")');
 assert.match(element('#dialog-content').innerHTML, /<dt>Requested RAM<\/dt><dd>32 GiB total<\/dd>/);
 assert.match(element('#dialog-content').innerHTML, /<dt>Requested CPUs<\/dt><dd>Not reported<\/dd>/);
 
+// Runtime limits come only from the dedicated field, for pending and running
+// jobs alike. Elapsed time remains separate, and unavailable is never zero.
+for (const [value, expected] of [
+  ['00:30:00', '30 minutes'], ['01:30:00', '1 hour 30 minutes'],
+  ['2-00:00:00', '2 days'], ['1-12:01:05', '1 day 12 hours 1 minute 5 seconds'],
+  ['30-00:00:00', '30 days'], ['00:00:00', '0 seconds'], ['UNLIMITED', 'Unlimited'],
+  ...[undefined, null, '', 'NOT_SET', '90', 90, {}, '<script>', '1-24:00:00',
+    '01:60:00', '-01:30:00', '00:00:60'].map(value => [value, 'Not reported'])
+]) {
+  for (const state of ['RUNNING', 'PENDING']) {
+    report([job(48, 'alice', state === 'PENDING' ? '(Resources)' : 'devbox', state,
+      {time_limit: value, time: '12:34:56'})]);
+    evaluate('showJob("48")');
+    const dialog = element('#dialog-content').innerHTML;
+    assert.ok(dialog.includes(`<dt>Requested time limit</dt><dd>${expected}</dd>`), JSON.stringify({value, state}));
+    assert.ok(dialog.includes(`<dt>Elapsed</dt><dd>${state === 'PENDING' ? 'Not started' : '12:34:56'}</dd>`));
+    assert.doesNotMatch(dialog, /<script>/);
+  }
+}
+
 // Requested and allocated GPUs must not be derived from the number of devices
 // with matching processes. Multiple processes on one device still mean one GPU.
 report([job(54901, 'alice', 'server2', 'RUNNING', {req_gpus: '2', alloc_gpus: '2'})]);

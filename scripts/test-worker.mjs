@@ -42,7 +42,7 @@ const slurmReport={sinfo:[
   ...[null,'0',true,{},[],NaN,Infinity].map((value,index)=>({name:`invalid-${index}`,
     ...Object.fromEntries(slurmAllocationFields.map(key=>[key,value]))})),
 ],squeue:['total','node','cpu',undefined,'unknown',{}].map((scope,index)=>({
-  job_id:String(index+1),req_cpus:'2',req_mem:'4G',req_mem_scope:scope,req_gpus:'2',alloc_gpus:'2',
+  job_id:String(index+1),time_limit:['2-00:00:00','UNLIMITED',undefined,null,{},'01:30:00'][index],req_cpus:'2',req_mem:'4G',req_mem_scope:scope,req_gpus:'2',alloc_gpus:'2',
   gpu_allocations:index===0?[{node:'unit-node',gres_indices:[2,0]}]:undefined,
 })),accounting:{jobs:[]}};
 assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
@@ -56,6 +56,7 @@ assert.deepEqual(slurmAllocationFields.map(key=>slurmNode[key]),[1536000,327680,
 assert.equal(Object.hasOwn(slurmNode,'ignored'),false);
 assert.equal(Object.hasOwn(snapshot.slurm.data,'accounting'),false);
 assert.ok(snapshot.slurm.data.squeue.every(j=>j.req_gpus==='2'&&j.alloc_gpus==='2'));
+assert.deepEqual(snapshot.slurm.data.squeue.map(j=>j.time_limit), ['2-00:00:00','UNLIMITED','','','','01:30:00']);
 assert.deepEqual(snapshot.slurm.data.squeue.map(j=>[j.req_cpus,j.req_mem,j.req_mem_scope]),
   ['total','node','cpu','','',''].map(scope=>['2','4G',scope]));
 assert.ok(slurmAllocationFields.every(key=>snapshot.slurm.data.sinfo[1][key]===0));
