@@ -7,7 +7,9 @@ const source = await Promise.all(['app.js', 'gpu-jobs.js', 'live.js'].map(name =
 const page = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 assert.doesNotMatch(page, /class="sample-note"|class="node-key"|id="sample-details"|Slurm snapshot/);
 assert.equal([...page.matchAll(/id="retry-live"/g)].length, 1);
-assert.match(page, /id="nodes"[^>]*><div class="section-heading">[\s\S]*?id="nodes-title">GPU nodes<\/h2>[\s\S]*?<button[^>]*id="retry-live"[^>]*>Refresh now<\/button><\/div>/);
+assert.doesNotMatch(page, /id="nodes-title"|id="node-count"|Cluster overview/);
+assert.match(page, /id="page-title">NLP Lab\. Server Status<\/h1>/);
+assert.match(page, /class="heading-controls"><span class="snapshot">[\s\S]*?id="retry-live"[^>]*>Refresh Now<\/button><button[^>]*id="theme-toggle"/);
 const flush = async () => {for (let i = 0; i < 12; i++) await Promise.resolve();};
 
 // Run the actual browser scripts against a small DOM and controllable browser
@@ -16,7 +18,7 @@ function browser({hidden = false, holdRequest = false} = {}) {
   let now = Date.parse('2026-09-22T10:00:00Z'), timerId = 0;
   const timers = new Map(), elements = new Map(), listeners = new Map(), requests = [], responses = [];
   const element = selector => {
-    assert.ok(!['.sample-note', '.node-key', '#sample-details', '.table-footer>span:last-child'].includes(selector),
+    assert.ok(!['.sample-note', '.node-key', '#sample-details', '#node-count', '.table-footer>span:last-child'].includes(selector),
       `Removed status UI must not be accessed: ${selector}`);
     if (!elements.has(selector)) elements.set(selector, {
       innerHTML: '', textContent: '', disabled: false, hidden: false, addEventListener() {}, showModal() {},
@@ -111,7 +113,7 @@ assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 1s');
 await healthy.element('#retry-live').onclick();
 assert.equal(healthy.requests.length, 1);
 await healthy.advance(1000);
-assert.equal(healthy.element('#retry-live').textContent, 'Refresh now');
+assert.equal(healthy.element('#retry-live').textContent, 'Refresh Now');
 assert.equal(healthy.element('#retry-live').disabled, false);
 assert.match(healthy.element('#retry-live').title, /every 30 seconds/);
 await healthy.advance(24999);
@@ -180,7 +182,7 @@ assert.equal(failures.state().errorKind, 'quota');
 assert.match(failures.state().error, /09:00:00 KST/);
 assert.equal(failures.element('#connection-status').hidden, false);
 assert.match(failures.element('#connection-status').textContent, /Showing last received data; live status is unavailable/);
-assert.match(failures.element('#connection-status').textContent, /Automatic retry within 5 minutes, or use Refresh now/);
+assert.match(failures.element('#connection-status').textContent, /Automatic retry within 5 minutes, or use Refresh Now/);
 assert.equal(failures.evaluate('nodes[0].stale'), true);
 assert.equal(failures.evaluate('nodes[0].gpus[0].util'), null);
 assert.equal(failures.state().snapshot.nodes.length, 1);

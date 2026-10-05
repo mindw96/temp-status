@@ -145,7 +145,7 @@ try {
   assert.equal(unacceptable.status, 406);
   const html = await raw(base, '/', {headers: {'Accept-Encoding': 'gzip'}});
   assert.equal(html.status, 200); assert.equal(html.headers['content-encoding'], 'gzip');
-  assert.match(gunzipSync(html.body).toString(), /Cluster overview/);
+  assert.match(gunzipSync(html.body).toString(), /NLP Lab\. Server Status/);
   const head = await raw(base, '/', {method: 'HEAD', headers: {'Accept-Encoding': 'gzip'}});
   assert.equal(head.status, 200); assert.equal(head.body.length, 0);
   assert.equal(head.headers['content-encoding'], 'gzip');
