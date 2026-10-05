@@ -9,7 +9,7 @@ assert.doesNotMatch(page, /class="sample-note"|class="node-key"|id="sample-detai
 assert.equal([...page.matchAll(/id="retry-live"/g)].length, 1);
 assert.doesNotMatch(page, /id="nodes-title"|id="node-count"|Cluster overview/);
 assert.match(page, /id="page-title">NLP Lab\. Server Status<\/h1>/);
-assert.match(page, /class="heading-controls"><span class="snapshot">[\s\S]*?id="retry-live"[^>]*>Refresh Now<\/button><button[^>]*id="theme-toggle"/);
+assert.match(page, /class="heading-controls"><span class="snapshot">[\s\S]*?id="retry-live"[^>]*><svg[^>]*class="refresh-icon"[\s\S]*?<span class="refresh-label">Refresh Now<\/span><\/button><button[^>]*id="theme-toggle"/);
 const flush = async () => {for (let i = 0; i < 12; i++) await Promise.resolve();};
 
 // Run the actual browser scripts against a small DOM and controllable browser
@@ -106,14 +106,14 @@ await flush();
 assert.equal(healthy.requests.length, 1);
 assert.equal(healthy.element('#connection-status').hidden, true);
 assert.equal(healthy.element('#connection-status').textContent, '');
-assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 5s');
+assert.equal(healthy.element('#retry-live .refresh-label').textContent, 'Refresh in 5s');
 assert.equal(healthy.element('#retry-live').disabled, true);
 await healthy.advance(4000);
-assert.equal(healthy.element('#retry-live').textContent, 'Refresh in 1s');
+assert.equal(healthy.element('#retry-live .refresh-label').textContent, 'Refresh in 1s');
 await healthy.element('#retry-live').onclick();
 assert.equal(healthy.requests.length, 1);
 await healthy.advance(1000);
-assert.equal(healthy.element('#retry-live').textContent, 'Refresh Now');
+assert.equal(healthy.element('#retry-live .refresh-label').textContent, 'Refresh Now');
 assert.equal(healthy.element('#retry-live').disabled, false);
 assert.match(healthy.element('#retry-live').title, /every 30 seconds/);
 await healthy.advance(24999);
@@ -149,7 +149,7 @@ assert.equal(healthy.requests.at(-1).at - healthy.requests.at(-2).at, 5000);
 const inFlight = browser({holdRequest: true});
 await flush();
 assert.equal(inFlight.state().loading, true);
-assert.equal(inFlight.element('#retry-live').textContent, 'Refreshing…');
+assert.equal(inFlight.element('#retry-live .refresh-label').textContent, 'Refreshing…');
 assert.equal(inFlight.element('#retry-live').disabled, true);
 await inFlight.visibility(true);
 assert.equal(inFlight.requests[0].signal.aborted, true);
@@ -326,7 +326,7 @@ assert.match(connection.element('#connection-status').textContent, /Request fail
 connection.evaluate('liveState.mode = "demo"; renderConnection();');
 assert.equal(connection.element('#connection-status').hidden, false);
 assert.match(connection.element('#connection-status').textContent, /All values and names are fictional/);
-assert.equal(connection.element('#retry-live').textContent, 'Data source');
+assert.equal(connection.element('#retry-live .refresh-label').textContent, 'Data source');
 assert.equal(connection.element('#retry-live').disabled, false);
 await connection.element('#retry-live').onclick();
 assert.match(connection.element('#dialog-content').innerHTML, /<h2 id="dialog-title">Collector connection<\/h2>/);

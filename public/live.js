@@ -59,15 +59,16 @@ function renderRefreshControl() {
   clearTimeout(refreshControlTimer);
   const button = $('#retry-live');
   if (!button) return;
+  const label = $('#retry-live .refresh-label');
   if (liveState.mode === 'demo') {
     button.disabled = false;
-    button.textContent = 'Data source';
+    label.textContent = 'Data source';
     button.title = 'About the sample data.';
     return;
   }
   const remaining = liveState.lastAttemptAt === null ? 0 : Math.max(0, liveState.lastAttemptAt + MANUAL_COOLDOWN_MS - Date.now());
   button.disabled = liveState.loading || remaining > 0;
-  button.textContent = liveState.loading ? 'Refreshing…' : remaining > 0 ? `Refresh in ${Math.ceil(remaining / 1000)}s` : 'Refresh Now';
+  label.textContent = liveState.loading ? 'Refreshing…' : remaining > 0 ? `Refresh in ${Math.ceil(remaining / 1000)}s` : 'Refresh Now';
   button.title = liveState.loading ? 'A refresh is in progress.' : remaining > 0 ? 'Please wait 5 seconds between refreshes.' : 'Fetch the latest reports now. Automatically refreshes every 30 seconds.';
   if (!document.hidden && !liveState.loading && remaining > 0) refreshControlTimer = setTimeout(renderRefreshControl, Math.min(1000, remaining));
 }
