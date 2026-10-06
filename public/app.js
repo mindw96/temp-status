@@ -43,6 +43,10 @@ const jobSpecs=[['48217','llama3-70b-sft','minji','RUNNING','accelerated',8,'03:
 let jobs=jobSpecs.map(([id,name,user,state,partition,gpus,elapsed,target,indices])=>({id,name,user,state,partition,gpus,elapsed,target,indices}));
 const reasons={Resources:'Insufficient resources',Priority:'Waiting for priority',Dependency:'Waiting for dependency',QOSMaxGRESPerUser:'User GPU limit'};
 const state={jobState:'all',search:'',user:'',server:''};
+const jobSort = {key: null, direction: 'desc'};
+const jobSortLabels = Object.freeze({id: 'Job ID', name: 'Job Name', user: 'User'});
+const jobIdOrder = new Intl.Collator('en', {numeric: true, sensitivity: 'base'});
+const jobTextOrder = new Intl.Collator('ko', {numeric: true, sensitivity: 'base'});
 const $=selector=>document.querySelector(selector);
 const currentNodes=()=>nodes;
 const currentJobs=()=>jobs;
@@ -149,7 +153,39 @@ function jobsForFilterCounts() {
     && [job.name, job.user, displayUserName(job.user), job.id, job.target, jobIsPending(job) ? requestedNodeList(job) : displayNodeList(job.target), jobIsPending(job) ? displayNodeList(requestedNodeList(job)) : '']
       .some(value => String(value ?? '').toLowerCase().includes(q)));
 }
-function filteredJobs(){return jobsForFilterCounts().filter(job => state.jobState === 'all' || job.state === state.jobState);}
+function filteredJobs() {
+  const rows = jobsForFilterCounts().filter(job => state.jobState === 'all' || job.state === state.jobState);
+  if (!jobSort.key) return rows;
+  const direction = jobSort.direction === 'asc' ? 1 : -1;
+  // Sort the filtered copy before pagination; never reorder collector data.
+  // Numeric collation also preserves array IDs and avoids Number precision loss.
+  return rows.sort((a, b) => {
+    const byId = jobIdOrder.compare(a.id, b.id);
+    const primary = jobSort.key === 'id' ? byId : jobSort.key === 'user'
+      ? jobTextOrder.compare(displayUserName(a.user), displayUserName(b.user))
+      : jobTextOrder.compare(a.name, b.name);
+    return direction * (primary || byId);
+  });
+}
+function setJobSort(key) {
+  if (!Object.hasOwn(jobSortLabels, key)) return;
+  jobSort.direction = jobSort.key === key && jobSort.direction === 'desc' ? 'asc' : 'desc';
+  jobSort.key = key;
+  resetJobPage();
+  renderJobs();
+}
+function renderJobSort() {
+  document.querySelectorAll('[data-job-sort]').forEach(button => {
+    const key = button.dataset.jobSort, active = jobSort.key === key;
+    const ascending = active && jobSort.direction === 'asc';
+    const action = `${jobSortLabels[key]}, sort ${active && !ascending ? 'ascending' : 'descending'}`;
+    button.closest('th').setAttribute('aria-sort', active ? ascending ? 'ascending' : 'descending' : 'none');
+    button.classList.toggle('is-active', active);
+    button.querySelector('.job-sort-indicator').textContent = active ? ascending ? '↑' : '↓' : '↕';
+    button.setAttribute('aria-label', action);
+    button.title = action;
+  });
+}
 function resetJobPage() {if (typeof liveState !== 'undefined') liveState.page = 1;}
 function resetJobFilters() {
   Object.assign(state, {jobState: 'all', search: '', user: '', server: ''});
@@ -162,13 +198,14 @@ function jobStatusClass(status) {
     FAILED: 'down', CANCELLED: 'down', TIMEOUT: 'down'}[status] || 'idle';
   return `badge badge-${badge}${status === 'PENDING' ? ' pending' : ''}`;
 }
-function renderJobs(){renderJobFilters();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map(j=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
+function renderJobs(){renderJobFilters();renderJobSort();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map(j=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('[data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
 function render(){renderNodes();renderJobs();}
 function openDialog(html,eyebrow){$('#dialog-content').innerHTML=html;$('#dialog-eyebrow').textContent=eyebrow;$('#detail-dialog').showModal();}
 const detailItem=(label,value)=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
 function showNode(id){const n=nodes.find(n=>n.id===id);if(!n)return;const assigned=jobs.filter(j=>j.target===id);openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${partitionMeta[n.partition].model} × ${n.total} · ${n.partition}</p><dl class="detail-grid">${detailItem('Slurm state',n.state)}${detailItem('Allocated GPUs',`${n.allocated} / ${n.total}`)}${detailItem('Allocated CPUs',`${n.cpuAllocated} / ${n.cpu}`)}${detailItem('Collected at','Sep 22, 2026, 10:40 KST · Sample')}</dl><div class="dialog-gpus">${n.gpus.map(g=>`<div class="dialog-gpu ${g.util===null?'gpu-offline':''}"><strong>GPU ${g.index}</strong>${g.util===null?'No metrics':g.allocated?'Allocated':'Idle'}<span>Compute ${percent(g.util)}</span><span>${g.memoryUsed===null?'—':g.memoryUsed+' / '+g.memory+' GB'}</span><span>${g.temp===null?'—':g.temp+' °C'}</span></div>`).join('')}</div><p class="dialog-note">${n.reason?'Maintenance: '+n.reason+'. This node is not accepting new jobs.':'Dark GPU blocks indicate job allocations. An allocated GPU can have low utilization while loading data or waiting for I/O.'}</p>${assigned.length?`<p class="dialog-jobs" style="margin-top:16px">Running jobs: ${assigned.map(j=>`${j.id} · ${j.name}`).join('<br>')}</p>`:''}`,'GPU NODE · SAMPLE DATA');}
 function showJob(id){const j=jobs.find(j=>j.id===id);if(!j)return;openDialog(`<h2 id="dialog-title">${esc(j.name)}</h2><p class="dialog-subtitle">Job ${j.id} · ${esc(displayUserName(j.user))}</p><dl class="detail-grid">${detailItem('State',j.state)}${detailItem('Partition',j.partition)}${detailItem(j.state==='RUNNING'?'Allocated GPUs':'Requested GPUs',`${j.gpus}`)}${detailItem(j.state==='RUNNING'?'Elapsed':'Time pending',j.elapsed)}${detailItem(j.state==='RUNNING'?'Assigned node':'Pending reason',j.state==='RUNNING'?displayNodeList(j.target):j.target)}${detailItem(j.state==='RUNNING'?'GPU indices':'Assigned node',j.state==='RUNNING'?j.indices.join(', '):'Not yet allocated')}</dl><p class="dialog-note">${j.state==='RUNNING'?'This job has been allocated resources and is running. GPU allocation and utilization are separate metrics.':j.target==='Dependency'?'Waiting for job 48217 to complete successfully.':j.target==='QOSMaxGRESPerUser'?'In this sample, the user has a limit of 4 GPUs, all currently allocated to diffusion-train.':j.target==='Priority'?'Waiting for higher-priority jobs in this partition to be scheduled.':`This job requests ${j.gpus} GPUs on one node, but sufficient matching resources are not available.`}</p>`,'SLURM JOB · SAMPLE DATA');}
 function showDataInfo(){openDialog('<h2 id="dialog-title">Sample data</h2><p class="dialog-subtitle">This view uses a sample cluster snapshot.</p><div class="dialog-copy"><p>Node reports use <code>POST /api/report/node</code> and Slurm reports use <code>POST /api/report/slurm</code>.</p><p>The live dashboard displays reports received from the configured collectors. Sample data is provided separately for previewing the interface.</p><p>All nodes, job names, users, and metrics in this sample are fictional.</p></div>','DATA SOURCE');}
+document.querySelectorAll('[data-job-sort]').forEach(button => button.addEventListener('click', () => setJobSort(button.dataset.jobSort)));
 $('#job-search').addEventListener('input',e=>{state.search=e.target.value;resetJobPage();renderJobs();});
 $('#job-user-filter').addEventListener('change',e=>{state.user=e.target.value;resetJobPage();renderJobs();});
 $('#job-server-filter').addEventListener('change',e=>{state.server=e.target.value;resetJobPage();renderJobs();});

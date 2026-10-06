@@ -11,9 +11,14 @@ function element(selector) {
   assert.ok(!['.sample-note', '.node-key', '#sample-details', '.table-footer>span:last-child'].includes(selector),
     `Removed status UI must not be accessed: ${selector}`);
   if (!elements.has(selector)) {
-    const listeners = new Map();
+    const listeners = new Map(), attributes = new Map(), classes = new Set();
     elements.set(selector, {innerHTML: '', textContent: '', value: '', disabled: false,
-      dataset: {}, classList: {toggle() {}}, setAttribute() {}, showModal() {},
+      dataset: {}, classList: {
+        toggle(name, enabled) {if (enabled) classes.add(name); else classes.delete(name);},
+        contains(name) {return classes.has(name);}
+      },
+      setAttribute(name, value) {attributes.set(name, String(value));},
+      getAttribute(name) {return attributes.get(name) ?? null;}, showModal() {},
       addEventListener(name, callback) {
         if (!listeners.has(name)) listeners.set(name, []);
         listeners.get(name).push(callback);
@@ -29,9 +34,16 @@ function element(selector) {
 const tabs = ['all', 'RUNNING', 'PENDING'].map(state => {
   const tab = element(`[data-state="${state}"]`); tab.dataset.state = state; return tab;
 });
+const sortButtons = ['id', 'name', 'user'].map(key => {
+  const button = element(`[data-job-sort="${key}"]`);
+  button.dataset.jobSort = key;
+  button.closest = selector => selector === 'th' ? element(`#sort-header-${key}`) : null;
+  button.querySelector = selector => selector === '.job-sort-indicator' ? element(`#sort-indicator-${key}`) : null;
+  return button;
+});
 const document = {
   hidden: true, querySelector: element,
-  querySelectorAll: selector => selector === '[data-state]' ? tabs : [],
+  querySelectorAll: selector => selector === '[data-state]' ? tabs : selector === '[data-job-sort]' ? sortButtons : [],
   addEventListener() {}, modelContext: {registerTool(tool) {tools.set(tool.name, tool);}}
 };
 const context = vm.createContext({document, structuredClone, Date, Intl, AbortController,
@@ -606,6 +618,97 @@ report([job(704, 'guest-user', 'ubuntu')]);
 assert.match(element('#job-user-filter').innerHTML, /value="mindw">민동욱\(mindw\) · No current jobs/);
 element('#reset-job-filters').dispatch('click');
 
+// Sorting covers the entire filtered queue before pagination and starts in
+// descending order. Numeric IDs and Slurm array subtasks retain natural order.
+const shuffledIds = ['99', '1000', '2', '101', '100_10', '7', '100', '20', '100_2', '3', '999', '10', '42', '4', '8'];
+const ascendingIds = ['2', '3', '4', '7', '8', '10', '20', '42', '99', '100', '100_2', '100_10', '101', '999', '1000'];
+report(shuffledIds.map(id => job(id, 'mindw', 'devbox')));
+assert.deepEqual(ids(), shuffledIds, 'No sort is forced before the user selects a column');
+assert.deepEqual(plain(evaluate('jobSort')), {key: null, direction: 'desc'});
+for (const key of ['id', 'name', 'user']) {
+  assert.equal(element(`#sort-header-${key}`).getAttribute('aria-sort'), 'none');
+  assert.equal(element(`#sort-indicator-${key}`).textContent, '↕');
+}
+const unsortedSnapshot = plain(evaluate('jobs'));
+element('#next-page').onclick();
+assert.equal(evaluate('liveState.page'), 2);
+sortButtons[0].dispatch('click');
+assert.deepEqual(plain(evaluate('jobSort')), {key: 'id', direction: 'desc'});
+assert.equal(evaluate('liveState.page'), 1, 'Choosing a sort returns to the first page');
+assert.deepEqual(ids(), ascendingIds.toReversed());
+assert.deepEqual(visibleIds(), ascendingIds.toReversed().slice(0, 10));
+assert.equal(element('#total-jobs').textContent, shuffledIds.length);
+assert.equal(element('#sort-header-id').getAttribute('aria-sort'), 'descending');
+assert.equal(element('#sort-indicator-id').textContent, '↓');
+assert.equal(sortButtons[0].classList.contains('is-active'), true);
+assert.match(sortButtons[0].getAttribute('aria-label'), /sort ascending$/);
+element('#next-page').onclick();
+assert.deepEqual(visibleIds(), ['8', '7', '4', '3', '2']);
+sortButtons[0].dispatch('click');
+assert.deepEqual(ids(), ascendingIds);
+assert.deepEqual(visibleIds(), ascendingIds.slice(0, 10));
+assert.equal(element('#sort-header-id').getAttribute('aria-sort'), 'ascending');
+assert.equal(element('#sort-indicator-id').textContent, '↑');
+assert.match(sortButtons[0].getAttribute('aria-label'), /sort descending$/);
+assert.deepEqual(plain(evaluate('jobs')), unsortedSnapshot, 'Sorting never mutates the source job array or its rows');
+
+// Names use case-insensitive natural text order; matching names use the job ID
+// in the same direction, so refreshed input order cannot shuffle tied rows.
+const sortingQueue = [
+  job(2, 'mindw', 'devbox', 'RUNNING', {name: 'train2'}),
+  job(10, 'ryujh', '(Resources)', 'PENDING', {name: 'train10', req_node_list: 'server2'}),
+  job(20, 'kangjh', 'devbox', 'RUNNING', {name: 'Alpha'}),
+  job(21, 'kimjh', 'server2', 'RUNNING', {name: 'alpha'}),
+  job(30, 'mindw', 'server2', 'RUNNING', {name: 'beta'}),
+  job(31, 'kangjh', 'devbox', 'RUNNING', {name: 'beta'})
+];
+report(sortingQueue);
+sortButtons[1].dispatch('click');
+assert.deepEqual(plain(evaluate('jobSort')), {key: 'name', direction: 'desc'});
+assert.deepEqual(ids(), ['10', '2', '31', '30', '21', '20']);
+assert.equal(element('#sort-header-id').getAttribute('aria-sort'), 'none');
+assert.equal(element('#sort-header-name').getAttribute('aria-sort'), 'descending');
+assert.equal(sortButtons[0].classList.contains('is-active'), false);
+sortButtons[1].dispatch('click');
+assert.deepEqual(ids(), ['20', '21', '30', '31', '2', '10']);
+report(sortingQueue.toReversed());
+assert.deepEqual(ids(), ['20', '21', '30', '31', '2', '10']);
+assert.equal(element('#sort-header-name').getAttribute('aria-sort'), 'ascending');
+
+// User sorting follows visible Korean names, not account IDs (류 precedes 민).
+// Unknown users retain their account labels and natural numerical ordering.
+sortButtons[2].dispatch('click');
+assert.deepEqual(plain(evaluate('jobSort')), {key: 'user', direction: 'desc'});
+assert.deepEqual(ids(), ['30', '2', '10', '21', '31', '20']);
+assert.equal(element('#sort-header-name').getAttribute('aria-sort'), 'none');
+assert.equal(element('#sort-header-user').getAttribute('aria-sort'), 'descending');
+sortButtons[2].dispatch('click');
+assert.deepEqual(ids(), ['20', '31', '21', '10', '2', '30']);
+assert.deepEqual(apply({user: 'mindw'}).visibleJobIds, ['2', '30']);
+assert.deepEqual(apply({server: 'server2'}).visibleJobIds, ['30']);
+assert.deepEqual(apply({jobState: 'PENDING'}).visibleJobIds, []);
+element('#reset-job-filters').dispatch('click');
+assert.deepEqual(ids(), ['20', '31', '21', '10', '2', '30']);
+assert.deepEqual(plain(evaluate('jobSort')), {key: 'user', direction: 'asc'}, 'Clearing filters preserves the selected sort');
+const refreshedQueue = [...sortingQueue.toReversed(), job(40, 'mindw', 'devbox', 'RUNNING', {name: 'train3'})];
+report(refreshedQueue);
+assert.deepEqual(ids(), ['20', '31', '21', '10', '2', '30', '40']);
+assert.deepEqual(apply({user: 'mindw', search: 'train'}).visibleJobIds, ['2', '40']);
+report([]);
+assert.deepEqual(ids(), []);
+assert.equal(element('#sort-header-user').getAttribute('aria-sort'), 'ascending');
+report(refreshedQueue);
+assert.deepEqual(ids(), ['2', '40'], 'Both filtering and sorting persist after an empty report');
+element('#reset-job-filters').dispatch('click');
+report([job(61, 'guest10', 'devbox'), job(60, 'guest2', 'devbox')]);
+assert.deepEqual(ids(), ['60', '61']);
+sortButtons[2].dispatch('click');
+assert.deepEqual(ids(), ['61', '60']);
+const validSort = plain(evaluate('jobSort'));
+evaluate('setJobSort("partition")');
+assert.deepEqual(plain(evaluate('jobSort')), validSort, 'Unsupported columns cannot replace the active sort');
+assert.equal(requests, 0, 'Every sort and filter change remains local');
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 evaluate('renderNodes()');
@@ -618,4 +721,4 @@ element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, refresh retention, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, numeric and array ID sorting, natural name sorting, Korean display-user sorting, accessible sort state, refresh/filter sort retention, immutable source rows, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');

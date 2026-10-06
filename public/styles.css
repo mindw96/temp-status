@@ -215,6 +215,8 @@ section[id]{scroll-margin-top:24px}
 /* The paginated table only scrolls horizontally; nested sticky blur can hide its labels. */
 .jobs-table thead th{position:static;backdrop-filter:none;-webkit-backdrop-filter:none}
 .jobs-table thead th:nth-child(6){white-space:normal}
+.job-sort-button:hover{color:var(--link)}
+.job-sort-button.is-active .job-sort-indicator{color:inherit}
 .jobs-table td{padding:8px 14px;border-bottom:1px solid var(--table-row-border);color:var(--text-primary);vertical-align:middle;font-variant-numeric:tabular-nums}
 .jobs-table th:first-child,.jobs-table td:first-child{padding-left:22px}
 .jobs-table th:last-child,.jobs-table td:last-child{padding-right:22px}

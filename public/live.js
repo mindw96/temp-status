@@ -207,6 +207,7 @@ renderNodes = function() {
 };
 renderJobs = function() {
   renderJobFilters();
+  renderJobSort();
   const all = jobsForFilterCounts(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / JOBS_PER_PAGE)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
   liveState.page = Math.min(liveState.page, pages);
   const visible = rows.slice((liveState.page - 1) * JOBS_PER_PAGE, liveState.page * JOBS_PER_PAGE);
