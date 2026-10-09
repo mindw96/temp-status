@@ -15,3 +15,6 @@ services:
         value: public
       - key: STATUS_REPORT_TOKEN
         sync: false
+      # Optional for the existing dashboard; A100 ingestion stays off until set.
+      - key: A100_REPORT_TOKEN
+        sync: false

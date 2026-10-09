@@ -9,11 +9,11 @@ import {localDB} from './local-db.mjs';
 
 const MAX_BODY = 8 * 1024 * 1024;
 const gzip = promisify(gzipCallback), brotli = promisify(brotliCallback);
-const STATIC_ASSETS = new Set(['/index.html', '/design-system.css', '/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js']);
+const STATIC_ASSETS = new Set(['/index.html', '/design-system.css', '/styles.css', '/theme.js', '/app.js', '/gpu-jobs.js', '/live.js', '/a100.html', '/a100.css', '/a100.js']);
 class PayloadTooLarge extends Error {}
 
-function readBody(req) {
-  if (Number(req.headers['content-length'] || 0) > MAX_BODY) {
+function readBody(req, maxBody = MAX_BODY) {
+  if (Number(req.headers['content-length'] || 0) > maxBody) {
     return Promise.reject(new PayloadTooLarge());
   }
   return new Promise((resolveBody, reject) => {
@@ -28,7 +28,7 @@ function readBody(req) {
     const onEnd = () => {cleanup(); resolveBody(Buffer.concat(chunks, size));};
     const onData = chunk => {
       size += chunk.length;
-      if (size > MAX_BODY) {
+      if (size > maxBody) {
         cleanup(); req.pause(); reject(new PayloadTooLarge()); return;
       }
       chunks.push(chunk);
@@ -121,13 +121,15 @@ async function sendResponse(req, res, response) {
   return sendPreparedResponse(req, res, await prepareResponse(response));
 }
 
-export function createRenderServer({reportToken = process.env.STATUS_REPORT_TOKEN} = {}) {
+export function createRenderServer({reportToken = process.env.STATUS_REPORT_TOKEN, a100ReportToken = process.env.A100_REPORT_TOKEN} = {}) {
   if (typeof reportToken !== 'string' || !reportToken.trim() || reportToken.length > 1024) {
     throw new Error('STATUS_REPORT_TOKEN is required and must be at most 1024 characters.');
   }
   // Latest reports live only in this process. Collectors refill them after a restart.
-  const DB = localDB(), env = {DB, STATUS_REPORT_TOKEN: reportToken.trim(), SNAPSHOT_AUTH_MODE: 'public'};
-  // At most five immutable built assets, each with at most Brotli and gzip.
+  const validA100Token = typeof a100ReportToken === 'string' && a100ReportToken.trim()
+    && a100ReportToken.length <= 1024 ? a100ReportToken.trim() : undefined;
+  const DB = localDB(), env = {DB, STATUS_REPORT_TOKEN: reportToken.trim(), A100_REPORT_TOKEN: validA100Token, SNAPSHOT_AUTH_MODE: 'public'};
+  // Immutable built assets have at most Brotli and gzip representations.
   // API responses, report acknowledgments, and errors never enter this cache.
   const assetCache = new Map();
   const server = createServer({requestTimeout: 30000, headersTimeout: 15000}, async (req, res) => {
@@ -138,7 +140,7 @@ export function createRenderServer({reportToken = process.env.STATUS_REPORT_TOKE
           headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}
         }));
       }
-      const assetKey = path === '/' ? '/index.html' : path;
+      const assetKey = path === '/' ? '/index.html' : path === '/a100' || path === '/a100/' ? '/a100.html' : path;
       if (['GET', 'HEAD'].includes(req.method) && STATIC_ASSETS.has(assetKey)) {
         if (!assetCache.has(assetKey)) {
           const pending = worker.fetch(new Request('http://localhost' + assetKey), env, {})
@@ -153,7 +155,7 @@ export function createRenderServer({reportToken = process.env.STATUS_REPORT_TOKE
         return await sendPreparedResponse(req, res, await assetCache.get(assetKey));
       }
       const hasBody = !['GET', 'HEAD'].includes(req.method);
-      const body = hasBody ? await readBody(req) : undefined;
+      const body = hasBody ? await readBody(req, path === '/api/a100/report' ? 1024 * 1024 : MAX_BODY) : undefined;
       // Fetch static HEAD metadata from the same representation used for GET.
       const method = req.method === 'HEAD' && !path.startsWith('/api/') ? 'GET' : req.method;
       const request = new Request('http://localhost' + req.url, {
