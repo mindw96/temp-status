@@ -14,7 +14,7 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 
 ## 화면
 
-현재 디자인은 **vToss**입니다. 바로 이전 Noto 폰트의 vApple은 **vApple-noto-20261012** 태그와 별도 ZIP으로 보존했습니다. [디자인 버전·복원 기록](docs/design/versions.md), [vToss 적용 내역](docs/design/vToss.md), 제공된 [DESIGN.md](DESIGN.md)를 참고하세요.
+현재 디자인은 **v261011**입니다. 2026-10-12에 원래 디자인으로 복원했으며, 직전 **vToss**는 같은 이름의 Git 태그와 소스 ZIP·화면 캡처·체크섬으로 보존했습니다. [디자인 버전·복원 기록](docs/design/versions.md), [v261011 복원 내역](docs/design/restore-v261011-20261012.md), 현재 [디자인 기준](DESIGN.md)을 참고하세요.
 
 - 실시간 보고와 명시적으로 분리된 가상 예시 모드
 - Server1~4의 GPU별 Job ID·사용자·작업명
@@ -26,11 +26,11 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 - 수동 **Refresh now** 버튼은 GPU nodes 제목 오른쪽에 표시. 정상 상태의 경과 시간 배너·상태 범례는 없으며, 대기·실제 조회 오류는 필요할 때만 표시
 - 노드 수신 시각과 Slurm 수신 시각을 별도로 표시
 - 우측 상단에서 라이트·다크 모드 전환. 처음에는 기기 설정을 따르고, 직접 선택한 모드는 브라우저에 저장
-- vToss의 흰색 배경·청회색 슬롯·8px 모서리·파란색 액션과 기존 Noto Sans / Noto Sans KR 폰트를 적용하고 다크 모드를 지원
+- v261011의 반투명 표면·카드·여백과 Noto Sans / Noto Sans KR 폰트를 적용하고 다크 모드를 지원
 
 ## 화면 수정과 자동 배포
 
-`public/design-system.css`와 `public/styles.css`는 기존 화면의 기본 스타일과 반응형 배치, Noto Sans / Noto Sans KR 폰트를 유지합니다. 마지막에 로드하는 `public/design-vtoss.css`가 제공된 `DESIGN.md`의 색상·카드·컨트롤 스타일을 적용하고, A100 페이지는 `public/design-vtoss-a100.css`로 보완합니다. 화면 상태와 API는 기존 JavaScript를 사용하며, `public/theme.js`는 테마 선택과 저장을 담당합니다.
+`public/design-system.css`와 `public/styles.css`가 현재 v261011의 색상·카드·반응형 배치와 Noto Sans / Noto Sans KR 폰트를 정의합니다. A100 페이지는 `public/a100.css`를 함께 사용합니다. 이전 `design-vapple*.css`와 `design-vtoss*.css`는 이력 보존용으로 남아 있지만 현재 페이지에서는 로드하지 않습니다. 화면 상태와 API는 기존 JavaScript를 사용하며, `public/theme.js`는 테마 선택과 저장을 담당합니다.
 
 화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
 

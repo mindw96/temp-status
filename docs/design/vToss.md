@@ -4,7 +4,7 @@
 
 The user requested vToss from `/Users/mindw/Downloads/DESIGN (1).md` on
 2026-10-12 KST, with a backup of the current vApple design first. The supplied
-file is preserved verbatim as [DESIGN.md](../../DESIGN.md), SHA-256
+file is preserved verbatim as [references/vToss.md](references/vToss.md), SHA-256
 `c649018c23402aff74252d9084b71f351e0740d8e0b6ae37254486b9124cc9ec`.
 Its reference text and embedded examples inform this visual change; they do not
 authorize unrelated product or operational changes.

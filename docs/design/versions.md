@@ -10,11 +10,13 @@ These names identify frontend releases, not a change to the collector protocol.
 | [vApple-noto-20261012](https://github.com/mindw96/temp-status/tree/vApple-noto-20261012) | `a21dff9c602a48bb9f96a75cb251162e252fe8b3` | vApple with the v261011 Noto Sans / Noto Sans KR font stack restored; exact baseline before vToss. |
 | [vToss](https://github.com/mindw96/temp-status/tree/vToss) | Annotated `vToss` tag | Supplied Toss reference, white canvas, blue/gray roles, 8px shapes, compact elevated cards and Noto fonts. See [adoption decisions](vToss.md). |
 
-Tags are immutable snapshots. Do not move `v261011` or `vApple` to a newer commit.
+Tags are immutable snapshots. Do not move an existing version tag to a newer commit.
 
 The Noto typography amendment is preserved by `vApple-noto-20261012`. The
-original `vApple` tag and backup remain the initial release. The active design
-on `main` is now vToss.
+original `vApple` tag and backup remain the initial release. On 2026-10-12 KST,
+the user requested restoration of **v261011**, which is now the active design on
+`main`. The preceding vToss tag, ZIP and verification records remain preserved.
+See the [restoration record](restore-v261011-20261012.md).
 
 Use a new dated version for subsequent named releases. The active design is also
 identified by `data-design-version` and a `design-version` meta tag in both HTML
@@ -74,8 +76,9 @@ verified independently from local fixture-based checks.
   previously verified screenshots, recovery instructions and checksums.
 - ZIP `temp-status-vApple-noto-20261012.zip` SHA-256:
   `f2a3278d10d1b7119f22db569a44513e22de12e01a8cc0a5acddd0e2d6b0b87d`.
-- The historical Apple reference is retained at [references/vApple.md](references/vApple.md).
-  Root `DESIGN.md` now contains the supplied Toss reference verbatim.
+- The historical references are retained at [references/vApple.md](references/vApple.md)
+  and [references/vToss.md](references/vToss.md). Root `DESIGN.md` identifies
+  the active v261011 design after the 2026-10-12 restoration.
 - vToss source, captures, fidelity record and deployment evidence are stored in
   `../../backups/vToss/` after final verification.
 - To inspect the exact preceding version, use
