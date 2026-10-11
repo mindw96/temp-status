@@ -5,7 +5,7 @@
  * dashboard decisions documented in docs/design/vApple.md, not Apple tokens.
  */
 :root[data-design-version="vApple"] {
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  /* Inherit v261011's Noto Sans / Noto Sans KR stack from styles.css. */
   --apple-primary: #191bdf;
   --apple-card-radius: 18px;
   --apple-control-radius: 9px;

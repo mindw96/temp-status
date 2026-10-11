@@ -9,6 +9,11 @@ These names identify frontend releases, not a change to the collector protocol.
 | [vApple](https://github.com/mindw96/temp-status/tree/vApple) | Annotated `vApple` tag | User-supplied `DESIGN.md`, system fonts, compact solid controls, elevated surfaces, primary `#191bdf`, and retained dark mode. See [adoption decisions](vApple.md). |
 
 Tags are immutable snapshots. Do not move `v261011` or `vApple` to a newer commit.
+
+The current vApple design on `main` also includes the 2026-10-12 KST typography
+amendment requested by the user: restore v261011's Noto Sans / Noto Sans KR fonts
+on both routes. The `vApple` tag and its backup remain the original release.
+
 Use a new dated version for subsequent named releases. The active design is also
 identified by `data-design-version` and a `design-version` meta tag in both HTML
 entry points; there is no extra version label in the dashboard itself.

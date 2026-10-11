@@ -1,5 +1,18 @@
 # vApple adoption record
 
+## Current typography amendment — 2026-10-12 KST
+
+At the user's request, the current vApple design uses the exact v261011 font
+stack: `Noto Sans`, `Noto Sans KR`, `-apple-system`, `BlinkMacSystemFont`,
+`Segoe UI`, `sans-serif`. The original Google Fonts import (weights 300, 400,
+500 and 600, with `display=swap`) is restored. Both routes inherit the shared
+stack in `styles.css`; vApple no longer overrides it with platform-only fonts.
+Other vApple styling and existing font sizes remain unchanged. This explicit
+user preference takes precedence over the reference's typography suggestion.
+
+The immutable `vApple` tag and original backup preserve the initial release;
+the record and validation below describe that initial release unless noted.
+
 ## Input and authority
 
 The user requested applying `/Users/mindw/Downloads/DESIGN.md` to the existing

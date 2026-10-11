@@ -26,11 +26,11 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 - 수동 **Refresh now** 버튼은 GPU nodes 제목 오른쪽에 표시. 정상 상태의 경과 시간 배너·상태 범례는 없으며, 대기·실제 조회 오류는 필요할 때만 표시
 - 노드 수신 시각과 Slurm 수신 시각을 별도로 표시
 - 우측 상단에서 라이트·다크 모드 전환. 처음에는 기기 설정을 따르고, 직접 선택한 모드는 브라우저에 저장
-- vApple의 밝은 회색 배경·흰색 카드·절제된 그림자와 시스템 폰트를 적용하고 다크 모드를 지원
+- vApple의 밝은 회색 배경·흰색 카드·절제된 그림자와 v261011의 Noto Sans / Noto Sans KR 폰트를 적용하고 다크 모드를 지원
 
 ## 화면 수정과 자동 배포
 
-`public/design-system.css`와 `public/styles.css`는 기존 화면의 기본 스타일과 반응형 배치를 유지합니다. 마지막에 로드하는 `public/design-vapple.css`가 제공된 `DESIGN.md`의 색상·시스템 폰트·카드·컨트롤 스타일을 적용하고, A100 페이지는 `public/design-vapple-a100.css`로 보완합니다. 화면 상태와 API는 기존 JavaScript를 사용하며, `public/theme.js`는 테마 선택과 저장을 담당합니다.
+`public/design-system.css`와 `public/styles.css`는 기존 화면의 기본 스타일과 반응형 배치, Noto Sans / Noto Sans KR 폰트를 유지합니다. 마지막에 로드하는 `public/design-vapple.css`가 제공된 `DESIGN.md`의 색상·카드·컨트롤 스타일을 적용하고, A100 페이지는 `public/design-vapple-a100.css`로 보완합니다. 화면 상태와 API는 기존 JavaScript를 사용하며, `public/theme.js`는 테마 선택과 저장을 담당합니다.
 
 화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
 
