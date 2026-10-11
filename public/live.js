@@ -220,7 +220,7 @@ renderJobs = function() {
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;
   $('#next-page').disabled = liveState.page === pages;
-  document.querySelectorAll('[data-state]').forEach(b => {b.classList.toggle('active', b.dataset.state === state.jobState); b.setAttribute('aria-pressed', String(b.dataset.state === state.jobState));});
+  document.querySelectorAll('.jobs-tabs [data-state]').forEach(b => {b.classList.toggle('active', b.dataset.state === state.jobState); b.setAttribute('aria-pressed', String(b.dataset.state === state.jobState));});
 };
 showNode = function(id) {
   if (liveState.mode === 'demo') return demoRender.node(id);

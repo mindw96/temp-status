@@ -44,9 +44,11 @@
 .a100-section-note{margin:14px 0 24px;font-size:12px;color:var(--text-tertiary)}
 .a100-empty{grid-column:1/-1;padding:28px 18px;border:1px dashed var(--control-border);border-radius:14px;color:var(--text-tertiary);font-size:13px;text-align:center}
 .a100-finished{padding:0 20px;margin-top:6px}
-.a100-finished summary{padding:17px 0;cursor:pointer;font-size:14px;color:var(--text-secondary)}
-.a100-finished summary .count-chip{margin-left:8px}
-.a100-finished summary:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:6px}
+.a100-finished .t-acc-head{display:flex;align-items:center;width:100%;padding:17px 0;text-align:left;cursor:pointer;font-size:14px;color:var(--text-secondary)}
+.a100-finished .t-acc-head .count-chip{margin-left:8px}
+.a100-finished .t-acc-head:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:6px}
+.a100-finished .t-acc-chevron{width:14px;height:14px;margin-right:6px;flex-shrink:0}
+.a100-finished .t-acc-panel-inner{min-height:0}
 .a100-finished-list{padding-bottom:12px}
 .a100-finished-row{display:grid;grid-template-columns:minmax(0,1fr) 180px 90px;gap:14px;align-items:baseline;padding:11px 0;border-top:1px solid var(--divider);font-size:12px;color:var(--text-secondary)}
 .a100-finished-row .a100-job-name{font-size:13px}

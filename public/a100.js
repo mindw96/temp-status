@@ -219,13 +219,7 @@
     if (!button) return;
     state.dialogId = button.dataset.a100Job;
     renderDialog();
-    $('#a100-dialog').showModal();
-  });
-  $('#a100-close').addEventListener('click',() => $('#a100-dialog').close());
-  $('#a100-dialog').addEventListener('click',event => {
-    if (event.target !== event.currentTarget) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close();
+    window.dashboardMotion.openDialog($('#a100-dialog'));
   });
   document.addEventListener('visibilitychange',() => {
     clearTimeout(pollTimer);

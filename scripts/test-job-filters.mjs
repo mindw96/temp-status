@@ -43,11 +43,11 @@ const sortButtons = ['id', 'name', 'user'].map(key => {
 });
 const document = {
   hidden: true, querySelector: element,
-  querySelectorAll: selector => selector === '[data-state]' ? tabs : selector === '[data-job-sort]' ? sortButtons : [],
+  querySelectorAll: selector => selector === '.jobs-tabs [data-state]' ? tabs : selector === '[data-job-sort]' ? sortButtons : [],
   addEventListener() {}, modelContext: {registerTool(tool) {tools.set(tool.name, tool);}}
 };
 const context = vm.createContext({document, structuredClone, Date, Intl, AbortController,
-  window: {addEventListener() {}}, setTimeout() {return 1;}, clearTimeout() {},
+  window: {addEventListener() {}, dashboardMotion: {openDialog(dialog) {dialog.showModal();}}}, setTimeout() {return 1;}, clearTimeout() {},
   fetch() {requests++; throw new Error('Filters must not request data');}
 });
 for (const name of ['app.js', 'gpu-jobs.js', 'live.js']) {

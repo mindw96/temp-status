@@ -9,6 +9,7 @@
   <title>NLP Lab. A100 Status</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23007AFF'/%3E%3Cg fill='%23ffffff'%3E%3Crect x='7' y='7' width='7' height='7' rx='1'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/motion.css">
   <link rel="stylesheet" href="/a100.css">
 </head>
 <body class="a100-page">
@@ -19,7 +20,7 @@
       <div class="heading-controls">
         <span id="a100-timestamp" class="snapshot">Connecting…</span>
         <button type="button" id="a100-refresh" class="header-action refresh-button ds-theme-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5"/></svg><span class="refresh-label">Refresh Now</span></button>
-        <button type="button" id="theme-toggle" class="header-action theme-toggle ds-theme-toggle" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 13.1A8.5 8.5 0 0 1 10.9 3.5a8.5 8.5 0 1 0 9.6 9.6Z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><span class="theme-toggle-label">Dark mode</span></button>
+        <button type="button" id="theme-toggle" class="header-action theme-toggle ds-theme-toggle" aria-label="Switch to dark mode" title="Switch to dark mode"><span class="t-icon-swap" data-state="a" aria-hidden="true"><svg class="theme-icon-moon t-icon" data-icon="a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 13.1A8.5 8.5 0 0 1 10.9 3.5a8.5 8.5 0 1 0 9.6 9.6Z"/></svg><svg class="theme-icon-sun t-icon" data-icon="b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg></span><span class="theme-toggle-label">Dark mode</span></button>
       </div>
     </header>
     <p id="a100-connection" class="connection-status" role="status">Connecting to the A100 collector…</p>
@@ -35,17 +36,18 @@
       <div id="a100-job-cards" class="a100-job-grid"><p class="a100-empty">Waiting for the first report.</p></div>
       <p class="a100-section-note">UTIL and VRAM show recent GPU activity. Low utilization alone does not indicate a failed job.</p>
     </section>
-    <details id="a100-finished" class="a100-finished">
-      <summary>Completed jobs <span id="a100-finished-count" class="count-chip">—</span></summary>
-      <div id="a100-finished-list" class="a100-finished-list"></div>
-    </details>
+    <section id="a100-finished" class="a100-finished t-acc" data-open="false" aria-labelledby="a100-finished-heading">
+      <button type="button" id="a100-finished-heading" class="t-acc-head" aria-expanded="false" aria-controls="a100-finished-panel"><span class="t-acc-chevron" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5L8 10.5L12 6.5"/></svg></span>Completed jobs <span id="a100-finished-count" class="count-chip">—</span></button>
+      <div id="a100-finished-panel" class="t-acc-panel" inert aria-hidden="true"><div class="t-acc-panel-inner"><div id="a100-finished-list" class="a100-finished-list"></div></div></div>
+    </section>
     <footer class="a100-footer"><a href="/">Server Status <span aria-hidden="true">↗</span></a><span>Auto-refresh every 30 seconds</span></footer>
   </main>
-  <dialog id="a100-dialog" aria-labelledby="a100-dialog-title">
-    <div class="dialog-head"><span class="eyebrow">KUBERNETES JOB</span><button type="button" id="a100-close" class="icon-button" aria-label="Close details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+  <dialog class="t-modal" id="a100-dialog" aria-labelledby="a100-dialog-title">
+    <div class="dialog-head"><span class="eyebrow">KUBERNETES JOB</span><button type="button" id="a100-close" data-dialog-close class="icon-button" aria-label="Close details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div id="a100-dialog-content"></div>
   </dialog>
   <noscript><p class="a100-noscript">JavaScript is required to display live A100 reports.</p></noscript>
+  <script src="/motion.js"></script>
   <script src="/a100.js" defer></script>
 </body>
 </html>

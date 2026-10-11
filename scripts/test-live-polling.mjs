@@ -44,7 +44,7 @@ function browser({hidden = false, holdRequest = false} = {}) {
   };
   const context = vm.createContext({
     structuredClone, Date: BrowserDate, Intl, AbortController, document,
-    window: {addEventListener() {}},
+    window: {addEventListener() {}, dashboardMotion: {openDialog(dialog) {dialog.showModal();}}},
     setTimeout(callback, delay) {timers.set(++timerId, {at: now + delay, callback}); return timerId;},
     clearTimeout(id) {timers.delete(id);},
     fetch: async (url, options) => {

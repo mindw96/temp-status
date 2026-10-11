@@ -22,6 +22,7 @@
       button.setAttribute('aria-label', `Switch to ${next} mode`);
       button.title = `Switch to ${next} mode`;
       button.querySelector('.theme-toggle-label').textContent = next === 'dark' ? 'Dark mode' : 'Light mode';
+      button.querySelector('.t-icon-swap').dataset.state = theme === 'dark' ? 'b' : 'a';
     }
   }
 
@@ -29,6 +30,12 @@
   applyTheme();
   const bindToggle = () => {
     applyTheme();
+    const button = document.getElementById('theme-toggle');
+    if (button) {
+      // Set the saved/system theme without animating the initial page load.
+      void button.offsetWidth;
+      button.dataset.motionReady = 'true';
+    }
     document.getElementById('theme-toggle')?.addEventListener('click', () => {
       preference = root.dataset.theme === 'dark' ? 'light' : 'dark';
       try {

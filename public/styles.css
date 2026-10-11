@@ -70,9 +70,8 @@ section[id]{scroll-margin-top:24px}
 .snapshot svg{width:14px;height:14px}
 .header-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:9px 16px;border:1px solid var(--toggle-border);border-radius:100px;background:var(--toggle-bg);color:var(--text-primary);font-size:13px;font-weight:500;white-space:nowrap;flex-shrink:0;backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);box-shadow:0 2px 12px var(--glass-shadow)}
 .header-action svg{width:17px;height:17px}
-.theme-toggle .theme-icon-sun{display:none}
-:root[data-theme='dark'] .theme-toggle .theme-icon-moon{display:none}
-:root[data-theme='dark'] .theme-toggle .theme-icon-sun{display:block}
+.theme-toggle .t-icon-swap{width:17px;height:17px;flex-shrink:0}
+.theme-toggle:not([data-motion-ready]) .t-icon{transition:none}
 .header-action:disabled{opacity:.6;transform:none;box-shadow:0 2px 12px var(--glass-shadow)}
 .connection-status{margin:0 0 14px;font-size:12px;line-height:1.6;color:var(--pending-text)}
 .section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
@@ -347,7 +346,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   main{padding-inline:14px}
   .page-heading h1{font-size:25px}
   .heading-controls .snapshot{font-size:10px}
-  .heading-controls .snapshot svg,:root[data-theme] .heading-controls .theme-toggle svg{display:none}
+  .heading-controls .snapshot svg,:root[data-theme] .heading-controls .theme-toggle svg,.theme-toggle .t-icon-swap{display:none}
   .header-action{font-size:11px;padding-inline:8px}
   .header-action svg{width:14px;height:14px}
   .theme-toggle{gap:0}
