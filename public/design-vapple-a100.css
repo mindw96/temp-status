@@ -1,0 +1,75 @@
+/*
+ * vApple · A100 surface adapters.
+ * Load after a100.css and design-vapple.css. Geometry, data states, metric
+ * gradients, and the existing disclosure/dialog motion stay in their owners.
+ * Elevation and the dark palette are project adaptations, not Apple tokens.
+ */
+
+:root[data-design-version="vApple"] .a100-summary-card,
+:root[data-design-version="vApple"] .a100-job-card,
+:root[data-design-version="vApple"] .a100-finished {
+  background: var(--apple-card-bg);
+  border-color: var(--apple-card-border);
+  border-radius: var(--apple-card-radius);
+  box-shadow: var(--apple-card-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Match the original theme selectors explicitly so no glass surface leaks in. */
+:root[data-design-version="vApple"][data-theme="dark"] .a100-summary-card,
+:root[data-design-version="vApple"][data-theme="dark"] .a100-job-card,
+:root[data-design-version="vApple"][data-theme="dark"] .a100-finished {
+  background: var(--apple-card-bg);
+}
+
+:root[data-design-version="vApple"] .a100-gpu {
+  background: var(--apple-slot-bg);
+  border: 1px solid var(--apple-slot-border);
+  border-radius: 10px;
+  /* Preserve the previous tile dimensions while introducing a fine outline. */
+  padding: 9px 10px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-design-version="vApple"][data-theme="dark"] .a100-gpu {
+  background: var(--apple-slot-bg);
+}
+
+:root[data-design-version="vApple"] .a100-filters select,
+:root[data-design-version="vApple"] .a100-filters input {
+  height: 36px;
+  border-radius: var(--apple-control-radius);
+  background: var(--apple-control-bg);
+  box-shadow: none;
+  font-family: var(--font);
+  padding-block: 6px;
+}
+
+:root[data-design-version="vApple"] .a100-filters select:hover,
+:root[data-design-version="vApple"] .a100-filters input:hover {
+  background: var(--apple-control-hover);
+}
+
+:root[data-design-version="vApple"] .a100-filters select option {
+  background: var(--apple-control-bg);
+}
+
+:root[data-design-version="vApple"] .a100-job-name:hover,
+:root[data-design-version="vApple"] .a100-footer a:hover {
+  color: var(--apple-link);
+}
+
+:root[data-design-version="vApple"] .a100-empty {
+  background: var(--apple-empty-bg);
+  border-color: var(--apple-card-border);
+  border-radius: var(--apple-card-radius);
+}
+
+:root[data-design-version="vApple"] .a100-dialog-pod {
+  background: var(--apple-slot-bg);
+  border-color: var(--apple-slot-border);
+  border-radius: var(--apple-control-radius);
+}

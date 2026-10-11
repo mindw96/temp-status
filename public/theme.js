@@ -15,7 +15,7 @@
     const theme = preference || (systemTheme.matches ? 'dark' : 'light');
     root.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content',
-      theme === 'dark' ? '#0b0d18' : '#ffffff');
+      theme === 'dark' ? '#0b0d18' : root.dataset.designVersion === 'vApple' ? '#f5f5f7' : '#ffffff');
     const button = document.getElementById('theme-toggle');
     if (button) {
       const next = theme === 'dark' ? 'light' : 'dark';

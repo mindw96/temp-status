@@ -1,0 +1,235 @@
+/*
+ * vApple — adopted from the user-supplied DESIGN.md.
+ * This layer owns visual styling; existing layout, metrics and motion retain
+ * their functional owners. Elevation, density and solid dark surfaces are local
+ * dashboard decisions documented in docs/design/vApple.md, not Apple tokens.
+ */
+:root[data-design-version="vApple"] {
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --apple-primary: #191bdf;
+  --apple-card-radius: 18px;
+  --apple-control-radius: 9px;
+  --apple-card-bg: #ffffff;
+  --apple-card-border: #e5e5ea;
+  --apple-card-shadow: 0 2px 8px rgba(0,0,0,.035), 0 8px 24px rgba(0,0,0,.035);
+  --apple-slot-bg: #fafafa;
+  --apple-slot-border: #e8e8ed;
+  --apple-empty-bg: #ededf0;
+  --apple-control-bg: #ffffff;
+  --apple-control-hover: #f5f5f7;
+  --apple-link: #191bdf;
+  --apple-dialog-shadow: 0 16px 64px rgba(0,0,0,.18);
+  font-optical-sizing: auto;
+}
+
+:root[data-design-version="vApple"]:not([data-theme="dark"]) {
+  --page-bg: #f5f5f7;
+  --server-surface: #ffffff;
+  --server-surface-hover: #fafafa;
+  --text-primary: #1d1d1f;
+  --text-secondary: #515154;
+  --text-tertiary: #6e6e73;
+  --metric-calm: #515154;
+  --link: var(--apple-link);
+  --focus: var(--apple-primary);
+  --accent-blue: var(--apple-primary);
+  --accent-indigo: var(--apple-primary);
+  --control-bg: var(--apple-control-bg);
+  --control-border: #d2d2d7;
+  --soft-blue: rgba(25,27,223,.06);
+  --glass-bg: var(--apple-card-bg);
+  --glass-border: var(--apple-card-border);
+  --glass-inset: transparent;
+  --gpu-block-bg: var(--apple-slot-bg);
+  --gpu-block-border: var(--apple-slot-border);
+  --meter-track: #e8e8ed;
+  --divider: #e8e8ed;
+  --table-header-bg: #f5f5f7;
+  --table-header-color: #515154;
+  --table-row-border: #ebebef;
+  --table-row-hover: #f5f5f7;
+  --pill-bg: #f0f0f3;
+  --pill-color: #515154;
+  --toggle-bg: #ffffff;
+  --toggle-border: #d2d2d7;
+  --dialog-bg: #ffffff;
+}
+
+/* The reference leaves dark colors unspecified: retain the existing palette.
+   Opaque surfaces use the same RGB bases as v261011's translucent panels. */
+:root[data-design-version="vApple"][data-theme="dark"] {
+  --apple-card-bg: #121420;
+  --apple-card-border: rgba(255,255,255,.16);
+  --apple-card-shadow: 0 2px 8px rgba(0,0,0,.2), 0 8px 24px rgba(0,0,0,.2);
+  --apple-slot-bg: rgba(255,255,255,.08);
+  --apple-slot-border: rgba(255,255,255,.08);
+  --apple-empty-bg: #121420;
+  --apple-control-bg: #282a3a;
+  --apple-control-hover: #303244;
+  --apple-link: #8ad7ff;
+  --apple-dialog-shadow: 0 16px 64px rgba(0,0,0,.6);
+  --server-surface: var(--apple-card-bg);
+  --server-surface-hover: #181a28;
+  --glass-bg: var(--apple-card-bg);
+  --control-bg: var(--apple-control-bg);
+  --toggle-bg: var(--apple-control-bg);
+  --dialog-bg: var(--apple-card-bg);
+}
+
+:root[data-design-version="vApple"] body {
+  font-family: var(--font);
+  letter-spacing: -.01em;
+}
+:root[data-design-version="vApple"] h1 {
+  font-size: 32px;
+  line-height: 1.125;
+  font-weight: 600;
+  letter-spacing: -.025em;
+}
+:root[data-design-version="vApple"] h2 {
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+}
+:root[data-design-version="vApple"] .panel,
+:root[data-design-version="vApple"] .node:not(.live-node) {
+  background: var(--apple-card-bg);
+  border-color: var(--apple-card-border);
+  border-radius: var(--apple-card-radius);
+  box-shadow: var(--apple-card-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: none;
+}
+:root[data-design-version="vApple"] .panel:not(.no-hover):hover {
+  transform: none;
+  box-shadow: var(--apple-card-shadow);
+}
+:root[data-design-version="vApple"] .header-action {
+  min-height: 36px;
+  padding: 7px 15px;
+  border-radius: 980px;
+  background: var(--apple-control-bg);
+  border-color: var(--control-border);
+  color: var(--apple-link);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+:root[data-design-version="vApple"] .header-action:hover:not(:disabled) {
+  transform: none;
+  background: var(--apple-control-hover);
+  border-color: var(--apple-link);
+  box-shadow: none;
+}
+:root[data-design-version="vApple"] .header-action:disabled {
+  transform: none;
+  box-shadow: none;
+}
+:root[data-design-version="vApple"] .node-summary {
+  border-radius: var(--apple-card-radius) var(--apple-card-radius) 0 0;
+}
+:root[data-design-version="vApple"] .node-model-badge {
+  background: transparent;
+  padding-inline: 0;
+  font-weight: 400;
+}
+:root[data-design-version="vApple"] .node-header { margin-bottom: 12px; }
+:root[data-design-version="vApple"] .resource-line .metric-label { letter-spacing: 0; }
+
+/* Retain the original slot geometry and text hierarchy, including empty rows. */
+:root[data-design-version="vApple"] .gpu-job-row.gpu-block {
+  border-radius: 9px;
+  border-color: var(--apple-slot-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vApple"] .gpu-job-row.gpu-block.occupied {
+  background: var(--apple-slot-bg);
+}
+:root[data-design-version="vApple"] .gpu-job-row.gpu-block.unallocated {
+  background: var(--apple-empty-bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-design-version="vApple"] .gpu-job-row.gpu-block.unallocated .gpu-meter,
+:root[data-design-version="vApple"] .gpu-job-row.gpu-block.unallocated .gpu-meter>span {
+  background: transparent;
+}
+:root[data-design-version="vApple"] .gpu-metric strong { color: var(--text-secondary); }
+
+:root[data-design-version="vApple"] .job-filter select,
+:root[data-design-version="vApple"] .search,
+:root[data-design-version="vApple"] .reset-job-filters {
+  height: 36px;
+  padding-block: 6px;
+  background: var(--apple-control-bg);
+  border-radius: var(--apple-control-radius);
+  box-shadow: none;
+}
+:root[data-design-version="vApple"] .job-filter select:hover,
+:root[data-design-version="vApple"] .reset-job-filters:hover:not(:disabled) {
+  background: var(--apple-control-hover);
+}
+:root[data-design-version="vApple"] .jobs-tabs button.active {
+  color: var(--apple-link);
+  border-bottom-color: var(--apple-link);
+}
+:root[data-design-version="vApple"] .jobs-table thead th {
+  letter-spacing: 0;
+  font-weight: 500;
+}
+:root[data-design-version="vApple"] .jobs-table .job-name { font-weight: 400; }
+:root[data-design-version="vApple"] .pagination button { box-shadow: none; }
+:root[data-design-version="vApple"] dialog {
+  border-color: var(--apple-card-border);
+  border-radius: var(--apple-card-radius);
+  background: var(--apple-card-bg);
+  box-shadow: var(--apple-dialog-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vApple"] dialog::backdrop {
+  background: rgba(0,0,0,.35);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vApple"] .dialog-gpu {
+  background: var(--apple-slot-bg);
+  border-color: var(--apple-slot-border);
+  box-shadow: none;
+}
+:root[data-design-version="vApple"] .dialog-note {
+  background: var(--apple-slot-bg);
+}
+
+/* Eight five-line GPU slots remain readable in a 1080px-high desktop viewport.
+   Keep the 14/12px text hierarchy; recover height from surrounding spacing. */
+@media(min-width:1024px) {
+  :root[data-design-version="vApple"] main { padding-top: 20px; }
+  :root[data-design-version="vApple"] .page-heading { margin-bottom: 12px; }
+  :root[data-design-version="vApple"] .node-summary { padding-top: 12px; }
+  :root[data-design-version="vApple"] .node-header { margin-bottom: 8px; }
+  :root[data-design-version="vApple"] .resource-metrics { gap: 4px; margin-top: 8px; }
+  :root[data-design-version="vApple"] .node-storage { gap: 4px; margin-top: 6px; padding-top: 6px; }
+  :root[data-design-version="vApple"] .gpu-job-row.gpu-block { padding-block: 4px; margin-top: 4px; }
+  :root[data-design-version="vApple"] .gpu-job-row.gpu-block:first-of-type { margin-top: 0; }
+  :root[data-design-version="vApple"] .gpu-metrics { line-height: 1.25; row-gap: 1px; margin-top: 2px; }
+}
+
+@media(max-width:740px) {
+  :root[data-design-version="vApple"] h1 { font-size: 28px; }
+  :root[data-design-version="vApple"] .header-action { padding-inline: 10px; font-size: 12px; }
+}
+@media(max-width:480px) {
+  :root[data-design-version="vApple"] h1 { font-size: 25px; }
+  :root[data-design-version="vApple"] .header-action { padding-inline: 8px; font-size: 11px; }
+}
+@media(max-width:360px) {
+  :root[data-design-version="vApple"] .header-action { padding-inline: 6px; font-size: 10px; }
+}
