@@ -1,0 +1,256 @@
+/*
+ * vToss — adopted from the user-supplied DESIGN.md.
+ * This layer owns visual styling; existing layout, metrics and motion retain
+ * their functional owners. Elevation, density and solid dark surfaces are local
+ * dashboard decisions documented in docs/design/vToss.md, not official Toss tokens.
+ * Small informative text uses Body rather than the lower-contrast Muted role.
+ */
+:root[data-design-version="vToss"] {
+  /* Inherit v261011's Noto Sans / Noto Sans KR stack from styles.css. */
+  --toss-primary: #3182f6;
+  --toss-muted: #8b95a1;
+  --toss-weak-bg: #e8f3ff;
+  --toss-weak-hover: #deedff;
+  --toss-weak-fg: #1b64da;
+  --toss-card-radius: 8px;
+  --toss-control-radius: 8px;
+  --toss-card-bg: #ffffff;
+  --toss-card-border: #e5e8eb;
+  --toss-card-shadow: 0 2px 8px rgba(25,31,40,.035), 0 8px 24px rgba(25,31,40,.035);
+  --toss-slot-bg: #f2f4f6;
+  --toss-slot-border: transparent;
+  --toss-empty-bg: #e5e8eb;
+  --toss-control-bg: #ffffff;
+  --toss-control-hover: #f2f4f6;
+  --toss-link: #1b64da;
+  --toss-dialog-shadow: 0 16px 64px rgba(0,0,0,.18);
+  font-optical-sizing: auto;
+}
+
+:root[data-design-version="vToss"]:not([data-theme="dark"]) {
+  --page-bg: #ffffff;
+  --server-surface: #ffffff;
+  --server-surface-hover: #f2f4f6;
+  --text-primary: #191f28;
+  --text-secondary: #4e5968;
+  --text-tertiary: #4e5968;
+  --metric-calm: #4e5968;
+  --link: var(--toss-link);
+  --focus: var(--toss-primary);
+  --accent-blue: var(--toss-primary);
+  --accent-indigo: var(--toss-primary);
+  --control-bg: var(--toss-control-bg);
+  --control-border: #e5e8eb;
+  --soft-blue: #e8f3ff;
+  --glass-bg: var(--toss-card-bg);
+  --glass-border: var(--toss-card-border);
+  --glass-inset: transparent;
+  --gpu-block-bg: var(--toss-slot-bg);
+  --gpu-block-border: var(--toss-slot-border);
+  --meter-track: #e5e8eb;
+  --divider: #e5e8eb;
+  --table-header-bg: #f2f4f6;
+  --table-header-color: #4e5968;
+  --table-row-border: #e5e8eb;
+  --table-row-hover: #f2f4f6;
+  --pill-bg: #f2f4f6;
+  --pill-color: #4e5968;
+  --toggle-bg: #ffffff;
+  --toggle-border: #e5e8eb;
+  --dialog-bg: #ffffff;
+}
+
+/* The reference leaves dark colors unspecified: retain the existing palette.
+   Opaque surfaces use the same RGB bases as v261011's translucent panels. */
+:root[data-design-version="vToss"][data-theme="dark"] {
+  --toss-card-bg: #121420;
+  --toss-card-border: rgba(255,255,255,.16);
+  --toss-card-shadow: 0 2px 8px rgba(0,0,0,.2), 0 8px 24px rgba(0,0,0,.2);
+  --toss-slot-bg: rgba(255,255,255,.08);
+  --toss-slot-border: rgba(255,255,255,.08);
+  --toss-empty-bg: #121420;
+  --toss-control-bg: #282a3a;
+  --toss-control-hover: #303244;
+  --toss-link: #8ad7ff;
+  --toss-weak-bg: #282a3a;
+  --toss-weak-hover: #303244;
+  --toss-weak-fg: #8ad7ff;
+  --toss-dialog-shadow: 0 16px 64px rgba(0,0,0,.6);
+  --server-surface: var(--toss-card-bg);
+  --server-surface-hover: #181a28;
+  --glass-bg: var(--toss-card-bg);
+  --control-bg: var(--toss-control-bg);
+  --toggle-bg: var(--toss-control-bg);
+  --dialog-bg: var(--toss-card-bg);
+}
+
+:root[data-design-version="vToss"] body {
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+:root[data-design-version="vToss"] h1 {
+  font-size: 32px;
+  line-height: 1.125;
+  font-weight: 600;
+  letter-spacing: -.025em;
+}
+:root[data-design-version="vToss"] h2 {
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+}
+:root[data-design-version="vToss"] .panel,
+:root[data-design-version="vToss"] .node:not(.live-node) {
+  background: var(--toss-card-bg);
+  border-color: var(--toss-card-border);
+  border-radius: var(--toss-card-radius);
+  box-shadow: var(--toss-card-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: none;
+}
+:root[data-design-version="vToss"] .panel:not(.no-hover):hover {
+  transform: none;
+  box-shadow: var(--toss-card-shadow);
+}
+:root[data-design-version="vToss"] .header-action {
+  min-height: 36px;
+  padding: 7px 15px;
+  border-radius: var(--toss-control-radius);
+  background: var(--toss-weak-bg);
+  border-color: transparent;
+  color: var(--toss-weak-fg);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+:root[data-design-version="vToss"] .header-action:hover:not(:disabled) {
+  transform: none;
+  background: var(--toss-weak-hover);
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-design-version="vToss"] .header-action:disabled {
+  transform: none;
+  box-shadow: none;
+}
+:root[data-design-version="vToss"] .header-action:active:not(:disabled) {
+  background: var(--toss-weak-hover);
+}
+:root[data-design-version="vToss"] .node-summary {
+  border-radius: var(--toss-card-radius) var(--toss-card-radius) 0 0;
+}
+:root[data-design-version="vToss"] .node-model-badge {
+  background: transparent;
+  padding-inline: 0;
+  font-weight: 400;
+}
+:root[data-design-version="vToss"] .node-header { margin-bottom: 12px; }
+:root[data-design-version="vToss"] .resource-line .metric-label { letter-spacing: 0; }
+
+/* Retain the original slot geometry and text hierarchy, including empty rows. */
+:root[data-design-version="vToss"] .gpu-job-row.gpu-block {
+  border-radius: var(--toss-control-radius);
+  border-color: var(--toss-slot-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vToss"] .gpu-job-row.gpu-block.occupied {
+  background: var(--toss-slot-bg);
+}
+:root[data-design-version="vToss"] .gpu-job-row.gpu-block.unallocated {
+  background: var(--toss-empty-bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-design-version="vToss"] .gpu-job-row.gpu-block.unallocated .gpu-meter,
+:root[data-design-version="vToss"] .gpu-job-row.gpu-block.unallocated .gpu-meter>span {
+  background: transparent;
+}
+:root[data-design-version="vToss"] .gpu-metric strong { color: var(--text-secondary); }
+
+:root[data-design-version="vToss"] .job-filter select,
+:root[data-design-version="vToss"] .search,
+:root[data-design-version="vToss"] .reset-job-filters {
+  height: 36px;
+  padding-block: 6px;
+  background: var(--toss-control-bg);
+  border-radius: var(--toss-control-radius);
+  box-shadow: none;
+}
+:root[data-design-version="vToss"] .job-filter select:hover,
+:root[data-design-version="vToss"] .reset-job-filters:hover:not(:disabled) {
+  background: var(--toss-control-hover);
+}
+:root[data-design-version="vToss"] .jobs-tabs button.active {
+  color: var(--toss-link);
+  border-bottom-color: var(--toss-link);
+}
+:root[data-design-version="vToss"] .jobs-table thead th {
+  letter-spacing: 0;
+  font-weight: 500;
+}
+:root[data-design-version="vToss"] .jobs-table .job-name { font-weight: 400; }
+:root[data-design-version="vToss"] .pagination button { box-shadow: none; }
+:root[data-design-version="vToss"] dialog {
+  border-color: var(--toss-card-border);
+  border-radius: var(--toss-card-radius);
+  background: var(--toss-card-bg);
+  box-shadow: var(--toss-dialog-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vToss"] dialog::backdrop {
+  background: rgba(0,0,0,.35);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-design-version="vToss"] .dialog-gpu {
+  background: var(--toss-slot-bg);
+  border-color: var(--toss-slot-border);
+  box-shadow: none;
+}
+:root[data-design-version="vToss"] .dialog-note {
+  background: var(--toss-slot-bg);
+}
+
+/* Apply the selected 8px shape to secondary containers and controls too.
+   Meter end caps and SVG circles retain their purpose-specific geometry. */
+:root[data-design-version="vToss"] :is(.count-chip, .jobs-tabs button span,
+  .pagination button, .table-arrow, .waiting-nodes, .detail-grid, .dialog-gpu,
+  .dialog-note, .icon-button, .skip, .dialog-copy code, .gpu-job-link:focus-visible,
+  .search kbd),
+:root[data-design-version="vToss"] #dialog-content .node-storage {
+  border-radius: var(--toss-control-radius);
+}
+
+/* Eight five-line GPU slots remain readable in a 1080px-high desktop viewport.
+   Keep the 14/12px text hierarchy; recover height from surrounding spacing. */
+@media(min-width:1024px) {
+  :root[data-design-version="vToss"] main { padding-top: 20px; }
+  :root[data-design-version="vToss"] .page-heading { margin-bottom: 12px; }
+  :root[data-design-version="vToss"] .node-summary { padding-top: 12px; }
+  :root[data-design-version="vToss"] .node-header { margin-bottom: 8px; }
+  :root[data-design-version="vToss"] .resource-metrics { gap: 4px; margin-top: 8px; }
+  :root[data-design-version="vToss"] .node-storage { gap: 4px; margin-top: 6px; padding-top: 6px; }
+  :root[data-design-version="vToss"] .gpu-job-row.gpu-block { padding-block: 4px; margin-top: 4px; }
+  :root[data-design-version="vToss"] .gpu-job-row.gpu-block:first-of-type { margin-top: 0; }
+  :root[data-design-version="vToss"] .gpu-metrics { line-height: 1.25; row-gap: 1px; margin-top: 2px; }
+}
+
+@media(max-width:740px) {
+  :root[data-design-version="vToss"] h1 { font-size: 28px; }
+  :root[data-design-version="vToss"] .header-action { padding-inline: 10px; font-size: 12px; }
+}
+@media(max-width:480px) {
+  :root[data-design-version="vToss"] h1 { font-size: 25px; }
+  :root[data-design-version="vToss"] .header-action { padding-inline: 8px; font-size: 11px; }
+}
+@media(max-width:360px) {
+  :root[data-design-version="vToss"] .header-action { padding-inline: 6px; font-size: 10px; }
+}

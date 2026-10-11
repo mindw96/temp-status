@@ -17,7 +17,7 @@ the record and validation below describe that initial release unless noted.
 
 The user requested applying `/Users/mindw/Downloads/DESIGN.md` to the existing
 dashboard after preserving its previous design as `v261011`. The supplied file
-is preserved verbatim at the repository root as [DESIGN.md](../../DESIGN.md).
+is preserved verbatim as the [original Apple reference](references/vApple.md).
 Its SHA-256 is
 `e4aec0cc7286b3592566697408c1b19224e0fc449af796f0018e5518675d856b`.
 

@@ -1,0 +1,79 @@
+/*
+ * vToss · A100 surface adapters.
+ * Load after a100.css and design-vtoss.css. Geometry, data states, metric
+ * gradients, and the existing disclosure/dialog motion stay in their owners.
+ * Elevation and the dark palette are project adaptations, not Toss tokens.
+ */
+
+:root[data-design-version="vToss"] .a100-summary-card,
+:root[data-design-version="vToss"] .a100-job-card,
+:root[data-design-version="vToss"] .a100-finished {
+  background: var(--toss-card-bg);
+  border-color: var(--toss-card-border);
+  border-radius: var(--toss-card-radius);
+  box-shadow: var(--toss-card-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Match the original theme selectors explicitly so no glass surface leaks in. */
+:root[data-design-version="vToss"][data-theme="dark"] .a100-summary-card,
+:root[data-design-version="vToss"][data-theme="dark"] .a100-job-card,
+:root[data-design-version="vToss"][data-theme="dark"] .a100-finished {
+  background: var(--toss-card-bg);
+}
+
+:root[data-design-version="vToss"] .a100-gpu {
+  background: var(--toss-slot-bg);
+  border: 1px solid var(--toss-slot-border);
+  border-radius: var(--toss-control-radius);
+  /* Preserve the previous tile dimensions while introducing a fine outline. */
+  padding: 9px 10px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-design-version="vToss"][data-theme="dark"] .a100-gpu {
+  background: var(--toss-slot-bg);
+}
+
+:root[data-design-version="vToss"] .a100-filters select,
+:root[data-design-version="vToss"] .a100-filters input {
+  height: 36px;
+  border-radius: var(--toss-control-radius);
+  background: var(--toss-control-bg);
+  box-shadow: none;
+  font-family: var(--font);
+  padding-block: 6px;
+}
+
+:root[data-design-version="vToss"] .a100-filters select:hover,
+:root[data-design-version="vToss"] .a100-filters input:hover {
+  background: var(--toss-control-hover);
+}
+
+:root[data-design-version="vToss"] .a100-filters select option {
+  background: var(--toss-control-bg);
+}
+
+:root[data-design-version="vToss"] .a100-job-name:hover,
+:root[data-design-version="vToss"] .a100-footer a:hover {
+  color: var(--toss-link);
+}
+
+:root[data-design-version="vToss"] .a100-empty {
+  background: var(--toss-empty-bg);
+  border-color: var(--toss-card-border);
+  border-radius: var(--toss-card-radius);
+}
+
+:root[data-design-version="vToss"] .a100-dialog-pod {
+  background: var(--toss-slot-bg);
+  border-color: var(--toss-slot-border);
+  border-radius: var(--toss-control-radius);
+}
+
+:root[data-design-version="vToss"] .a100-finished .t-acc-head:focus-visible {
+  border-radius: var(--toss-control-radius);
+}
