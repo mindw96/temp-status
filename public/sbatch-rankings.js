@@ -11,12 +11,12 @@
   const summary = panel.querySelector('#sbatch-rankings-summary');
   const empty = panel.querySelector('#sbatch-rankings-empty');
   const updated = panel.querySelector('#sbatch-rankings-updated');
-  const coverage = panel.querySelector('#sbatch-rankings-coverage');
   const periods = ['today', 'week', 'month', 'all'];
   const refreshMs = 30000, freshnessMs = 180000;
-  const numberFormat = new Intl.NumberFormat('ko-KR');
-  const dateFormat = new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit'});
-  const timeFormat = new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'});
+  const numberFormat = new Intl.NumberFormat('en-US');
+  const dateFormat = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Seoul', year:'numeric', month:'short', day:'numeric'});
+  const timeFormat = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Seoul', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'});
+  const countLabel = (value, unit) => `${numberFormat.format(value)} ${unit}${value === 1 ? '' : 's'}`;
   let opened = false, selected = 'today', payload = null, savedRankings = null;
   let errorMessage = '', failureCount = 0, nextRequestAt = 0, clockOffset = 0;
   let activeRequest = null, refreshTimer = null;
@@ -63,7 +63,7 @@
   function recordElement(record, index) {
     const item = element('li', 'sbatch-rankings-record');
     const count = element('span', 'sbatch-rankings-count', numberFormat.format(record.count));
-    count.append(element('small', '', '회'));
+    count.append(element('small', '', record.count === 1 ? 'job' : 'jobs'));
     item.append(element('span', 'sbatch-rankings-position', String(index + 1)),
       element('span', 'sbatch-rankings-user', userLabel(record.user)), count);
     return item;
@@ -79,40 +79,37 @@
     const stale = payload?.stale || (rankings?.collected_at && Date.now() + clockOffset - Date.parse(rankings.collected_at) >= freshnessMs);
     let message = '', warning = false;
     if (errorMessage) {
-      message = errorMessage + (rankings ? ' 마지막으로 확인한 집계를 표시합니다.' : ' 아직 제출 횟수를 확인할 수 없습니다.');
+      message = errorMessage + (rankings ? ' Showing the last available counts.' : ' Submission counts are not available yet.');
       warning = true;
     } else if (unavailable) {
-      message = 'Slurm 제출 기록을 집계하지 못했습니다.' + (rankings ? ' 마지막으로 확인한 집계를 표시합니다.' : '');
+      message = 'Slurm submission counts are unavailable.' + (rankings ? ' Showing the last available counts.' : '');
       warning = true;
     } else if (waiting) {
-      message = rankings ? '수집기 연결을 기다리고 있습니다. 마지막 집계를 표시합니다.' : '수집기의 첫 집계를 기다리고 있습니다.';
+      message = rankings ? 'Waiting for the collector. Showing the last available counts.' : 'Waiting for the first collection.';
     } else if (stale) {
-      message = '집계가 지연되고 있습니다. 아래 갱신 시각의 횟수를 표시합니다.';
+      message = 'Updates are delayed. Counts reflect the update time below.';
       warning = true;
     } else if (!payload) {
-      message = 'Slurm 제출 기록을 확인하고 있습니다…';
+      message = 'Loading Slurm submission counts…';
     }
     status.textContent = message;
     status.hidden = !message;
     status.dataset.kind = warning ? 'warning' : 'info';
-    summary.textContent = period ? `총 ${numberFormat.format(period.total)}회 · ${numberFormat.format(period.users)}명`
-      + (selected !== 'all' && period.start ? ` · ${dateFormat.format(new Date(period.start))}부터` : '') : '';
+    summary.textContent = period ? `${countLabel(period.total, 'submission')} · ${countLabel(period.users, 'user')}`
+      + (selected !== 'all' && period.start ? ` · Since ${dateFormat.format(new Date(period.start))}` : '') : '';
     summary.hidden = !period;
     empty.hidden = records.length > 0;
     empty.replaceChildren();
     if (!records.length) {
       if (!rankings) {
-        empty.append(element('strong', '', unavailable || errorMessage ? '집계 정보를 확인할 수 없습니다' : '랭킹을 준비하고 있습니다'),
-          document.createTextNode('확인된 sbatch 제출 횟수가 여기에 표시됩니다.'));
+        empty.append(element('strong', '', unavailable || errorMessage ? 'Rankings are unavailable' : 'Preparing rankings'),
+          document.createTextNode('Verified sbatch submission counts will appear here.'));
       } else {
-        empty.append(element('strong', '', '이 기간에는 제출 기록이 없습니다'),
-          document.createTextNode('새로운 sbatch 제출이 확인되면 자동으로 갱신됩니다.'));
+        empty.append(element('strong', '', 'No submissions in this period'),
+          document.createTextNode('New sbatch submissions will appear automatically.'));
       }
     }
-    updated.textContent = rankings?.collected_at ? `${timeFormat.format(new Date(rankings.collected_at))} KST 갱신` : '집계 대기 중';
-    coverage.textContent = rankings?.history_start
-      ? `Slurm 보관 기록: ${dateFormat.format(new Date(rankings.history_start))}부터`
-      : 'Slurm에 남아 있는 제출 기록 기준';
+    updated.textContent = rankings?.collected_at ? `Updated ${timeFormat.format(new Date(rankings.collected_at))} KST` : 'Waiting for data';
   }
 
   function selectPeriod(key, focus = false) {
@@ -154,9 +151,9 @@
     panel.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('/api/sbatch-rankings', {cache:'no-store', signal:request.controller.signal});
-      if (!response.ok) throw new Error('랭킹을 새로 불러오지 못했습니다.');
+      if (!response.ok) throw new Error('Unable to load rankings.');
       const data = await response.json();
-      if (!validPayload(data)) throw new Error('랭킹 응답 형식을 확인할 수 없습니다.');
+      if (!validPayload(data)) throw new Error('Invalid ranking response.');
       if (activeRequest !== request) return;
       payload = data;
       clockOffset = data.serverTime - Date.now();
@@ -174,8 +171,8 @@
     } catch (error) {
       if (activeRequest !== request) return;
       failureCount += 1;
-      errorMessage = error?.name === 'AbortError' ? '랭킹 요청 시간이 초과되었습니다.'
-        : /^랭킹 /.test(error?.message || '') || /^랭킹을 /.test(error?.message || '') ? error.message : '랭킹을 새로 불러오지 못했습니다.';
+      errorMessage = error?.name === 'AbortError' ? 'The ranking request timed out.'
+        : ['Unable to load rankings.', 'Invalid ranking response.'].includes(error?.message) ? error.message : 'Unable to load rankings.';
       nextRequestAt = Date.now() + Math.min(300000, 60000 * 2 ** Math.min(failureCount - 1, 3));
       render();
     } finally {

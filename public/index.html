@@ -48,25 +48,22 @@
       <h2 id="sbatch-rankings-title">Sbatch Top 5</h2>
       <button type="button" id="sbatch-rankings-close" class="sbatch-rankings-close" aria-label="Close rankings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
     </div>
-    <div class="sbatch-rankings-tabs" role="tablist" aria-label="집계 기간" lang="ko">
-      <button type="button" id="sbatch-rankings-tab-today" role="tab" aria-selected="true" aria-controls="sbatch-rankings-results" data-period="today">오늘</button>
-      <button type="button" id="sbatch-rankings-tab-week" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="week" tabindex="-1">이번 주</button>
-      <button type="button" id="sbatch-rankings-tab-month" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="month" tabindex="-1">이번 달</button>
-      <button type="button" id="sbatch-rankings-tab-all" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="all" tabindex="-1">전체</button>
+    <div class="sbatch-rankings-tabs" role="tablist" aria-label="Ranking period">
+      <button type="button" id="sbatch-rankings-tab-today" role="tab" aria-selected="true" aria-controls="sbatch-rankings-results" data-period="today">Today</button>
+      <button type="button" id="sbatch-rankings-tab-week" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="week" tabindex="-1">This week</button>
+      <button type="button" id="sbatch-rankings-tab-month" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="month" tabindex="-1">This month</button>
+      <button type="button" id="sbatch-rankings-tab-all" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="all" tabindex="-1">All time</button>
     </div>
-    <div class="sbatch-rankings-scroll" lang="ko">
+    <div class="sbatch-rankings-scroll">
       <p id="sbatch-rankings-status" class="sbatch-rankings-status" role="status"></p>
       <div id="sbatch-rankings-results" role="tabpanel" aria-labelledby="sbatch-rankings-tab-today" tabindex="0">
         <p id="sbatch-rankings-summary" class="sbatch-rankings-summary"></p>
-        <ol id="sbatch-rankings-list" class="sbatch-rankings-list" aria-label="Sbatch 제출 횟수 상위 5명"></ol>
+        <ol id="sbatch-rankings-list" class="sbatch-rankings-list" aria-label="Top 5 users by sbatch submissions"></ol>
         <p id="sbatch-rankings-empty" class="sbatch-rankings-empty"></p>
       </div>
     </div>
-    <footer class="sbatch-rankings-footer" lang="ko">
-      <span id="sbatch-rankings-updated" class="sbatch-rankings-updated">집계 대기 중</span>
-      <span>한국 시간 기준 · 주 시작: 월요일 · 30초마다 갱신</span>
-      <span id="sbatch-rankings-coverage">Slurm에 남아 있는 제출 기록 기준</span>
-      <span>배열 작업은 1회 · 재시작은 중복 집계하지 않음</span>
+    <footer class="sbatch-rankings-footer">
+      <span id="sbatch-rankings-updated" class="sbatch-rankings-updated">Waiting for data</span>
     </footer>
   </section>
   <script src="motion.js"></script>
