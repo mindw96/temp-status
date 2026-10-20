@@ -30,6 +30,11 @@ class BackfillError(Exception):
     """A safe diagnostic that contains no command output or credentials."""
 
 
+QUERY_BATCH_SIZE = 512
+MAX_QUERY_BYTES = 32 * 1024 * 1024
+MAX_QUERY_ROWS = 100000
+
+
 def _private_bytes(path, maximum):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
@@ -49,15 +54,28 @@ def archive_path(config_path):
 
 
 def candidates(max_job_id):
+    """Construct patterned numbers directly instead of scanning every Job ID."""
     ids = set()
-    for length in range(4, 11):
+    for length in range(4, min(10, len(str(max_job_id))) + 1):
         for digit in "123456789":
             ids.add(digit * length)
+            ids.add(digit + "0" * (length - 1))
         for start in range(1, 10):
             for delta in (-1, 1):
                 digits = [start + delta * index for index in range(length)]
                 if all(0 <= digit <= 9 for digit in digits):
                     ids.add("".join(map(str, digits)))
+        half = (length + 1) // 2
+        prefix_limit = min(10 ** half, max_job_id // (10 ** (length - half)) + 1)
+        for prefix in range(10 ** (half - 1), prefix_limit):
+            left = str(prefix)
+            ids.add(left + (left[:-1] if length % 2 else left)[::-1])
+        for width in range(2, length // 2 + 1):
+            if length % width:
+                continue
+            prefix_limit = min(10 ** width, max_job_id // (10 ** (length - width)) + 1)
+            for prefix in range(10 ** (width - 1), prefix_limit):
+                ids.add(str(prefix) * (length // width))
     return sorted((value for value in ids if int(value) <= max_job_id), key=int)
 
 
@@ -70,7 +88,7 @@ def _command(arguments, runner, timeout):
         raise BackfillError("A read-only Slurm query failed or timed out.") from None
     if result.returncode != 0:
         raise BackfillError("A read-only Slurm query returned an error.")
-    if len(result.stdout) > 32 * 1024 * 1024:
+    if len(result.stdout.encode("utf-8")) > MAX_QUERY_BYTES:
         raise BackfillError("Slurm query output exceeded the one-time import limit.")
     return result.stdout
 
@@ -93,20 +111,27 @@ def query_history(runner=subprocess.run):
     wanted = candidates(int(maximum))
     if not wanted:
         raise BackfillError("No matching IDs are within Slurm's configured ID range.")
-    output = _command([
-        "sacct", "-a", "-X", "-D", "-M", cluster,
-        "-S", "2000-01-01", "-E", "now", "-j", ",".join(wanted), "--json",
-    ], runner, 60)
-    try:
-        response = json.loads(output)
-    except (ValueError, RecursionError):
-        raise BackfillError("Slurm accounting did not return valid JSON.") from None
-    if (not isinstance(response, dict) or response.get("errors") != []
-            or not isinstance(response.get("jobs"), list)):
-        raise BackfillError("Slurm accounting returned errors or an unsupported response.")
-    if len(response["jobs"]) > 100000:
-        raise BackfillError("Slurm accounting returned too many rows for a one-time import.")
-    return cluster, wanted, response["jobs"]
+    rows, output_bytes = [], 0
+    for offset in range(0, len(wanted), QUERY_BATCH_SIZE):
+        output = _command([
+            "sacct", "-a", "-X", "-D", "-M", cluster,
+            "-S", "2000-01-01", "-E", "now",
+            "-j", ",".join(wanted[offset:offset + QUERY_BATCH_SIZE]), "--json",
+        ], runner, 60)
+        output_bytes += len(output.encode("utf-8"))
+        if output_bytes > MAX_QUERY_BYTES:
+            raise BackfillError("Slurm query output exceeded the one-time import limit.")
+        try:
+            response = json.loads(output)
+        except (ValueError, RecursionError):
+            raise BackfillError("Slurm accounting did not return valid JSON.") from None
+        if (not isinstance(response, dict) or response.get("errors") != []
+                or not isinstance(response.get("jobs"), list)):
+            raise BackfillError("Slurm accounting returned errors or an unsupported response.")
+        if len(rows) + len(response["jobs"]) > MAX_QUERY_ROWS:
+            raise BackfillError("Slurm accounting returned too many rows for a one-time import.")
+        rows.extend(response["jobs"])
+    return cluster, wanted, rows
 
 
 def _unset_number(value):

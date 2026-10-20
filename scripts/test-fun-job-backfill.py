@@ -57,13 +57,25 @@ class BackfillTests(unittest.TestCase):
         self.commands = []
 
     def runner(self, jobs=None, response=None):
-        response = response if response is not None else {"errors": [], "jobs": jobs or []}
+        first_batch = True
 
         def run(arguments, **options):
+            nonlocal first_batch
             self.commands.append((arguments, options))
             if arguments[0] == "scontrol":
                 return SimpleNamespace(returncode=0, stdout="ClusterName = lab-cluster\nMaxJobId = 67043328\n")
-            return SimpleNamespace(returncode=0, stdout=json.dumps(response))
+            if response is not None:
+                value = response
+            else:
+                requested = set(arguments[arguments.index("-j") + 1].split(","))
+                value = {"errors": [], "jobs": [
+                    item for item in jobs or [] if (
+                        (type(item.get("job_id")) is int and str(item["job_id"]) in requested)
+                        or (first_batch and type(item.get("job_id")) is not int)
+                    )
+                ]}
+            first_batch = False
+            return SimpleNamespace(returncode=0, stdout=json.dumps(value))
         return run
 
     def invoke(self, jobs=None, apply=False, runner=None):
@@ -71,16 +83,71 @@ class BackfillTests(unittest.TestCase):
                                runner=runner or self.runner(jobs), now=NOW)
 
     def test_candidates_and_bounded_readonly_query(self):
-        self.assertEqual(len(module.candidates(9999999999)), 112)
-        self.assertEqual(len(module.candidates(67043328)), 84)
+        expected = module.candidates(67043328)
+        self.assertGreater(len(expected), 10000)
+        for candidate in expected:
+            self.assertIsNotNone(bridge.fun_job_pattern(candidate))
+            self.assertLessEqual(int(candidate), 67043328)
+        for candidate in ["1111", "1234", "4321", "1000", "1221", "1212",
+                          "12345", "54321", "10000", "20000", "1234554321"]:
+            self.assertIn(candidate, module.candidates(9999999999))
         self.invoke([row("22222")])
-        arguments, options = self.commands[-1]
-        self.assertEqual(arguments[:7], ["sacct", "-a", "-X", "-D", "-M", "lab-cluster", "-S"])
-        self.assertIn("--json", arguments)
-        self.assertIn("2000-01-01", arguments)
-        self.assertEqual(len(arguments[arguments.index("-j") + 1].split(",")), 84)
-        self.assertEqual(options["timeout"], 60)
-        self.assertEqual(options["env"]["TZ"], "UTC")
+        requested = []
+        for arguments, options in self.commands[1:]:
+            self.assertEqual(arguments[:7], ["sacct", "-a", "-X", "-D", "-M", "lab-cluster", "-S"])
+            self.assertIn("--json", arguments)
+            self.assertIn("2000-01-01", arguments)
+            batch = arguments[arguments.index("-j") + 1].split(",")
+            self.assertLessEqual(len(batch), module.QUERY_BATCH_SIZE)
+            requested.extend(batch)
+            self.assertEqual(options["timeout"], 60)
+            self.assertEqual(options["env"]["TZ"], "UTC")
+        self.assertEqual(requested, expected)
+        self.assertGreater(len(self.commands), 2)
+
+    def test_all_four_digit_matches_are_candidates_with_exact_maximum(self):
+        all_four_digits = {
+            str(value) for value in range(1000, 10000) if bridge.fun_job_pattern(str(value))}
+        self.assertEqual(set(module.candidates(9999)), all_four_digits)
+        for maximum in [999, 1000, 1212, 9999, 10000, 12321, 12345, 54321, 100001]:
+            self.assertEqual(set(module.candidates(maximum)), {
+                str(value) for value in range(1000, maximum + 1)
+                if bridge.fun_job_pattern(str(value))})
+
+    def test_later_batch_failure_or_timeout_does_not_write_partial_import(self):
+        for failure in ["error", "timeout"]:
+            basic = self.runner([row("1000")])
+            batches = 0
+
+            def run(arguments, **options):
+                nonlocal batches
+                if arguments[0] == "sacct":
+                    batches += 1
+                    if batches == 2:
+                        if failure == "timeout":
+                            raise subprocess.TimeoutExpired("private query", 60)
+                        return SimpleNamespace(returncode=0, stdout=json.dumps({
+                            "errors": [{"description": "private details"}], "jobs": []}))
+                return basic(arguments, **options)
+
+            with self.subTest(failure=failure), self.assertRaises(module.BackfillError):
+                self.invoke(apply=True, runner=run)
+            self.assertEqual(batches, 2)
+            self.assertEqual(self.archive.read_bytes(), self.before)
+            self.assertFalse(Path(str(self.archive) + ".lock").exists())
+
+    def test_cumulative_query_limits_apply_across_batches(self):
+        with patch.object(module, "QUERY_BATCH_SIZE", 1), \
+                patch.object(module, "MAX_QUERY_ROWS", 1):
+            with self.assertRaises(module.BackfillError):
+                self.invoke(apply=True, runner=self.runner([row("1000"), row("1001")]))
+        self.assertEqual(self.archive.read_bytes(), self.before)
+        self.assertFalse(Path(str(self.archive) + ".lock").exists())
+        with patch.object(module, "MAX_QUERY_BYTES", 128):
+            with self.assertRaises(module.BackfillError):
+                self.invoke(apply=True)
+        self.assertEqual(self.archive.read_bytes(), self.before)
+        self.assertFalse(Path(str(self.archive) + ".lock").exists())
 
     def test_preview_does_not_create_lock_or_backup_or_write(self):
         result = self.invoke([row("22222")])

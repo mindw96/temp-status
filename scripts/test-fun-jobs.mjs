@@ -7,8 +7,15 @@ import {localDB} from './local-db.mjs';
 
 for (const id of ['1111', '2222', '3333', '55555', '9999999999']) assert.equal(funJobPattern(id), 'repeat');
 for (const id of ['1234', '12345', '6789', '123456789']) assert.equal(funJobPattern(id), 'ascending');
-for (const id of ['54321', '43210', '9876543210']) assert.equal(funJobPattern(id), 'descending');
-for (const id of ['111', '10000', '12321', '7890', '01234', '0000', '12345_7',
+for (const id of ['4321', '54321', '43210', '9876543210']) assert.equal(funJobPattern(id), 'descending');
+for (const id of ['1000', '2000', '9000', '10000', '20000', '1000000000', '9000000000']) assert.equal(funJobPattern(id), 'round');
+for (const id of ['1221', '12321', '10001', '121121', '1234554321']) assert.equal(funJobPattern(id), 'palindrome');
+for (const id of ['1212', '123123', '202020', '121212', '1234512345']) assert.equal(funJobPattern(id), 'repeating');
+// Category priority keeps existing records valid: repeated digits win over
+// palindromes/blocks, and symmetric repeating blocks are called palindromes.
+assert.equal(funJobPattern('1111'), 'repeat');
+assert.equal(funJobPattern('121121'), 'palindrome');
+for (const id of ['111', '100', '12000', '20001', '12312', '112233', '7890', '01234', '0000', '12345_7',
   '12345_[1-20]', '12345+0', ' 1111', '1111\n', '11111111111', 1111, null, {}, '１２３４']) {
   assert.equal(funJobPattern(id), null, String(id));
 }
@@ -25,9 +32,14 @@ assert.equal(Object.hasOwn(clean.records[0], 'submitted_at'), false);
 const historicalRecord = {job_id: '2222', name: 'old matching job', user: 'mindw',
   pattern: 'repeat', first_seen_at: '2026-10-20T00:00:02.000Z',
   source: 'sacct', submitted_at: '2025-09-17T10:14:25.123456Z'};
-const historicalArchive = {...archive, records: [...archive.records, historicalRecord]};
+const expandedRecords = ['1000', '10000', '20000', '1221', '12321', '121121', '1212', '123123', '202020'].map(job_id => ({
+  job_id, name: `pattern test ${job_id}`, user: 'mindw', pattern: funJobPattern(job_id),
+  first_seen_at: started, source: 'sacct', submitted_at: '2025-09-01T00:00:00.000Z'
+}));
+const historicalArchive = {...archive, records: [...archive.records, historicalRecord, ...expandedRecords]};
 const historicalClean = normalizeFunJobs(historicalArchive);
 assert.deepEqual(historicalClean.records[0], {...historicalRecord, submitted_at: '2025-09-17T10:14:25.123Z'});
+for (const record of expandedRecords) assert.deepEqual(historicalClean.records.find(item => item.job_id === record.job_id), record);
 assert.equal(historicalClean.started_at, started);
 assert.equal(normalizeFunJobs({...archive, records: [{
   ...historicalRecord, submitted_at: historicalRecord.first_seen_at
@@ -121,4 +133,4 @@ try {
   assert.equal((await post({...report, squeue: []})).status, 200);
   assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, historicalClean);
 } finally { await close(server); }
-console.log('PASS: patterns, live/history archive validation, preserved import provenance and submission times, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');
+console.log('PASS: six pattern categories and overlap priority, live/history archive validation, preserved import provenance and submission times, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');

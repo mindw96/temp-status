@@ -21,6 +21,9 @@ for pattern, examples in {
     "repeat": ["1111", "2222", "3333", "55555", "9999999999"],
     "ascending": ["1234", "12345", "23456789"],
     "descending": ["4321", "98765", "9876543210"],
+    "round": ["1000", "10000", "20000", "9000000000"],
+    "palindrome": ["1221", "12321", "1001", "1234554321", "12211221"],
+    "repeating": ["1212", "1010", "123123", "1234512345"],
 }.items():
     for job_id in examples:
         assert bridge.fun_job_pattern(job_id) == pattern, job_id
