@@ -4,6 +4,8 @@ Keep the JSON credential file readable only by its owner (chmod 600).
 This wrapper is opt-in; it does not install services or edit existing agents.
 """
 import argparse
+from datetime import datetime, timezone
+import fcntl
 import importlib.util
 import json
 import math
@@ -14,7 +16,163 @@ import shlex
 import shutil
 import stat
 import sys
+import tempfile
 from urllib.parse import urlparse
+
+
+MAX_FUN_JOBS = 1000
+MAX_FUN_JOBS_BYTES = 2 * 1024 * 1024
+
+
+def fun_job_pattern(job_id):
+    """Match the displayed scalar ID, never array parents, aliases or substrings."""
+    if not isinstance(job_id, str) or not re.fullmatch(r"[1-9][0-9]{3,9}", job_id):
+        return None
+    if len(set(job_id)) == 1:
+        return "repeat"
+    steps = [int(right) - int(left) for left, right in zip(job_id, job_id[1:])]
+    if all(step == 1 for step in steps):
+        return "ascending"
+    if all(step == -1 for step in steps):
+        return "descending"
+    return None
+
+
+def _fun_jobs_timestamp(value):
+    if not isinstance(value, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value):
+        raise ValueError("Invalid archive timestamp")
+    return datetime.fromisoformat(value[:-1] + "+00:00")
+
+
+def _read_fun_jobs(path):
+    """Reject damaged or unsafe archives without ever replacing their contents."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "r", encoding="utf-8") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_size > MAX_FUN_JOBS_BYTES):
+            raise ValueError("Invalid archive file")
+        archive = json.load(stream)
+    if (not isinstance(archive, dict)
+            or set(archive) != {"version", "started_at", "records"}
+            or type(archive["version"]) is not int or archive["version"] != 1
+            or not isinstance(archive["records"], list)
+            or len(archive["records"]) > MAX_FUN_JOBS):
+        raise ValueError("Invalid archive format")
+    started_at = _fun_jobs_timestamp(archive["started_at"])
+    seen = set()
+    for record in archive["records"]:
+        if (not isinstance(record, dict)
+                or set(record) != {"job_id", "name", "user", "pattern", "first_seen_at"}
+                or fun_job_pattern(record["job_id"]) is None
+                or record["pattern"] != fun_job_pattern(record["job_id"])
+                or record["job_id"] in seen
+                or not isinstance(record["name"], str) or len(record["name"]) > 500
+                or not isinstance(record["user"], str) or len(record["user"]) > 80
+                or _fun_jobs_timestamp(record["first_seen_at"]) < started_at):
+            raise ValueError("Invalid archive record")
+        seen.add(record["job_id"])
+    return archive
+
+
+def _write_fun_jobs(path, archive):
+    """Replace only after a complete, private file has reached the filesystem."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         prefix="." + path.name + ".",
+                                         dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            os.fchmod(stream.fileno(), 0o600)
+            json.dump(archive, stream, ensure_ascii=False, separators=(",", ":"))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        temporary = None
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def collect_fun_jobs(path_value, jobs):
+    """Keep the shared archive at the collector, outside ephemeral web storage."""
+    previous = {"version": 1, "status": "unavailable", "started_at": None, "records": []}
+    try:
+        if not isinstance(path_value, str) or not path_value or not isinstance(jobs, list):
+            return previous
+        path = Path(path_value)
+        if not path.is_absolute():
+            return previous
+        lock_fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(lock_fd, "a") as lock:
+            info = os.fstat(lock.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+                return previous
+            os.fchmod(lock.fileno(), 0o600)
+            # A separate inode stays locked across the archive's atomic rename.
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            archive = _read_fun_jobs(path)
+            now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            changed = archive is None
+            if archive is None:
+                archive = {"version": 1, "started_at": now, "records": []}
+            else:
+                previous = {**archive, "status": "unavailable", "records": list(archive["records"])}
+                # A corrected system clock must not create an internally invalid archive.
+                if _fun_jobs_timestamp(now) < _fun_jobs_timestamp(archive["started_at"]):
+                    return previous
+            seen = {record["job_id"] for record in archive["records"]}
+            for job in jobs:
+                if not isinstance(job, dict):
+                    continue
+                value = job.get("job_id")
+                job_id = str(value) if type(value) is int else value
+                pattern = fun_job_pattern(job_id)
+                if not pattern or job_id in seen:
+                    continue
+                if len(archive["records"]) >= MAX_FUN_JOBS:
+                    break
+                archive["records"].append({
+                    "job_id": job_id,
+                    "name": job["name"][:500] if isinstance(job.get("name"), str) else "",
+                    "user": job["user"][:80] if isinstance(job.get("user"), str) else "",
+                    "pattern": pattern,
+                    "first_seen_at": now,
+                })
+                seen.add(job_id)
+                changed = True
+            if changed:
+                _write_fun_jobs(path, archive)
+            return {**archive, "status": "full" if len(archive["records"]) >= MAX_FUN_JOBS else "ok"}
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError):
+        # Keep normal reporting alive; never log job metadata, paths or secrets.
+        return previous
+
+
+def install_fun_jobs(module, kind, path_value=None):
+    """Opt in only the configured Slurm collector; no additional scheduler query."""
+    if kind != "slurm" or path_value is None:
+        return
+    original_build_payload = module.build_payload
+
+    def build_payload():
+        payload = original_build_payload()
+        if isinstance(payload, dict):
+            payload["fun_jobs"] = collect_fun_jobs(path_value, payload.get("squeue"))
+        return payload
+
+    module.build_payload = build_payload
 
 
 def slurm_number(value):
@@ -546,6 +704,7 @@ def main():
     install_storage_reporting(module, args.kind)
     install_slurm_gpu_mapping(module, args.kind)
     install_slurm_job_requests(module, args.kind)
+    install_fun_jobs(module, args.kind, config.get("fun_jobs_path"))
     if auth_mode == "sites":
         module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
     if args.once:

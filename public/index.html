@@ -11,6 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23007AFF'/%3E%3Cg fill='%23ffffff'%3E%3Crect x='7' y='7' width='7' height='7' rx='1'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="motion.css">
+  <link rel="stylesheet" href="fun-jobs.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to main content</a>
@@ -38,9 +39,32 @@
       </section>
     </main>
   <dialog class="t-modal" id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><span class="eyebrow" id="dialog-eyebrow">DETAILS</span><button class="icon-button" id="close-dialog" data-dialog-close aria-label="Close details"><span data-icon="close"></span></button></div><div id="dialog-content"></div></dialog>
+  <button type="button" id="fun-jobs-launcher" class="fun-jobs-launcher" aria-expanded="false" aria-controls="fun-jobs-panel" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 3 2.1 6.9L19 12l-6.9 2.1L10 21l-2.1-6.9L1 12l6.9-2.1L10 3Z"/><path d="m19 2 .9 3.1L23 6l-3.1.9L19 10l-.9-3.1L15 6l3.1-.9L19 2Z"/></svg>
+    <span>Fun IDs</span>
+  </button>
+  <section id="fun-jobs-panel" class="fun-jobs-panel" role="dialog" aria-modal="false" aria-labelledby="fun-jobs-title" aria-describedby="fun-jobs-description" hidden>
+    <div class="fun-jobs-heading">
+      <h2 id="fun-jobs-title">Fun Job IDs</h2>
+      <button type="button" id="fun-jobs-close" class="fun-jobs-close" aria-label="Close Fun Job IDs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+    </div>
+    <p id="fun-jobs-description" class="fun-jobs-intro">Repeated or sequential numbers · 4+ digits<span>For example: 1111 · 12345 · 54321</span></p>
+    <label class="fun-jobs-search" for="fun-jobs-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+      <input id="fun-jobs-search" type="search" placeholder="Search IDs, jobs, or users" aria-label="Search saved fun job IDs" autocomplete="off">
+    </label>
+    <p id="fun-jobs-status" class="fun-jobs-status" role="status"></p>
+    <div class="fun-jobs-scroll">
+      <ul id="fun-jobs-list" class="fun-jobs-list" aria-label="Saved fun job IDs"></ul>
+      <p id="fun-jobs-empty" class="fun-jobs-empty"></p>
+      <button type="button" id="fun-jobs-more" class="fun-jobs-more" hidden>Load more</button>
+    </div>
+    <footer class="fun-jobs-footer"><span id="fun-jobs-count" class="fun-jobs-count">Shared with the lab</span><span id="fun-jobs-receipt" hidden></span><span id="fun-jobs-since" hidden></span></footer>
+  </section>
   <script src="motion.js"></script>
   <script src="app.js"></script>
   <script src="gpu-jobs.js"></script>
   <script src="live.js"></script>
+  <script src="fun-jobs.js"></script>
 </body>
 </html>
