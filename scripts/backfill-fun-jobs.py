@@ -65,17 +65,6 @@ def candidates(max_job_id):
                 digits = [start + delta * index for index in range(length)]
                 if all(0 <= digit <= 9 for digit in digits):
                     ids.add("".join(map(str, digits)))
-        half = (length + 1) // 2
-        prefix_limit = min(10 ** half, max_job_id // (10 ** (length - half)) + 1)
-        for prefix in range(10 ** (half - 1), prefix_limit):
-            left = str(prefix)
-            ids.add(left + (left[:-1] if length % 2 else left)[::-1])
-        for width in range(2, length // 2 + 1):
-            if length % width:
-                continue
-            prefix_limit = min(10 ** width, max_job_id // (10 ** (length - width)) + 1)
-            for prefix in range(10 ** (width - 1), prefix_limit):
-                ids.add(str(prefix) * (length // width))
     return sorted((value for value in ids if int(value) <= max_job_id), key=int)
 
 

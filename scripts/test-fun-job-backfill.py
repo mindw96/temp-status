@@ -84,21 +84,24 @@ class BackfillTests(unittest.TestCase):
 
     def test_candidates_and_bounded_readonly_query(self):
         expected = module.candidates(67043328)
-        self.assertGreater(len(expected), 10000)
+        self.assertEqual(len(expected), 126)
         for candidate in expected:
             self.assertIsNotNone(bridge.fun_job_pattern(candidate))
             self.assertLessEqual(int(candidate), 67043328)
-        for candidate in ["1111", "1234", "4321", "1000", "1221", "1212",
-                          "12345", "54321", "10000", "20000", "1234554321"]:
+        for candidate in ["1111", "1234", "4321", "1000",
+                          "12345", "54321", "10000", "20000"]:
             self.assertIn(candidate, module.candidates(9999999999))
-        self.invoke([row("22222")])
+        for rejected in ["1221", "1212", "1001", "12321", "123123"]:
+            self.assertNotIn(rejected, expected)
+        with patch.object(module, "QUERY_BATCH_SIZE", 16):
+            self.invoke([row("22222")])
         requested = []
         for arguments, options in self.commands[1:]:
             self.assertEqual(arguments[:7], ["sacct", "-a", "-X", "-D", "-M", "lab-cluster", "-S"])
             self.assertIn("--json", arguments)
             self.assertIn("2000-01-01", arguments)
             batch = arguments[arguments.index("-j") + 1].split(",")
-            self.assertLessEqual(len(batch), module.QUERY_BATCH_SIZE)
+            self.assertLessEqual(len(batch), 16)
             requested.extend(batch)
             self.assertEqual(options["timeout"], 60)
             self.assertEqual(options["env"]["TZ"], "UTC")
@@ -130,7 +133,8 @@ class BackfillTests(unittest.TestCase):
                             "errors": [{"description": "private details"}], "jobs": []}))
                 return basic(arguments, **options)
 
-            with self.subTest(failure=failure), self.assertRaises(module.BackfillError):
+            with self.subTest(failure=failure), patch.object(module, "QUERY_BATCH_SIZE", 16), \
+                    self.assertRaises(module.BackfillError):
                 self.invoke(apply=True, runner=run)
             self.assertEqual(batches, 2)
             self.assertEqual(self.archive.read_bytes(), self.before)
@@ -140,10 +144,11 @@ class BackfillTests(unittest.TestCase):
         with patch.object(module, "QUERY_BATCH_SIZE", 1), \
                 patch.object(module, "MAX_QUERY_ROWS", 1):
             with self.assertRaises(module.BackfillError):
-                self.invoke(apply=True, runner=self.runner([row("1000"), row("1001")]))
+                self.invoke(apply=True, runner=self.runner([row("1000"), row("1111")]))
         self.assertEqual(self.archive.read_bytes(), self.before)
         self.assertFalse(Path(str(self.archive) + ".lock").exists())
-        with patch.object(module, "MAX_QUERY_BYTES", 128):
+        with patch.object(module, "MAX_QUERY_BYTES", 128), \
+                patch.object(module, "QUERY_BATCH_SIZE", 16):
             with self.assertRaises(module.BackfillError):
                 self.invoke(apply=True)
         self.assertEqual(self.archive.read_bytes(), self.before)

@@ -11,10 +11,6 @@ export function funJobPattern(id) {
   if (digits.slice(1).every((n, i) => n === digits[i] + 1)) return 'ascending';
   if (digits.slice(1).every((n, i) => n === digits[i] - 1)) return 'descending';
   if (/^[1-9]0{3,9}$/.test(id)) return 'round';
-  if (id === [...id].reverse().join('')) return 'palindrome';
-  for (let size = 2; size <= Math.floor(id.length / 2); size += 1) {
-    if (id.length % size === 0 && id.slice(0, size).repeat(id.length / size) === id) return 'repeating';
-  }
   return null;
 }
 

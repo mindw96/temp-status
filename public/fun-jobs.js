@@ -14,7 +14,7 @@
   const since = panel.querySelector('#fun-jobs-since');
   const patterns = Object.freeze({
     repeat: 'Repeated', ascending: 'Ascending', descending: 'Descending',
-    round: 'Milestone', palindrome: 'Palindrome', repeating: 'Repeating block'
+    round: 'Milestone'
   });
   const dateFormat = new Intl.DateTimeFormat('en-GB', {
     timeZone:'Asia/Seoul', year:'numeric', month:'short', day:'2-digit',

@@ -9,13 +9,11 @@ for (const id of ['1111', '2222', '3333', '55555', '9999999999']) assert.equal(f
 for (const id of ['1234', '12345', '6789', '123456789']) assert.equal(funJobPattern(id), 'ascending');
 for (const id of ['4321', '54321', '43210', '9876543210']) assert.equal(funJobPattern(id), 'descending');
 for (const id of ['1000', '2000', '9000', '10000', '20000', '1000000000', '9000000000']) assert.equal(funJobPattern(id), 'round');
-for (const id of ['1221', '12321', '10001', '121121', '1234554321']) assert.equal(funJobPattern(id), 'palindrome');
-for (const id of ['1212', '123123', '202020', '121212', '1234512345']) assert.equal(funJobPattern(id), 'repeating');
-// Category priority keeps existing records valid: repeated digits win over
-// palindromes/blocks, and symmetric repeating blocks are called palindromes.
-assert.equal(funJobPattern('1111'), 'repeat');
-assert.equal(funJobPattern('121121'), 'palindrome');
-for (const id of ['111', '100', '12000', '20001', '12312', '112233', '7890', '01234', '0000', '12345_7',
+// Symmetric numbers and repeating blocks are excluded unless they already
+// satisfy the original all-identical-digits rule.
+for (const id of ['1221', '12321', '10001', '121121', '1234554321', '22622', '30003',
+  '1212', '123123', '202020', '121212', '1234512345',
+  '111', '100', '12000', '20001', '12312', '112233', '7890', '01234', '0000', '12345_7',
   '12345_[1-20]', '12345+0', ' 1111', '1111\n', '11111111111', 1111, null, {}, '１２３４']) {
   assert.equal(funJobPattern(id), null, String(id));
 }
@@ -32,7 +30,7 @@ assert.equal(Object.hasOwn(clean.records[0], 'submitted_at'), false);
 const historicalRecord = {job_id: '2222', name: 'old matching job', user: 'mindw',
   pattern: 'repeat', first_seen_at: '2026-10-20T00:00:02.000Z',
   source: 'sacct', submitted_at: '2025-09-17T10:14:25.123456Z'};
-const expandedRecords = ['1000', '10000', '20000', '1221', '12321', '121121', '1212', '123123', '202020'].map(job_id => ({
+const expandedRecords = ['1000', '10000', '20000'].map(job_id => ({
   job_id, name: `pattern test ${job_id}`, user: 'mindw', pattern: funJobPattern(job_id),
   first_seen_at: started, source: 'sacct', submitted_at: '2025-09-01T00:00:00.000Z'
 }));
@@ -62,6 +60,7 @@ for (const invalid of [
     {source: 'sacct', submitted_at: ' 2025-09-17T10:14:25Z'},
   ].map(fields => ({...archive, records: [{...archive.records[0], ...fields}]})),
   ...[{pattern: 'descending'}, {user: 'x'.repeat(81)}, {name: 'x'.repeat(501)},
+    {job_id: '22622', pattern: 'palindrome'}, {job_id: '1212', pattern: 'repeating'},
     {job_id: '1111_0'}, {first_seen_at: '2026-13-01T00:00:00Z'}]
     .map(fields => ({...archive, records: [{...archive.records[0], ...fields}]}))
 ]) assert.equal(normalizeFunJobs(invalid).status, 'unavailable');
@@ -133,4 +132,4 @@ try {
   assert.equal((await post({...report, squeue: []})).status, 200);
   assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, historicalClean);
 } finally { await close(server); }
-console.log('PASS: six pattern categories and overlap priority, live/history archive validation, preserved import provenance and submission times, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');
+console.log('PASS: four pattern categories, excluded symmetric numbers and repeating blocks, live/history archive validation, preserved import provenance and submission times, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');

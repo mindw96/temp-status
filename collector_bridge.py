@@ -37,11 +37,6 @@ def fun_job_pattern(job_id):
         return "descending"
     if re.fullmatch(r"[1-9]0{3,9}", job_id):
         return "round"
-    if job_id == job_id[::-1]:
-        return "palindrome"
-    for width in range(2, len(job_id) // 2 + 1):
-        if len(job_id) % width == 0 and job_id[:width] * (len(job_id) // width) == job_id:
-            return "repeating"
     return None
 
 
