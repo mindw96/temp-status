@@ -85,6 +85,37 @@ assert not r.compact_job(raw(first, "env sbatch x"))["batch"]
 assert r.compact_job(raw(first, '"/usr/bin/sbatch" file.sh'))["batch"]
 deleted_user = {**raw(first), "user": None, "user_id": 3001}
 assert r.compact_job(deleted_user)["user"] == "3001"
+# Deleted Unix users have neither user nor user_id in Slurm JSON. Restore the
+# authoritative numeric UID via a strictly matched safe-field sacct query.
+no_user = {**raw(first), "user": None, "user_id": None}
+legacy = raw(compact(11))
+legacy["original_sluid"] = None
+identity_text = (
+    f'10|3001|{first["sluid"]}|{first["original"]}|2026-10-20T02:00:00|0\n'
+    f'11|1002|{legacy["sluid"]}|s0000000000000|2026-10-20T02:00:00|0\n')
+with patch.object(r, "_run", return_value=identity_text) as lookup:
+    recovered = r.compact_batch([no_user, legacy], now)
+    assert recovered[0]["user"] == "3001"
+    assert recovered[1]["original"] == legacy["sluid"]
+    assert recovered[1]["legacy_original_missing"]
+    assert r.aggregate(recovered, now)["periods"]["all"]["total"] == 2
+    assert "SubmitLine" not in " ".join(lookup.call_args.args[0])
+    legacy["original_sluid"] = "s0000000000000"
+    assert r.compact_batch([legacy], now)[0]["original"] == legacy["sluid"]
+with patch.object(r, "_run", return_value=identity_text.replace("02:00:00", "01:00:00")):
+    try:
+        r.compact_batch([no_user], now)
+        raise AssertionError("A different submission timestamp matched")
+    except r.CollectionError as exc:
+        assert str(exc) == "accounting_missing_legacy_uid"
+known_resize = {**recovered[1], "sluid": "s0000000000012", "submit": timestamp("2026-10-20T03:00:00Z")}
+assert len(r.submission_events([recovered[1], known_resize])) == 1
+ambiguous = {**compact(11, sequence=13), "resizing": True}
+try:
+    r.submission_events([recovered[1], ambiguous])
+    raise AssertionError("An ambiguous legacy resize must not count twice")
+except r.CollectionError as exc:
+    assert str(exc) == "accounting_ambiguous_legacy_resize"
 
 # Count descending, stable username tie-break, exactly five people when present.
 people = [compact(i + 100, user=name) for i, name in enumerate(["f", "e", "d", "c", "b", "a"])]
@@ -164,6 +195,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert path.read_bytes() == before and len(writes) == 1 and writes[0][0] == output
     failed = writes[0][1]
     assert failed["status"] == "unavailable" and failed["collected_at"] == r.iso(now)
+    assert failed["error_code"] == "slurm_command_failed"
     assert failed["periods"] == r.aggregate(cache["records"].values(), now)["periods"]
     path.chmod(0o644)
     try:

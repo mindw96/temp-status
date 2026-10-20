@@ -28,6 +28,7 @@ MAX_RECORDS = 500_000
 RECONCILE_SECONDS = 6 * 60 * 60
 BATCH_SIZE = 500
 USER_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,80}$")
+SLUID_RE = re.compile(r"^s[0-9A-Z]{13}$")
 # Explicit PENDING selection includes submitted jobs that never became eligible.
 # With no state filter, sacct silently omits some of those accepted submissions.
 ALL_STATES = ("BOOT_FAIL,CANCELLED,COMPLETED,DEADLINE,FAILED,NODE_FAIL,"
@@ -37,6 +38,11 @@ ALL_STATES = ("BOOT_FAIL,CANCELLED,COMPLETED,DEADLINE,FAILED,NODE_FAIL,"
 
 class CollectionError(Exception):
     """A bounded, non-sensitive reason the snapshot is unavailable."""
+
+
+def valid_sluid(value):
+    return (isinstance(value, str) and bool(SLUID_RE.fullmatch(value))
+            and value != "s0000000000000")
 
 
 def iso(value):
@@ -116,10 +122,7 @@ def compact_job(job):
     submitted = number(job.get("time", {}).get("submission"))
     sluid, original = job.get("sluid"), job.get("original_sluid")
     if (not job_id or not isinstance(user, str) or not USER_RE.fullmatch(user)
-            or not submitted or not isinstance(sluid, str)
-            or not re.fullmatch(r"s[0-9A-Z]{13}", sluid)
-            or not isinstance(original, str)
-            or not re.fullmatch(r"s[0-9A-Z]{13}", original)):
+            or not submitted or not valid_sluid(sluid) or not valid_sluid(original)):
         raise CollectionError("accounting_invalid_identity")
     array = number(job.get("array", {}).get("job_id"))
     hetero = number(job.get("het", {}).get("job_id"))
@@ -136,7 +139,85 @@ def compact_job(job):
     return {"id": job_id, "parent": array or hetero or job_id,
             "group": bool(array or hetero), "user": user, "submit": submitted,
             "sluid": sluid, "original": original,
-            "restarts": number(job.get("restart_cnt")), "batch": batch}
+            "restarts": number(job.get("restart_cnt")), "batch": batch,
+            "resizing": "RESIZING" in job.get("state", {}).get("current", [])}
+
+
+def compact_batch(jobs, now):
+    """Restore legacy/null JSON fields from the same authoritative sacct rows.
+
+    Slurm JSON omits the numeric UID when a Unix account no longer exists.
+    Parsable output of identity fields (never SubmitLine) retains that UID.
+    Matching the run SLUID, JobID and Submit prevents cross-linking reused IDs.
+    """
+    ids = set()
+    for job in jobs:
+        user = job.get("user")
+        original = job.get("original_sluid")
+        if (not isinstance(user, str) or not USER_RE.fullmatch(user)
+                or not valid_sluid(original)):
+            job_id = number(job.get("job_id"))
+            if not job_id:
+                raise CollectionError("accounting_invalid_identity")
+            ids.add(job_id)
+    identities = {}
+    if ids:
+        text = _run(["/usr/bin/sacct", "-a", "-X", "-D", "--array",
+                     "-S", "2000-01-01", "-E", now.strftime("%Y-%m-%dT%H:%M:%S"),
+                     "-j", ",".join(map(str, sorted(ids))), "-nP",
+                     "--format=JobIDRaw,UID,SLUID,OriginalSLUID,Submit,Restarts"])
+        for line in text.splitlines():
+            fields = line.split("|")
+            if len(fields) != 6:
+                raise CollectionError("accounting_invalid_identity_fields")
+            job_id, uid, sluid, original, submitted, restarts = fields
+            if (not re.fullmatch(r"[1-9][0-9]{0,10}", job_id)
+                    or not re.fullmatch(r"[0-9]{1,10}", uid)
+                    or not valid_sluid(sluid)
+                    or not re.fullmatch(r"[0-9]{1,10}", restarts)):
+                raise CollectionError("accounting_invalid_identity_fields")
+            try:
+                stamp = int(datetime.strptime(submitted, "%Y-%m-%dT%H:%M:%S")
+                            .replace(tzinfo=UTC).timestamp())
+            except ValueError as exc:
+                raise CollectionError("accounting_invalid_identity_fields") from exc
+            key = (int(job_id), sluid, stamp)
+            value = {"uid": int(uid), "original": original, "restarts": int(restarts)}
+            if key in identities and identities[key] != value:
+                raise CollectionError("accounting_conflicting_identity")
+            identities[key] = value
+    result = []
+    for job in jobs:
+        item = dict(job)
+        identity = identities.get((number(item.get("job_id")), item.get("sluid"),
+                                   number(item.get("time", {}).get("submission"))))
+        user = item.get("user")
+        if not isinstance(user, str) or not USER_RE.fullmatch(user):
+            if identity is None:
+                raise CollectionError("accounting_missing_legacy_uid")
+            item["user"] = str(identity["uid"])
+        original = item.get("original_sluid")
+        original_missing = False
+        if not valid_sluid(original):
+            if identity is None:
+                raise CollectionError("accounting_missing_legacy_identity")
+            candidate = identity["original"]
+            if valid_sluid(candidate):
+                item["original_sluid"] = candidate
+            elif candidate in ("", "Unknown", "None", "(null)", "0", "s0000000000000"):
+                # OriginalSLUID is optional in legacy records. The real run
+                # SLUID remains unique; restart_cnt still excludes requeues.
+                # Later resize rows referencing this SLUID join it normally.
+                item["original_sluid"] = item.get("sluid")
+                original_missing = True
+            else:
+                raise CollectionError("accounting_invalid_legacy_original")
+            item["restart_cnt"] = identity["restarts"]
+        record = compact_job(item)
+        if original_missing:
+            record["legacy_original_missing"] = True
+        result.append(record)
+    return result
 
 
 def submission_events(records):
@@ -165,6 +246,10 @@ def submission_events(records):
             # The original submission has been purged; attributing a restart to
             # today's submissions would be false. Keep the source unavailable.
             raise CollectionError("original_submission_missing")
+        if (len(initial) > 1
+                and any(run.get("legacy_original_missing") for run in initial)
+                and any(run.get("resizing") for run in runs)):
+            raise CollectionError("accounting_ambiguous_legacy_resize")
         seen = set()
         for run in initial:
             key = ("group", run["submit"]) if run["group"] else ("scalar", run["original"])
@@ -278,8 +363,7 @@ def refresh(cache, now):
         jobs = _json(["/usr/bin/sacct", "-a", "-X", "-D", "--array",
                       "-S", "2000-01-01", "-E", now.strftime("%Y-%m-%dT%H:%M:%S"),
                       "-j", ",".join(map(str, batch)), "--json"])
-        for job in jobs:
-            record = compact_job(job)
+        for record in compact_batch(jobs, now):
             seen.add((record["id"], record["user"]))
             incoming[record["sluid"]] = record
     if not live.issubset(seen):
@@ -322,12 +406,13 @@ def run_once(cache_path, output_path, now=None):
             fallback["history_start"] = None
             for period in fallback["periods"].values():
                 period["start"] = None
+        reason = str(exc) if isinstance(exc, CollectionError) else "export_failed"
+        fallback["error_code"] = reason
         try:
             atomic_json(output_path, fallback, 0o644)
         except (CollectionError, OSError):
             pass
         # Fixed reasons only: never log a Slurm response, command or traceback.
-        reason = str(exc) if isinstance(exc, CollectionError) else "export_failed"
         print(json.dumps({"status": "unavailable", "reason": reason}), flush=True)
         return False
 
