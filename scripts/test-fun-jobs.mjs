@@ -36,9 +36,23 @@ const expandedRecords = ['1000', '10000', '20000'].map(job_id => ({
 }));
 const historicalArchive = {...archive, records: [...archive.records, historicalRecord, ...expandedRecords]};
 const historicalClean = normalizeFunJobs(historicalArchive);
-assert.deepEqual(historicalClean.records[0], {...historicalRecord, submitted_at: '2025-09-17T10:14:25.123Z'});
+assert.deepEqual(historicalClean.records.find(item => item.job_id === historicalRecord.job_id),
+  {...historicalRecord, submitted_at: '2025-09-17T10:14:25.123Z'});
+assert.deepEqual(historicalClean.records.map(item => item.job_id),
+  ['20000', '12345', '10000', '2222', '1111', '1000']);
 for (const record of expandedRecords) assert.deepEqual(historicalClean.records.find(item => item.job_id === record.job_id), record);
 assert.equal(historicalClean.started_at, started);
+// Four-digit IDs must follow larger five-digit IDs even when discovered later.
+const requestedIDs = ['1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999',
+  '11111', '22222', '33333', '44444', '55555', '66666', '12345'];
+const requestedArchive = {...archive, records: requestedIDs.map((job_id, index) => ({
+  job_id, name: 'sorting regression', user: 'mindw', pattern: funJobPattern(job_id),
+  first_seen_at: new Date(Date.parse(started) + (requestedIDs.length - index) * 1000).toISOString()
+}))};
+assert.deepEqual(normalizeFunJobs(requestedArchive).records.map(item => item.job_id), [
+  '66666', '55555', '44444', '33333', '22222', '12345', '11111',
+  '9999', '8888', '7777', '6666', '5555', '4444', '3333', '2222', '1111'
+]);
 assert.equal(normalizeFunJobs({...archive, records: [{
   ...historicalRecord, submitted_at: historicalRecord.first_seen_at
 }]}).status, 'ok');

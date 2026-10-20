@@ -44,13 +44,11 @@
   animation:fun-jobs-appear 180ms var(--modal-ease, ease-out);
 }
 .fun-jobs-panel[hidden], .fun-jobs-panel [hidden] {display:none}
-.fun-jobs-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px 0 18px;flex-shrink:0}
+.fun-jobs-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px 12px 18px;flex-shrink:0}
 .fun-jobs-heading h2 {font-size:17px;letter-spacing:-.02em}
 .fun-jobs-close {display:grid;place-items:center;width:36px;height:36px;flex-shrink:0;border-radius:50%;color:var(--text-secondary)}
 .fun-jobs-close:hover {background:var(--pill-bg)}
 .fun-jobs-close svg {width:18px;height:18px}
-.fun-jobs-intro {padding:0 18px 14px;color:var(--text-tertiary);font-size:11px;line-height:1.8;flex-shrink:0}
-.fun-jobs-intro span {display:block;font-variant-numeric:tabular-nums}
 .fun-jobs-search {display:flex;align-items:center;gap:8px;margin:0 18px 12px;padding:8px 10px;border:1px solid var(--control-border);border-radius:10px;background:var(--control-bg);flex-shrink:0}
 .fun-jobs-search svg {width:15px;height:15px;color:var(--text-tertiary)}
 .fun-jobs-search input {width:100%;min-width:0;padding:0;border:0;background:transparent;color:var(--text-primary);font-size:12px;line-height:1.6}
@@ -61,16 +59,10 @@
 .fun-jobs-status[data-kind="warning"] {color:var(--pending-text)}
 .fun-jobs-scroll {min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 18px 2px}
 .fun-jobs-list {list-style:none;margin:0;padding:0}
-.fun-jobs-record {padding:12px 0;border-top:1px solid var(--divider)}
-.fun-jobs-record:first-child {border-top:0;padding-top:3px}
-.fun-jobs-record-top {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
-.fun-jobs-id {font-size:24px;font-weight:500;letter-spacing:.025em;line-height:1.3;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.fun-jobs-pattern {padding:3px 8px;border-radius:100px;background:var(--pill-bg);color:var(--text-secondary);font-size:10px;white-space:nowrap}
-.fun-jobs-user {color:var(--text-primary);font-size:12px;line-height:1.8;overflow-wrap:anywhere}
-.fun-jobs-name {color:var(--text-secondary);font-size:12px;line-height:1.8;overflow-wrap:anywhere}
-.fun-jobs-time {display:block;margin-top:4px;color:var(--text-tertiary);font-size:10px;line-height:1.7;font-variant-numeric:tabular-nums}
-.fun-jobs-origin {color:var(--text-secondary)}
-.fun-jobs-origin ~ .fun-jobs-time {margin-top:0}
+.fun-jobs-record {display:grid;grid-template-columns:max-content minmax(0, 1fr);align-items:center;gap:16px;padding:10px 0;border-top:1px solid var(--divider)}
+.fun-jobs-record:first-child {border-top:0}
+.fun-jobs-id {font-size:14px;font-weight:500;letter-spacing:.025em;line-height:1.6;font-variant-numeric:tabular-nums}
+.fun-jobs-user {color:var(--text-primary);font-size:14px;line-height:1.6;text-align:right;overflow-wrap:anywhere}
 .fun-jobs-empty {padding:20px 0 26px;color:var(--text-tertiary);font-size:12px;line-height:1.8}
 .fun-jobs-empty strong {display:block;margin-bottom:5px;color:var(--text-primary);font-size:14px;font-weight:500}
 .fun-jobs-more {display:block;width:100%;min-height:38px;margin:5px 0 12px;border:1px solid var(--control-border);border-radius:10px;background:var(--control-bg);font-size:12px;color:var(--text-primary)}

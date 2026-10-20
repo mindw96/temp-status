@@ -45,8 +45,8 @@ export function normalizeFunJobs(value) {
     records.push({job_id: item.job_id, name: item.name, user: item.user, pattern, first_seen_at: seen,
       ...(historical ? {source: 'sacct', submitted_at: submitted} : {})});
   }
-  records.sort((a, b) => b.first_seen_at.localeCompare(a.first_seen_at)
-    || b.job_id.length - a.job_id.length || b.job_id.localeCompare(a.job_id));
+  // Validated IDs contain at most ten digits, safely within Number precision.
+  records.sort((a, b) => Number(b.job_id) - Number(a.job_id));
   return {version: 1, status: value.status, started_at: started, records};
 }
 
