@@ -126,14 +126,19 @@
   }
   function renderJobs() {
     const jobs = allJobs();
-    const active = jobs.filter(job => !completed(job));
-    const visible = active.filter(matches).sort((a,b) => ({Failed:0,Running:1,Pending:2,Suspended:3,Unknown:4}[a.status] ?? 5) - ({Failed:0,Running:1,Pending:2,Suspended:3,Unknown:4}[b.status] ?? 5) || String(a.name).localeCompare(String(b.name)));
-    const done = jobs.filter(completed).filter(matches).sort((a,b) => (dateValue(b.finished_at) || 0) - (dateValue(a.finished_at) || 0));
+    const active = jobs.filter(job => !finished(job));
+    const visible = active.filter(matches).sort((a,b) => ({Running:0,Pending:1,Suspended:2,Unknown:3}[a.status] ?? 4) - ({Running:0,Pending:1,Suspended:2,Unknown:3}[b.status] ?? 4) || String(a.name).localeCompare(String(b.name)));
+    const newestFinishedFirst = (a,b) => (dateValue(b.finished_at) || 0) - (dateValue(a.finished_at) || 0);
+    const failed = jobs.filter(job => job.status === 'Failed').filter(matches).sort(newestFinishedFirst);
+    const done = jobs.filter(completed).filter(matches).sort(newestFinishedFirst);
+    const finishedRow = job => `<div class="a100-finished-row"><button type="button" class="a100-job-name" data-a100-job="${esc(job.id)}">${esc(job.name || 'Unnamed job')}</button><span>${esc(ownerName(job.owner))}</span><span>${esc(statusName(job))}</span></div>`;
     $('#a100-active-count').textContent = report() ? state.owner || state.search ? `${visible.length} / ${active.length}` : String(active.length) : '—';
     const empty = !report() ? 'Waiting for the first report.' : state.owner || state.search ? 'No matching active jobs.' : !jobsFresh() ? 'The current job list is unavailable.' : 'No active jobs in the latest report.';
     $('#a100-job-cards').innerHTML = visible.length ? visible.map(jobMarkup).join('') : `<p class="a100-empty">${empty}</p>`;
+    $('#a100-failed-count').textContent = report() ? String(failed.length) : '—';
+    $('#a100-failed-list').innerHTML = failed.length ? failed.map(finishedRow).join('') : '<p class="a100-summary-note">No failed jobs match the current filters.</p>';
     $('#a100-finished-count').textContent = report() ? String(done.length) : '—';
-    $('#a100-finished-list').innerHTML = done.length ? done.map(job => `<div class="a100-finished-row"><button type="button" class="a100-job-name" data-a100-job="${esc(job.id)}">${esc(job.name || 'Unnamed job')}</button><span>${esc(ownerName(job.owner))}</span><span>${esc(statusName(job))}</span></div>`).join('') : '<p class="a100-summary-note">No completed jobs match the current filters.</p>';
+    $('#a100-finished-list').innerHTML = done.length ? done.map(finishedRow).join('') : '<p class="a100-summary-note">No completed jobs match the current filters.</p>';
   }
   const detail = (label,value) => `<div><dt>${esc(label)}</dt><dd>${esc(value ?? 'Not reported')}</dd></div>`;
   function renderDialog() {
