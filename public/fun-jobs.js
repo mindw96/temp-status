@@ -24,7 +24,18 @@
 
   const stamp = value => dateFormat.format(typeof value === 'number' ? value : Date.parse(value)) + ' KST';
   const userLabel = value => typeof displayUserName === 'function' ? displayUserName(value) : value;
-  const validDate = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
+  const validDate = value => {
+    if (typeof value !== 'string' || value.trim() !== value
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(value)) return false;
+    const time = Date.parse(value);
+    return Number.isFinite(time) && time >= 0 && new Date(time).toISOString().slice(0, 19) === value.slice(0, 19);
+  };
+  const validHistory = record => {
+    if (!Object.hasOwn(record, 'source') && !Object.hasOwn(record, 'submitted_at')) return true;
+    return Object.hasOwn(record, 'source') && Object.hasOwn(record, 'submitted_at')
+      && record.source === 'sacct' && validDate(record.submitted_at)
+      && Date.parse(record.submitted_at) <= Date.parse(record.first_seen_at);
+  };
 
   function validPayload(value) {
     if (!value || typeof value !== 'object' || !Number.isFinite(value.serverTime)
@@ -36,7 +47,9 @@
       && archive.records.length <= 1000 && new Set(archive.records.map(record => record?.job_id)).size === archive.records.length
       && archive.records.every(record => record && typeof record.job_id === 'string' && /^[1-9]\d{3,9}$/.test(record.job_id)
         && typeof record.name === 'string' && [...record.name].length <= 500 && typeof record.user === 'string' && [...record.user].length <= 80
-        && Object.hasOwn(patterns, record.pattern) && validDate(record.first_seen_at));
+        && Object.hasOwn(patterns, record.pattern) && validDate(record.first_seen_at)
+        && validHistory(record) && archive.started_at !== null
+        && Date.parse(record.first_seen_at) >= Date.parse(archive.started_at));
   }
 
   function element(tag, className, text) {
@@ -50,10 +63,20 @@
     const item = element('li', 'fun-jobs-record');
     const top = element('div', 'fun-jobs-record-top');
     top.append(element('span', 'fun-jobs-id', record.job_id), element('span', 'fun-jobs-pattern', patterns[record.pattern]));
-    const time = element('time', 'fun-jobs-time', `First spotted ${stamp(record.first_seen_at)}`);
-    time.dateTime = record.first_seen_at;
     item.append(top, element('p', 'fun-jobs-user', userLabel(record.user) || 'User unavailable'),
-      element('p', 'fun-jobs-name', record.name || 'Job name unavailable'), time);
+      element('p', 'fun-jobs-name', record.name || 'Job name unavailable'));
+    const addTime = (label, date) => {
+      const time = element('time', 'fun-jobs-time', `${label} ${stamp(date)}`);
+      time.dateTime = date;
+      item.append(time);
+    };
+    if (record.source === 'sacct') {
+      item.append(element('p', 'fun-jobs-time fun-jobs-origin', 'Slurm history'));
+      addTime('Submitted', record.submitted_at);
+      addTime('Imported', record.first_seen_at);
+    } else {
+      addTime('First spotted', record.first_seen_at);
+    }
     return item;
   }
 
@@ -96,12 +119,12 @@
     if (!visible.length) {
       if (!archive) {
         empty.append(element('strong', '', unavailable || errorMessage ? 'Archive unavailable' : 'Your collection starts here'),
-          document.createTextNode('Only IDs found in real Slurm reports are saved. The examples above are not saved jobs.'));
+          document.createTextNode('Only IDs verified in Slurm reports or accounting history are saved. The examples above are not saved jobs.'));
       } else if (query) {
         empty.append(element('strong', '', 'No matching IDs'), document.createTextNode('Try a job ID, job name, or user.'));
       } else {
         empty.append(element('strong', '', 'No special IDs spotted yet'),
-          document.createTextNode('New matches are saved automatically from real Slurm reports, starting when collection was enabled.'));
+          document.createTextNode('New matches are saved automatically from Slurm reports. Imported matches from Slurm history also appear here.'));
       }
     }
     count.textContent = archive
@@ -109,7 +132,7 @@
       : 'Shared with the lab';
     receipt.textContent = Number.isFinite(savedReceivedAt) ? `Archive received ${stamp(savedReceivedAt)}` : '';
     receipt.hidden = !receipt.textContent;
-    since.textContent = archive?.started_at ? `Collecting since ${stamp(archive.started_at)}` : '';
+    since.textContent = archive?.started_at ? `Automatic collection since ${stamp(archive.started_at)}` : '';
     since.hidden = !since.textContent;
   }
 

@@ -20,12 +20,35 @@ const archive = {version: 1, status: 'ok', started_at: started, records: [
 const clean = normalizeFunJobs(archive);
 assert.deepEqual(clean.records.map(j => j.job_id), ['12345', '1111']);
 assert.equal(clean.records[0].first_seen_at, '2026-10-20T00:00:01.123Z');
+assert.equal(Object.hasOwn(clean.records[0], 'source'), false);
+assert.equal(Object.hasOwn(clean.records[0], 'submitted_at'), false);
+const historicalRecord = {job_id: '2222', name: 'old matching job', user: 'mindw',
+  pattern: 'repeat', first_seen_at: '2026-10-20T00:00:02.000Z',
+  source: 'sacct', submitted_at: '2025-09-17T10:14:25.123456Z'};
+const historicalArchive = {...archive, records: [...archive.records, historicalRecord]};
+const historicalClean = normalizeFunJobs(historicalArchive);
+assert.deepEqual(historicalClean.records[0], {...historicalRecord, submitted_at: '2025-09-17T10:14:25.123Z'});
+assert.equal(historicalClean.started_at, started);
+assert.equal(normalizeFunJobs({...archive, records: [{
+  ...historicalRecord, submitted_at: historicalRecord.first_seen_at
+}]}).status, 'ok');
 assert.equal(normalizeFunJobs(undefined), null);
 for (const invalid of [
   [], {}, {...archive, version: 2}, {...archive, records: [...archive.records, archive.records[0]]},
   {...archive, records: Array(1001).fill(archive.records[0])},
   {...archive, started_at: '2026-02-31T00:00:00Z'},
   {...archive, records: [{...archive.records[0], first_seen_at: '2026-10-19T00:00:00Z'}]},
+  ...[
+    {source: 'sacct'}, {submitted_at: historicalRecord.submitted_at},
+    {source: null, submitted_at: historicalRecord.submitted_at},
+    {source: 'squeue', submitted_at: historicalRecord.submitted_at},
+    {source: 'sacct', submitted_at: null},
+    {source: 'sacct', submitted_at: '2026-10-21T00:00:00Z'},
+    {source: 'sacct', submitted_at: '2025-02-30T00:00:00Z'},
+    {source: 'sacct', submitted_at: '1969-12-31T23:59:59Z'},
+    {source: 'sacct', submitted_at: '2025-09-17T10:14:25+09:00'},
+    {source: 'sacct', submitted_at: ' 2025-09-17T10:14:25Z'},
+  ].map(fields => ({...archive, records: [{...archive.records[0], ...fields}]})),
   ...[{pattern: 'descending'}, {user: 'x'.repeat(81)}, {name: 'x'.repeat(501)},
     {job_id: '1111_0'}, {first_seen_at: '2026-13-01T00:00:00Z'}]
     .map(fields => ({...archive, records: [{...archive.records[0], ...fields}]}))
@@ -65,21 +88,21 @@ try {
     method: 'POST', headers: {'Content-Type': 'application/json', 'X-Status-Token': token},
     body: JSON.stringify(report)
   });
-  const report = {sinfo: [], squeue: [{job_id: '1111', name: 'first recorded job', user: 'mindw'}], fun_jobs: archive};
+  const report = {sinfo: [], squeue: [{job_id: '1111', name: 'first recorded job', user: 'mindw'}], fun_jobs: historicalArchive};
   assert.equal((await (await get('/api/fun-jobs')).json()).archive, null);
   assert.equal((await post(report, 'wrong')).status, 401);
   assert.equal((await post(report)).status, 200);
   let response = await get('/api/fun-jobs');
   assert.equal(response.headers.get('cache-control'), 'no-store');
   let data = await response.json();
-  assert.deepEqual(data.archive, clean);
+  assert.deepEqual(data.archive, historicalClean);
   assert.equal(data.stale, false);
   const mainSnapshot = await (await get('/api/snapshot')).json();
   assert.equal(mainSnapshot.slurm.data.squeue[0].job_id, '1111');
   assert.equal(Object.hasOwn(mainSnapshot.slurm.data, 'fun_jobs'), false);
   // Finishing a job changes the queue, but does not delete its collector record.
   assert.equal((await post({...report, squeue: []})).status, 200);
-  assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, clean);
+  assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, historicalClean);
   // Corrupt optional history never takes the primary monitoring endpoint down.
   assert.equal((await post({...report, fun_jobs: {records: 'invalid'}})).status, 200);
   assert.equal((await (await get('/api/fun-jobs')).json()).archive.status, 'unavailable');
@@ -96,6 +119,6 @@ try {
   // A new process receives the durable collector archive without needing the
   // original job to still be running, matching the Render restart path.
   assert.equal((await post({...report, squeue: []})).status, 200);
-  assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, clean);
+  assert.deepEqual((await (await get('/api/fun-jobs')).json()).archive, historicalClean);
 } finally { await close(server); }
-console.log('PASS: patterns, archive validation, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');
+console.log('PASS: patterns, live/history archive validation, preserved import provenance and submission times, read/write access, optional failure isolation, no normal snapshot growth, static assets, finished-job retention and restart rehydration.');

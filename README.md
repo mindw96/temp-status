@@ -56,8 +56,9 @@ Slurm jobs의 **JOB ID**, **Job name**, **User** 열 제목을 누르면 첫 클
 
 기록의 원본은 Server1 수집기의 `fun-jobs.json`입니다. 기록은 페이지를 닫아 두어도
 15초 주기의 실제 Slurm 보고에서 수집되며, Render가 재배포되어도 다음 수집 보고에서
-복구됩니다. 시작 이전의 과거 작업이나 예시는 자동으로 채우지 않습니다. 발견 시각은
-제출 시각이 아니며, 보고 사이에 종료된 짧은 작업은 발견되지 않을 수 있습니다.
+복구됩니다. 발견 시각은 제출 시각이 아니며, 보고 사이에 종료된 짧은 작업은
+발견되지 않을 수 있습니다. Slurm 회계 DB에 남아 있는 과거 작업은 아래의
+별도 가져오기 명령으로 추가할 수 있습니다. 예시는 보관함에 넣지 않습니다.
 
 수집기 설정 파일의 `fun_jobs_path`에 기존 디렉터리 안의 절대 경로를 지정하면
 Slurm 수집기에서만 활성화됩니다. 운영 경로는
@@ -71,10 +72,39 @@ Slurm 수집기에서만 활성화됩니다. 운영 경로는
 인증된 기존 Slurm POST에 `fun_jobs`를 포함하고, `GET /api/fun-jobs`는 대시보드와
 동일한 조회 권한 정책을 사용합니다. 일반 `/api/snapshot`에는 보관함 전체를 넣지
 않습니다. 보관함은 열린 동안만 30초마다 조회하며, 닫힘·백그라운드에서는 조회를 멈춥니다.
-별도 공개 쓰기 API, 새 외부 DB, 추가 Slurm 조회는 없습니다.
+별도 공개 쓰기 API나 새 외부 DB는 사용하지 않습니다. 주기적인 보고에서는
+추가 Slurm 조회를 하지 않으며, 과거 기록 가져오기를 실행할 때만 `sacct`를 조회합니다.
+
+### Slurm 과거 기록 가져오기
+
+`scripts/backfill-fun-jobs.py`는 현재 클러스터의 Job ID 범위 안에서 패턴에 맞는
+후보 번호만 지정해 모든 사용자의 회계 기록을 읽습니다. 배열 작업·step·heterogeneous
+작업을 숫자 Job ID로 오인하지 않도록 제외합니다. 오래된 기록이 삭제되었거나
+접근 권한으로 보이지 않는 경우에는 가져올 수 없습니다.
+
+수집기와 같은 디렉터리의 `scripts/` 아래에 스크립트를 두고 다음처럼 실행합니다.
+기본 실행은 조회 결과만 확인하며 `--apply`가 있어야 실제 저장합니다.
+
+```bash
+cd /home/mindw/status_agent/cloudflare-status
+/home/mindw/status_agent/.venv/bin/python scripts/backfill-fun-jobs.py --config config.json
+/home/mindw/status_agent/.venv/bin/python scripts/backfill-fun-jobs.py --config config.json --apply
+```
+
+저장 직전에 최신 보관함을 잠금 아래 다시 읽고 변경 전 파일을 별도 백업합니다.
+기존 ID는 덮어쓰지 않으며, 같은 번호의 회계 기록이 여러 개면 가장 이른 유효 제출일의
+기록을 고릅니다. 반복 실행해도 동일 ID는 한 번만 저장됩니다.
+
+과거 기록은 `source: "sacct"`와 `submitted_at`을 함께 저장합니다.
+**Submitted**는 Slurm에 남은 실제 제출 시각, **Imported**는 이번 보관함 추가 시각이며
+둘 다 KST로 표시합니다. **Automatic collection since**는 자동 수집을 켠 날짜로 유지합니다.
+`first_seen_at`에는 가져온 시각을 쓰므로 과거 제출일과 혼동하지 않습니다.
+기존 필드만 있는 기록도 계속 읽습니다. 배포 시 웹 API·화면을 먼저 갱신하고,
+수집기 코드를 교체·재시작한 뒤 가져오기를 실행해야 합니다.
 
 검증: `python3 scripts/test-fun-job-collector.py`와
-`node scripts/test-fun-jobs.mjs`로 패턴·영구 저장·동시 쓰기·오류 격리·조회 권한·
+`python3 scripts/test-fun-job-backfill.py`, `node scripts/test-fun-jobs.mjs`로
+패턴·영구 저장·동시 쓰기·과거 기록 중복 방지·오류 격리·조회 권한·
 종료 작업 보관·웹서버 재시작 후 복구를 확인합니다.
 
 ## 데이터 계약

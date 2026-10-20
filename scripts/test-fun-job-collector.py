@@ -203,4 +203,29 @@ def build_payload():
     assert json.loads(cli.stdout) == {"kind": "slurm", "http_status": 200, "accepted": True}
     assert cli.stderr == "" and json.loads(cli_archive.read_text())["records"][0]["job_id"] == "55555"
 
+    # Imported submission dates may predate collection, but import times may not.
+    history = root / "history.json"
+    history_archive = json.loads(cli_archive.read_text())
+    historical_record = history_archive["records"][0]
+    historical_record.update(source="sacct", submitted_at="2020-01-01T00:00:00Z")
+    bridge._write_fun_jobs(history, history_archive)
+    imported = bridge.collect_fun_jobs(str(history), [job("55555", name="changed")])
+    assert imported["status"] == "ok" and imported["records"] == [historical_record]
+    for invalid in [
+        {"source": "other"}, {"submitted_at": "bad"},
+        {"submitted_at": "2100-01-01T00:00:00Z"},
+        {"submitted_at": "1969-01-01T00:00:00Z"},
+        {"extra": "unknown"},
+    ]:
+        broken = {**history_archive, "records": [{**historical_record, **invalid}]}
+        bridge._write_fun_jobs(history, broken)
+        before = history.read_bytes()
+        assert bridge.collect_fun_jobs(str(history), [])["status"] == "unavailable"
+        assert history.read_bytes() == before
+    for missing in ["source", "submitted_at"]:
+        partial = {**historical_record}
+        del partial[missing]
+        bridge._write_fun_jobs(history, {**history_archive, "records": [partial]})
+        assert bridge.collect_fun_jobs(str(history), [])["status"] == "unavailable"
+
 print("Fun Job collector tests passed: patterns, persistence, failures, capacity and concurrent writers.")

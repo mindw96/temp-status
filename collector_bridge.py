@@ -66,9 +66,10 @@ def _read_fun_jobs(path):
         raise ValueError("Invalid archive format")
     started_at = _fun_jobs_timestamp(archive["started_at"])
     seen = set()
+    record_fields = {"job_id", "name", "user", "pattern", "first_seen_at"}
     for record in archive["records"]:
         if (not isinstance(record, dict)
-                or set(record) != {"job_id", "name", "user", "pattern", "first_seen_at"}
+                or set(record) not in (record_fields, record_fields | {"source", "submitted_at"})
                 or fun_job_pattern(record["job_id"]) is None
                 or record["pattern"] != fun_job_pattern(record["job_id"])
                 or record["job_id"] in seen
@@ -76,6 +77,12 @@ def _read_fun_jobs(path):
                 or not isinstance(record["user"], str) or len(record["user"]) > 80
                 or _fun_jobs_timestamp(record["first_seen_at"]) < started_at):
             raise ValueError("Invalid archive record")
+        if "source" in record:
+            submitted_at = _fun_jobs_timestamp(record["submitted_at"])
+            if (record["source"] != "sacct"
+                    or submitted_at < datetime(1970, 1, 1, tzinfo=timezone.utc)
+                    or submitted_at > _fun_jobs_timestamp(record["first_seen_at"])):
+                raise ValueError("Invalid archive history")
         seen.add(record["job_id"])
     return archive
 

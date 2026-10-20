@@ -36,8 +36,13 @@ export function normalizeFunJobs(value) {
     if (!pattern || pattern !== item.pattern || !seen || (started && seen < started)
       || ids.has(item.job_id) || typeof item.name !== 'string' || [...item.name].length > 500
       || typeof item.user !== 'string' || [...item.user].length > 80) return unavailable();
+    const historical = Object.hasOwn(item, 'source') || Object.hasOwn(item, 'submitted_at');
+    const submitted = historical ? timestamp(item.submitted_at) : null;
+    if (historical && (!Object.hasOwn(item, 'source') || !Object.hasOwn(item, 'submitted_at')
+      || item.source !== 'sacct' || !submitted || submitted > seen)) return unavailable();
     ids.add(item.job_id);
-    records.push({job_id: item.job_id, name: item.name, user: item.user, pattern, first_seen_at: seen});
+    records.push({job_id: item.job_id, name: item.name, user: item.user, pattern, first_seen_at: seen,
+      ...(historical ? {source: 'sacct', submitted_at: submitted} : {})});
   }
   records.sort((a, b) => b.first_seen_at.localeCompare(a.first_seen_at)
     || b.job_id.length - a.job_id.length || b.job_id.localeCompare(a.job_id));
