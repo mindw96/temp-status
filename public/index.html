@@ -11,7 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23007AFF'/%3E%3Cg fill='%23ffffff'%3E%3Crect x='7' y='7' width='7' height='7' rx='1'/%3E%3Crect x='18' y='7' width='7' height='7' rx='1'/%3E%3Crect x='7' y='18' width='7' height='7' rx='1'/%3E%3Crect x='18' y='18' width='7' height='7' rx='1'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="motion.css">
-  <link rel="stylesheet" href="fun-jobs.css">
+  <link rel="stylesheet" href="sbatch-rankings.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to main content</a>
@@ -39,31 +39,40 @@
       </section>
     </main>
   <dialog class="t-modal" id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><span class="eyebrow" id="dialog-eyebrow">DETAILS</span><button class="icon-button" id="close-dialog" data-dialog-close aria-label="Close details"><span data-icon="close"></span></button></div><div id="dialog-content"></div></dialog>
-  <button type="button" id="fun-jobs-launcher" class="fun-jobs-launcher" aria-expanded="false" aria-controls="fun-jobs-panel" aria-haspopup="dialog">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 3 2.1 6.9L19 12l-6.9 2.1L10 21l-2.1-6.9L1 12l6.9-2.1L10 3Z"/><path d="m19 2 .9 3.1L23 6l-3.1.9L19 10l-.9-3.1L15 6l3.1-.9L19 2Z"/></svg>
-    <span>Fun IDs</span>
+  <button type="button" id="sbatch-rankings-launcher" class="sbatch-rankings-launcher" aria-expanded="false" aria-controls="sbatch-rankings-panel" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21V10h8v11M3 21V15h5m8 6h5V6h-5M2 21h20"/><path d="m7 5 2 2 5-5"/></svg>
+    <span>Ranking</span>
   </button>
-  <section id="fun-jobs-panel" class="fun-jobs-panel" role="dialog" aria-modal="false" aria-labelledby="fun-jobs-title" hidden>
-    <div class="fun-jobs-heading">
-      <h2 id="fun-jobs-title">Fun Job IDs</h2>
-      <button type="button" id="fun-jobs-close" class="fun-jobs-close" aria-label="Close Fun Job IDs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+  <section id="sbatch-rankings-panel" class="sbatch-rankings-panel" role="dialog" aria-modal="false" aria-labelledby="sbatch-rankings-title" hidden>
+    <div class="sbatch-rankings-heading">
+      <h2 id="sbatch-rankings-title">Sbatch Top 5</h2>
+      <button type="button" id="sbatch-rankings-close" class="sbatch-rankings-close" aria-label="Close rankings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
     </div>
-    <label class="fun-jobs-search" for="fun-jobs-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
-      <input id="fun-jobs-search" type="search" placeholder="Search IDs or users" aria-label="Search saved job IDs or users" autocomplete="off">
-    </label>
-    <p id="fun-jobs-status" class="fun-jobs-status" role="status"></p>
-    <div class="fun-jobs-scroll">
-      <ul id="fun-jobs-list" class="fun-jobs-list" aria-label="Saved fun job IDs"></ul>
-      <p id="fun-jobs-empty" class="fun-jobs-empty"></p>
-      <button type="button" id="fun-jobs-more" class="fun-jobs-more" hidden>Load more</button>
+    <div class="sbatch-rankings-tabs" role="tablist" aria-label="집계 기간" lang="ko">
+      <button type="button" id="sbatch-rankings-tab-today" role="tab" aria-selected="true" aria-controls="sbatch-rankings-results" data-period="today">오늘</button>
+      <button type="button" id="sbatch-rankings-tab-week" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="week" tabindex="-1">이번 주</button>
+      <button type="button" id="sbatch-rankings-tab-month" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="month" tabindex="-1">이번 달</button>
+      <button type="button" id="sbatch-rankings-tab-all" role="tab" aria-selected="false" aria-controls="sbatch-rankings-results" data-period="all" tabindex="-1">전체</button>
     </div>
-    <footer class="fun-jobs-footer"><span id="fun-jobs-count" class="fun-jobs-count">Shared with the lab</span></footer>
+    <div class="sbatch-rankings-scroll" lang="ko">
+      <p id="sbatch-rankings-status" class="sbatch-rankings-status" role="status"></p>
+      <div id="sbatch-rankings-results" role="tabpanel" aria-labelledby="sbatch-rankings-tab-today" tabindex="0">
+        <p id="sbatch-rankings-summary" class="sbatch-rankings-summary"></p>
+        <ol id="sbatch-rankings-list" class="sbatch-rankings-list" aria-label="Sbatch 제출 횟수 상위 5명"></ol>
+        <p id="sbatch-rankings-empty" class="sbatch-rankings-empty"></p>
+      </div>
+    </div>
+    <footer class="sbatch-rankings-footer" lang="ko">
+      <span id="sbatch-rankings-updated" class="sbatch-rankings-updated">집계 대기 중</span>
+      <span>한국 시간 기준 · 주 시작: 월요일 · 30초마다 갱신</span>
+      <span id="sbatch-rankings-coverage">Slurm에 남아 있는 제출 기록 기준</span>
+      <span>배열 작업은 1회 · 재시작은 중복 집계하지 않음</span>
+    </footer>
   </section>
   <script src="motion.js"></script>
   <script src="app.js"></script>
   <script src="gpu-jobs.js"></script>
   <script src="live.js"></script>
-  <script src="fun-jobs.js"></script>
+  <script src="sbatch-rankings.js"></script>
 </body>
 </html>

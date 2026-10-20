@@ -184,6 +184,42 @@ def install_fun_jobs(module, kind, path_value=None):
     module.build_payload = build_payload
 
 
+def install_sbatch_rankings(module, kind, path_value=None):
+    """Read only the administrator's small aggregate, never privileged history."""
+    if kind != "slurm" or path_value is None:
+        return
+    original_build_payload = module.build_payload
+
+    def build_payload():
+        payload = original_build_payload()
+        if not isinstance(payload, dict):
+            return payload
+        rankings = {"version": 1, "status": "unavailable"}
+        try:
+            if not isinstance(path_value, str) or not Path(path_value).is_absolute():
+                raise ValueError("Invalid aggregate path")
+            fd = os.open(path_value, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode)
+                        or info.st_uid not in (0, os.getuid())
+                        or stat.S_IMODE(info.st_mode) & 0o022
+                        or info.st_size > 65536):
+                    raise ValueError("Unsafe aggregate file")
+                value = json.loads(stream.read(65537))
+                if not isinstance(value, dict) or value.get("version") != 1:
+                    raise ValueError("Invalid aggregate")
+                # Only aggregate fields leave Server1; detailed records stay local.
+                rankings = {key: value.get(key) for key in (
+                    "version", "status", "collected_at", "timezone", "history_start", "periods")}
+        except (OSError, ValueError, TypeError, RecursionError):
+            pass
+        payload["sbatch_rankings"] = rankings
+        return payload
+
+    module.build_payload = build_payload
+
+
 def slurm_number(value):
     """Read Slurm's optional numeric value without treating its set flag as data."""
     if isinstance(value, dict):
@@ -714,6 +750,7 @@ def main():
     install_slurm_gpu_mapping(module, args.kind)
     install_slurm_job_requests(module, args.kind)
     install_fun_jobs(module, args.kind, config.get("fun_jobs_path"))
+    install_sbatch_rankings(module, args.kind, config.get("sbatch_rankings_path"))
     if auth_mode == "sites":
         module.SESSION.headers.update({"OAI-Sites-Authorization": "Bearer " + config["sites_bypass_token"]})
     if args.once:

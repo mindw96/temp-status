@@ -1,0 +1,80 @@
+/* A floating view that leaves the existing dashboard layout intact. */
+.sbatch-rankings-launcher {
+  position:fixed;
+  right:max(22px, env(safe-area-inset-right));
+  bottom:max(20px, env(safe-area-inset-bottom));
+  z-index:30;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:10px 16px;
+  border:1px solid var(--toggle-border);
+  border-radius:100px;
+  background:var(--dialog-bg);
+  color:var(--text-primary);
+  box-shadow:0 2px 1px var(--glass-inset) inset, 0 4px 20px var(--glass-shadow);
+  font-size:13px;
+  font-weight:500;
+  backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  transition:background 150ms ease, box-shadow 150ms ease;
+}
+.sbatch-rankings-launcher:hover,
+.sbatch-rankings-launcher[aria-expanded="true"] {background:var(--toggle-bg);box-shadow:0 2px 1px var(--glass-inset) inset, 0 6px 24px var(--glass-shadow-deep)}
+.sbatch-rankings-launcher svg {width:18px;height:18px;color:var(--link)}
+.sbatch-rankings-panel {
+  position:fixed;
+  right:max(22px, env(safe-area-inset-right));
+  bottom:calc(max(20px, env(safe-area-inset-bottom)) + 56px);
+  z-index:31;
+  display:flex;
+  flex-direction:column;
+  width:min(368px, calc(100vw - 32px));
+  max-height:min(620px, calc(100dvh - 100px));
+  overflow:hidden;
+  border:1px solid var(--control-border);
+  border-radius:20px;
+  background:var(--dialog-bg);
+  color:var(--text-primary);
+  box-shadow:0 2px 1px var(--glass-inset) inset, 0 16px 50px var(--glass-shadow-deep);
+  backdrop-filter:blur(30px) saturate(180%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  transform-origin:bottom right;
+  animation:sbatch-rankings-appear 180ms var(--modal-ease, ease-out);
+}
+.sbatch-rankings-panel[hidden], .sbatch-rankings-panel [hidden] {display:none}
+.sbatch-rankings-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px 10px 18px;flex-shrink:0}
+.sbatch-rankings-heading h2 {font-size:17px;letter-spacing:-.02em}
+.sbatch-rankings-close {display:grid;place-items:center;width:36px;height:36px;flex-shrink:0;border-radius:50%;color:var(--text-secondary)}
+.sbatch-rankings-close:hover {background:var(--pill-bg)}
+.sbatch-rankings-close svg {width:18px;height:18px}
+.sbatch-rankings-tabs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin:0 18px 12px;padding:4px;border:1px solid var(--control-border);border-radius:12px;background:var(--control-bg);flex-shrink:0}
+.sbatch-rankings-tabs button {min-height:36px;padding:5px 3px;border:1px solid transparent;border-radius:8px;color:var(--text-secondary);font-size:12px;line-height:1.5;white-space:nowrap}
+.sbatch-rankings-tabs button:hover {color:var(--text-primary)}
+.sbatch-rankings-tabs button[aria-selected="true"] {border-color:var(--control-border);background:var(--dialog-bg);color:var(--text-primary);box-shadow:0 1px 5px var(--glass-shadow)}
+.sbatch-rankings-scroll {min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 18px 5px}
+.sbatch-rankings-status {margin:0 0 10px;padding:9px 11px;border-radius:10px;background:var(--soft-blue);color:var(--text-secondary);font-size:11px;line-height:1.7}
+.sbatch-rankings-status[data-kind="warning"] {color:var(--pending-text)}
+.sbatch-rankings-summary {margin:0 0 4px;color:var(--text-tertiary);font-size:11px;line-height:1.7}
+.sbatch-rankings-list {list-style:none;margin:0;padding:0}
+.sbatch-rankings-record {display:grid;grid-template-columns:20px minmax(0,1fr) max-content;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--divider);font-size:13px;line-height:1.6}
+.sbatch-rankings-record:first-child {border-top:0}
+.sbatch-rankings-position {color:var(--text-tertiary);font-size:12px;font-variant-numeric:tabular-nums}
+.sbatch-rankings-user {color:var(--text-primary);overflow-wrap:anywhere}
+.sbatch-rankings-count {color:var(--text-primary);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sbatch-rankings-count small {margin-left:3px;color:var(--text-secondary);font-size:11px;font-weight:400}
+.sbatch-rankings-empty {padding:23px 0 27px;color:var(--text-tertiary);font-size:12px;line-height:1.8}
+.sbatch-rankings-empty strong {display:block;margin-bottom:4px;color:var(--text-primary);font-size:14px;font-weight:500}
+.sbatch-rankings-footer {padding:11px 18px 14px;border-top:1px solid var(--divider);color:var(--text-tertiary);font-size:10px;line-height:1.8;flex-shrink:0}
+.sbatch-rankings-footer span {display:block}
+.sbatch-rankings-updated {margin-bottom:3px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+@keyframes sbatch-rankings-appear {from {opacity:0;transform:translateY(7px) scale(.98)} to {opacity:1;transform:none}}
+@media (max-width:480px) {
+  .sbatch-rankings-launcher {right:max(12px, env(safe-area-inset-right));bottom:max(12px, env(safe-area-inset-bottom))}
+  .sbatch-rankings-panel {right:max(12px, env(safe-area-inset-right));bottom:calc(max(12px, env(safe-area-inset-bottom)) + 56px);width:calc(100vw - 24px);max-height:calc(100dvh - 92px)}
+}
+@media (prefers-reduced-motion:reduce) {
+  .sbatch-rankings-panel {animation:none}
+  .sbatch-rankings-launcher {transition:none}
+}

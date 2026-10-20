@@ -1,0 +1,29 @@
+[Unit]
+Description=NLP lab read-only Slurm submission ranking
+After=network-online.target munge.service slurmdbd.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 -u /usr/local/lib/nlp-status-ranking/sbatch_rankings.py --output /var/lib/nlp-status-ranking/sbatch-rankings.json --cache /var/lib/nlp-status-ranking/cache.json --interval 30
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=10
+Environment=PATH=/usr/bin:/bin
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=TZ=UTC
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/nlp-status-ranking
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=768M
+
+[Install]
+WantedBy=multi-user.target
