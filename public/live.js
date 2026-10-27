@@ -26,6 +26,26 @@ function ageText(at) {
   const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
   return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : `${Math.floor(seconds / 3600)}h ago`;
 }
+function nodeStatus(n) {
+  // On/Off describes collector reporting, not an independently measured power state.
+  const received = Number.isFinite(n.receivedAt), age = received ? Date.now() - n.receivedAt : null;
+  const connection = liveState.error || !received || age < 0 ? 'Unknown' : age < FRESHNESS_MS ? 'On' : 'Off';
+  const connectionTitle = liveState.error ? 'Server reporting status is unknown because the dashboard could not refresh.'
+    : !received || age < 0 ? 'Server reporting status is unknown. No valid node report has been received.'
+    : `${connection === 'On' ? 'Reporting online: a node report arrived within the last 3 minutes.' : 'Reporting offline: no node report for at least 3 minutes.'} Last received: ${clockText(n.receivedAt)}. Hardware power is not independently verified.`;
+  const rawState = typeof n.state === 'string' ? n.state.trim() : '';
+  const labels = {DRAINED:'Drain',DRAIN:'Drain',DRAINING:'Draining',DRNG:'Draining',MIXED:'Mix',MIX:'Mix',ALLOCATED:'Alloc',ALLOC:'Alloc',IDLE:'Idle',DOWN:'Down',COMPLETING:'Completing',COMP:'Completing',UNKNOWN:'Unknown',UNK:'Unknown'};
+  const slurm = n.isCloud ? 'N/A' : !n.slurmFresh || liveState.error || !rawState ? 'Unknown'
+    : rawState.replace(/[A-Za-z_]+/g, value => labels[value.toUpperCase()] || value.charAt(0).toUpperCase() + value.slice(1).toLowerCase());
+  const slurmTitle = n.isCloud ? 'This server does not use Slurm.'
+    : !n.slurmFresh || liveState.error ? `Slurm status is unavailable or over 3 minutes old.${rawState ? ` Last reported: ${rawState}.` : ''}`
+    : `Slurm node state: ${rawState || 'not reported'}. Independent of the server reporting status.`;
+  return {connection, connectionTitle, slurm, slurmTitle};
+}
+function nodeStatusMarkup(n) {
+  const status = nodeStatus(n);
+  return `<div class="node-status-line"><span class="node-connection is-${status.connection.toLowerCase()}" title="${esc(status.connectionTitle)}"><span class="node-status-dot" aria-hidden="true"></span><span class="sr-only">Server reporting: </span>${status.connection}</span><span class="node-slurm-state" title="${esc(status.slurmTitle)}">Slurm <span>${esc(status.slurm)}</span></span></div>`;
+}
 function normalizeSnapshot(snapshot) {
   jobs = (snapshot.slurm?.data.squeue || []).map(j => ({id: String(j.job_id), name: j.name || 'Unnamed job', user: j.user || 'Unknown', state: stateNames[j.job_state] || j.job_state || 'UNKNOWN', partition: j.partition || 'Unknown', gpus: j.req_gpus || '—', elapsed: j.time || '—', target: j.node_list_or_reason || j.reason || '—', indices: [], raw: j}));
   partitionMeta = Object.fromEntries([...new Set(jobs.map(j => j.partition))].map(p => [p, {label: 'Slurm job partition', model: p}]));
@@ -192,10 +212,10 @@ function storageMarkup(n) {
 renderNodes = function() {
   if (liveState.mode === 'demo') return demoRender.nodes();
   $('#node-grid').innerHTML = nodes.length ? nodes.map(n => {
-    const modelLabel = nodeGpuModelLabel(n);
+    const modelLabel = nodeGpuModelLabel(n), status = nodeStatus(n);
     return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
-      <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details">
-        <div class="node-header"><div class="node-title"><span class="node-name">${esc(displayNodeName(n.id))}</span></div><span class="node-model-badge" title="${esc(modelLabel)}">${esc(modelLabel)}</span></div>
+      <button class="node-summary" data-node="${esc(n.id)}" aria-label="${esc(displayNodeName(n.id))} details, reporting ${status.connection}, Slurm ${esc(status.slurm)}">
+        <div class="node-header"><div class="node-heading"><div class="node-title"><span class="node-name">${esc(displayNodeName(n.id))}</span></div>${nodeStatusMarkup(n)}</div><span class="node-model-badge" title="${esc(modelLabel)}">${esc(modelLabel)}</span></div>
         ${n.gpus.length ? '' : '<p class="node-no-gpu">Waiting for the node collector</p>'}
         <div class="resource-metrics" aria-label="${n.isCloud ? 'Host utilization' : 'Slurm resources: free / total'}">${n.isCloud ? resourceMarkup('CPU', !n.stale ? n.raw?.cpu_percent : null) + resourceMarkup('RAM', !n.stale ? n.raw?.ram_percent : null) : allocationMarkup(n, 'cpu') + allocationMarkup(n, 'ram')}</div>
         ${storageMarkup(n)}

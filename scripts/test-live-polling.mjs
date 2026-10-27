@@ -342,6 +342,50 @@ assert.match(failures.element('#dialog-content').innerHTML, /every 30 seconds/);
 assert.match(failures.element('#dialog-content').innerHTML, /older than 3 minutes/);
 assert.match(failures.element('#dialog-content').innerHTML, /at least 5 seconds/);
 
+// Server reporting and Slurm scheduling are independent. A drained or down
+// scheduler node can still report normally; a failed browser read cannot prove
+// that its reporter (or physical server) is off.
+const statusClient = browser();
+await flush();
+const renderStatus = ({nodeAge = 0, slurmAge = 0, state = 'MIXED', missingNode = false, missingSlurm = false, error = null} = {}) => {
+  statusClient.evaluate(`
+    liveState.error = ${JSON.stringify(error)};
+    liveState.snapshot.nodes = ${missingNode ? '[]' : `[{receivedAt: Date.now() - ${nodeAge}, data: {server_name: 'devbox', gpus: []}}]`};
+    liveState.snapshot.slurm = ${missingSlurm ? 'null' : `{receivedAt: Date.now() - ${slurmAge}, data: {sinfo: [{name: 'devbox', state: ${JSON.stringify(state)}}], squeue: []}}`};
+    normalizeSnapshot(liveState.snapshot); renderNodes();
+  `);
+  return JSON.parse(statusClient.evaluate('JSON.stringify(nodeStatus(nodes[0]))'));
+};
+const assertStatus = (fixture, connection, slurm) => {
+  const actual = renderStatus(fixture);
+  assert.equal(actual.connection, connection, JSON.stringify(fixture));
+  assert.equal(actual.slurm, slurm, JSON.stringify(fixture));
+  const text = statusClient.element('#node-grid').innerHTML.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(text, new RegExp(`\\b${connection}\\b`));
+  assert.ok(text.includes(slurm), `Missing rendered Slurm state: ${slurm}`);
+  return actual;
+};
+assertStatus({state: 'drained'}, 'On', 'Drain');
+assertStatus({state: 'DOWN'}, 'On', 'Down');
+assertStatus({nodeAge: 179999}, 'On', 'Mix');
+const offlineStatus = assertStatus({nodeAge: 180000}, 'Off', 'Mix');
+assert.match(offlineStatus.connectionTitle, /report/i);
+assert.match(offlineStatus.connectionTitle, /power.*(?:not|unverified)|(?:not|unverified).*power/i);
+assertStatus({error: 'Request failed'}, 'Unknown', 'Unknown');
+assertStatus({missingNode: true}, 'Unknown', 'Mix');
+assertStatus({nodeAge: -1000}, 'Unknown', 'Mix');
+assertStatus({slurmAge: 180000}, 'On', 'Unknown');
+assertStatus({missingSlurm: true}, 'On', 'Unknown');
+assertStatus({state: ''}, 'On', 'Unknown');
+for (const [state, label] of [
+  ['MIXED+DRAIN', 'Mix+Drain'], ['IDLE*', 'Idle*'], ['drng', 'Draining'],
+  ['allocated', 'Alloc'], ['comp', 'Completing'], ['unk', 'Unknown']
+]) assertStatus({state}, 'On', label);
+renderStatus();
+const cloudStatus = JSON.parse(statusClient.evaluate('JSON.stringify(nodeStatus({...nodes[0], isCloud:true}))'));
+assert.equal(cloudStatus.connection, 'On');
+assert.equal(cloudStatus.slurm, 'N/A');
+
 // Disk availability must use the reported free value, not total minus used:
 // reserved filesystem blocks are not available to ordinary users.
 const storage = browser();
@@ -555,4 +599,4 @@ for (const [value, expected] of [[0, '0%'], [45, '45%'], [100, '100%'], [null, '
   assert.doesNotMatch(markup, /class="meter|width:[\d.]+%/);
 }
 
-console.log('PASS: relocated refresh control and error-only connection status, hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, incomplete snapshot retention/30-second recovery/expiry/empty-queue handling, retained stale data, 3-minute freshness, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');
+console.log('PASS: relocated refresh control and error-only connection status, hidden startup/pause, abort and visibility resume, 30-second cadence, 5-second manual cooldown, quota/error backoff and recovery, incomplete snapshot retention/30-second recovery/expiry/empty-queue handling, retained stale data, 3-minute freshness, independent server reporting and Slurm states/unknowns/compound flags, disk availability/reserves/units/missing/zero/stale handling, card/detail metric bounds/zero/stale/error handling, and text-only Slurm CPU/RAM free/total capacity/idle/reserves/invalid/state/freshness handling.');
