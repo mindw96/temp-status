@@ -271,6 +271,12 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 #dialog-title{margin-bottom:7px;font-size:26px;font-weight:600;line-height:1.3;letter-spacing:-.025em;overflow-wrap:anywhere}
 .dialog-subtitle{margin-bottom:20px;font-size:13px;color:var(--text-tertiary);overflow-wrap:anywhere}
 #dialog-content{overflow-wrap:anywhere}
+.research-groups{display:grid;gap:18px}
+.research-group+.research-group{padding-top:18px;border-top:1px solid var(--divider)}
+.research-group-heading{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.research-group-heading h3{font-size:14px;font-weight:500;line-height:1.5}
+.research-group-members{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;list-style:none;padding:0;margin:0;font-size:13px;line-height:1.6;color:var(--text-secondary)}
+.research-group-members li{min-width:0}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin:20px 0;border:1px solid var(--divider);border-radius:12px;background:var(--divider);overflow:hidden}
 .detail-grid>div{padding:14px;background:var(--dialog-bg);min-width:0}
 .detail-grid dt{font-size:11px;color:var(--text-tertiary)}
@@ -322,6 +328,9 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .page-heading h1{font-size:28px}
   .heading-controls{justify-content:space-between;gap:6px;margin-left:0}
   .heading-controls .snapshot{font-size:11px}
+  .heading-controls:has(#show-groups){flex-wrap:wrap;justify-content:flex-end}
+  .heading-controls:has(#show-groups) .snapshot{flex-basis:100%;margin-bottom:2px}
+  .research-group-members{grid-template-columns:repeat(2,minmax(0,1fr))}
   .header-action{min-width:0;padding-inline:10px;font-size:12px;gap:5px}
   .section-heading{gap:10px;flex-wrap:wrap}
   .section-heading h2,.jobs-header h2{font-size:17px}
@@ -361,6 +370,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .dialog-gpus.with-jobs{grid-template-columns:1fr}
 }
 @media(max-width:360px){
+  .research-group-members{grid-template-columns:1fr}
   .heading-controls{gap:4px}
   .header-action{font-size:10px;padding-inline:6px}
 }
