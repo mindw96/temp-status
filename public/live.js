@@ -99,6 +99,7 @@ function gpuJobsMarkup(n, g, compactCard = false) {
   const empty = (message, idle = false) => compactCard
     ? `<div class="gpu-job-unlinked gpu-job-vacant" title="${esc(message)}"><span class="gpu-card-header">${idle ? '' : `<span class="gpu-job-status">${esc(message)}</span>`}${index}</span><span class="gpu-job-name gpu-job-placeholder" aria-hidden="true">&nbsp;</span><span class="sr-only">${esc(message)}</span></div>`
     : `<span class="gpu-job-empty">${esc(message)}</span>`;
+  if (nodeStatus(n).connection === 'Off') return empty('Server Off · GPU unavailable', true);
   if (g.error && !g.allocationRecords?.length) return empty('GPU report unavailable');
   if (n.isCloud) return !g.processes.length ? empty(n.stale ? 'No process in last report' : 'No process observed', !n.stale) : `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}${cloudProcessesMarkup(n, g)}`;
   if (!g.jobRecords.length) {
@@ -129,6 +130,7 @@ function cloudProcessesMarkup(n, g) {
   return [...users].map(([user, group]) => `<div class="gpu-process-user"><span class="gpu-process-name" title="${esc(user ? displayUserName(user) : 'User unavailable')}">${esc(user ? displayUserName(user) : 'User unavailable')}</span><span class="gpu-process-count">${group.count} ${group.count === 1 ? 'process' : 'processes'}</span></div>`).join('');
 }
 function gpuJobsCaption(n) {
+  if (nodeStatus(n).connection === 'Off') return 'Server Off · GPUs unavailable';
   if (n.stale) return 'Last observed · GPU data stale';
   if (n.isCloud) return 'Standalone · observed GPU processes';
   if (!n.slurmFresh) return 'Observed processes · Slurm data stale';
@@ -176,8 +178,9 @@ function gpuMetricMarkup(label, value) {
   return `<div class="gpu-metric"><span class="gpu-metric-label">${esc(label)}</span>${meter}<span class="gpu-metric-value"><strong>${percent(usable)}</strong></span></div>`;
 }
 function gpuBlockMarkup(n, g) {
-  const available = !n.stale && !g.error;
-  const occupied = !n.stale && ((!n.isCloud && n.slurmFresh && g.allocated) || (!g.error && g.processes.length > 0));
+  const offline = nodeStatus(n).connection === 'Off';
+  const available = !offline && !n.stale && !g.error;
+  const occupied = !offline && !n.stale && ((!n.isCloud && n.slurmFresh && g.allocated) || (!g.error && g.processes.length > 0));
   const mapped = Number.isInteger(g.gresIndex) && g.gresIndex >= 0 && g.gresIndex <= 255;
   // Missing allocation maps must not make a potentially reserved GPU look free.
   const unallocated = available && !occupied && !n.isCloud && n.slurmFresh && mapped
@@ -188,7 +191,7 @@ function gpuBlockMarkup(n, g) {
   const memoryAvailable = available && validNumber(g.memoryUsed) !== null && validNumber(g.memory) !== null && g.memory > 0 && g.memoryUsed >= 0 && g.memoryUsed <= g.memory;
   const vramPercent = memoryAvailable ? g.memoryUsed / g.memory * 100 : null;
   const capacity = memoryAvailable ? `(${compactGiB(g.memoryUsed)} / ${compactGiB(g.memory)} GiB)` : '';
-  return `<div class="gpu-job-row gpu-block${occupied ? ' occupied' : ''}${unallocated ? ' unallocated' : ''}" data-gpu-index="${esc(g.index)}"><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent)}<span class="gpu-memory">${esc(capacity)}</span></div></div>`;
+  return `<div class="gpu-job-row gpu-block${offline ? ' is-offline' : ''}${occupied ? ' occupied' : ''}${unallocated ? ' unallocated' : ''}" data-gpu-index="${esc(g.index)}"${offline ? ' aria-disabled="true" title="Server Off · GPU unavailable"' : ''}><div class="gpu-job-items">${gpuJobsMarkup(n, g, true)}</div><div class="gpu-metrics">${gpuMetricMarkup('UTIL', util)}${gpuMetricMarkup('VRAM', vramPercent)}<span class="gpu-memory">${esc(capacity)}</span></div></div>`;
 }
 function storageMarkup(n) {
   const raw = n.raw || {};
@@ -246,13 +249,14 @@ showNode = function(id) {
   if (liveState.mode === 'demo') return demoRender.node(id);
   const n = nodes.find(n => n.id === id);
   if (!n) return;
+  const offline = nodeStatus(n).connection === 'Off';
   const memory = n.raw;
   const context = n.isCloud ? 'Standalone cloud node · no Slurm' : `${n.state}${n.slurmFresh ? '' : ' · Slurm data stale'}`;
   const cpuDetail = n.isCloud ? detailItem('CPU cores', n.cpu ?? 'Not reported') : detailItem('Slurm CPU allocation', allocationDescription(n, 'cpu')) + detailItem('Slurm RAM allocation', allocationDescription(n, 'ram'));
   const note = n.isCloud ? 'This standalone cloud node reports GPU processes and users without Slurm. Process counts do not indicate reserved GPU allocations.' : 'CPU and RAM summaries show free / total capacity from Slurm. Free capacity is unallocated; job constraints, reservations and scheduling policies can still prevent immediate scheduling. GPU cards show the user and job assigned by Slurm, even when no process is running on the GPU. Utilization and VRAM remain measured values. Observed process labels are used only when a Slurm owner is unavailable; stale or ambiguous allocation data is not treated as current ownership.';
   openDialog(`<h2 id="dialog-title">${esc(displayNodeName(n.id))}</h2><p class="dialog-subtitle">${esc(context)} · ${esc(ageText(n.receivedAt))}</p><dl class="detail-grid">${detailItem('GPU report', n.stale ? liveState.error ? 'Live refresh unavailable; last report shown' : 'Missing or over 3 minutes old' : 'Fresh report')}${cpuDetail}${detailItem('Host RAM', memory?.ram_used_gb !== null && memory?.ram_used_gb !== undefined ? `${memory.ram_used_gb} / ${memory.ram_total_gb} GiB${n.stale ? ' (stale)' : ''}` : 'Not reported')}${detailItem('Report received at', clockText(n.receivedAt))}</dl>
     ${storageMarkup(n)}<p class="storage-note">Storage shows percent used and (free / total GiB). Free space is available to users and excludes filesystem reserves.</p>
-    ${gpuJobsCaptionMarkup(n)}<div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(g.util)}</span><span>${g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
+    ${gpuJobsCaptionMarkup(n)}<div class="dialog-gpus with-jobs">${n.gpus.map(g => `<div class="dialog-gpu ${offline || g.util === null ? 'gpu-offline' : ''}"><strong>GPU ${esc(g.index)}</strong><span>Compute ${percent(offline ? null : g.util)}</span><span>${offline || g.memoryUsed === null || g.memory === null || n.stale || g.error ? 'VRAM —' : `VRAM ${g.memoryUsed.toFixed(1)} / ${g.memory.toFixed(1)} GiB`}</span><div class="dialog-gpu-jobs"><span class="gpu-jobs-label">${n.isCloud ? 'User / Processes' : 'Job ID · User / Job name'}</span>${gpuJobsMarkup(n, g)}</div></div>`).join('')}</div>
     <p class="dialog-note">${note} Reports older than 3 minutes, or shown during a failed refresh, are marked stale and excluded from current utilization.</p>`, n.isCloud ? 'CLOUD NODE · LIVE REPORTS' : 'GPU NODE · LIVE REPORTS');
 };
 function requestedRam(job) {

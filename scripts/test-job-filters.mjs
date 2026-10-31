@@ -581,7 +581,7 @@ for (const [reason, code] of [
   if (['missing Slurm report', 'stale node report', 'stale Slurm report', 'failed refresh'].includes(reason)) {
     assert.deepEqual(plain(evaluate('nodes[0].gpus.map(g => g.allocated)')), [false, false, false, false], reason);
     assert.doesNotMatch(element('#node-grid').innerHTML, /data-source="allocation"/, reason);
-    assert.match(element('#node-grid').innerHTML, /GPU data stale|Slurm data stale/, reason);
+    assert.match(element('#node-grid').innerHTML, reason === 'stale node report' ? /Server Off · GPUs unavailable/ : /GPU data stale|Slurm data stale/, reason);
   }
 }
 for (const status of ['DOWN', 'MIXED+DRAIN', 'FAIL', 'MAINT', 'UNKNOWN', 'NOT_RESPONDING', 'POWER_DOWN', 'REBOOT', 'FUTURE', 'ALLOCATED*']) {

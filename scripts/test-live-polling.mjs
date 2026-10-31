@@ -386,6 +386,70 @@ const cloudStatus = JSON.parse(statusClient.evaluate('JSON.stringify(nodeStatus(
 assert.equal(cloudStatus.connection, 'On');
 assert.equal(cloudStatus.slurm, 'N/A');
 
+// A stopped reporter must not leave its last process owner on an apparently
+// usable GPU. Keep the device inventory and independent Slurm queue intact.
+const offlineGpus = browser();
+await flush();
+offlineGpus.evaluate(`
+  Object.assign(liveState.snapshot.slurm.data.squeue[0], {
+    node_list_or_reason:'devbox', req_gpus:'2', alloc_gpus:'2',
+    gpu_allocations:[{node:'devbox',gres_indices:[0,1]}]
+  });
+  liveState.snapshot.nodes[0].data.gpus = [0,1].map(id => ({
+    id, slurm_gres_index:id, gpu_utilization:87, vram_total_mb:49152, vram_total_used_mb:32768,
+    processes:id===0 ? [{pid:1,slurm_job_id:'1',username:'lab-user'}] : []
+  }));
+  normalizeSnapshot(liveState.snapshot); render();
+`);
+const offlineCards = () => JSON.parse(offlineGpus.evaluate('JSON.stringify(nodes[0].gpus.map(g=>gpuBlockMarkup(nodes[0],g)))'));
+for (const card of offlineCards()) {
+  assert.match(card, / occupied/);
+  assert.match(card, /Training/);
+}
+const assertOfflineCards = () => {
+  const cards = offlineCards();
+  assert.equal(cards.length, 2);
+  for (const [index, card] of cards.entries()) {
+    assert.match(card, /is-offline/);
+    assert.match(card, /aria-disabled="true"/);
+    assert.match(card, new RegExp(`GPU ${index}`));
+    assert.match(card, /gpu-job-placeholder/);
+    assert.match(card, /GPU unavailable/);
+    assert.doesNotMatch(card, /Training|lab-user|data-job=|data-source=|role="meter"|aria-valuenow=|87%|GiB/);
+    assert.doesNotMatch(card, /class="[^"]*\b(?:occupied|unallocated)\b/);
+  }
+  offlineGpus.evaluate('showNode("devbox")');
+  const detail = offlineGpus.element('#dialog-content').innerHTML;
+  assert.match(detail, /Server Off · GPUs unavailable/);
+  assert.doesNotMatch(detail, /Training|lab-user|data-job=|87%|32\.0 \/ 48\.0/);
+};
+// The exact Off boundary also applies if a detail is opened between polls.
+offlineGpus.evaluate('nodes[0].receivedAt=Date.now()-180000');
+assertOfflineCards();
+offlineGpus.evaluate('liveState.snapshot.nodes[0].receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot); render();');
+assertOfflineCards();
+assert.match(offlineGpus.element('#job-rows').innerHTML, /Training/);
+assert.equal(offlineGpus.evaluate('liveState.snapshot.nodes[0].data.gpus[0].processes.length'), 1);
+// Cloud process reports use the same unavailable state.
+offlineGpus.evaluate('liveState.snapshot.nodes[0].data.source_type="cloud"; normalizeSnapshot(liveState.snapshot)');
+assertOfflineCards();
+offlineGpus.evaluate('delete liveState.snapshot.nodes[0].data.source_type; liveState.error="Request failed"; normalizeSnapshot(liveState.snapshot)');
+assert.equal(offlineGpus.evaluate('nodeStatus(nodes[0]).connection'), 'Unknown');
+assert.ok(offlineCards().every(card => !card.includes('is-offline')));
+offlineGpus.evaluate('liveState.error=null; liveState.snapshot.nodes[0].receivedAt=Date.now(); liveState.snapshot.slurm.receivedAt=Date.now()-180000; normalizeSnapshot(liveState.snapshot)');
+assert.equal(offlineGpus.evaluate('nodeStatus(nodes[0]).connection'), 'On');
+assert.equal(offlineGpus.evaluate('nodeStatus(nodes[0]).slurm'), 'Unknown');
+assert.ok(offlineCards().every(card => !card.includes('is-offline')));
+// Fresh reports restore both the active GPU and the reserved GPU with no process.
+offlineGpus.evaluate('liveState.snapshot.slurm.receivedAt=Date.now(); normalizeSnapshot(liveState.snapshot); render(); showNode("devbox");');
+for (const card of offlineCards()) {
+  assert.match(card, / occupied/);
+  assert.match(card, /Training/);
+  assert.match(card, /lab-user/);
+  assert.match(card, /aria-valuenow="87"/);
+  assert.doesNotMatch(card, /is-offline|aria-disabled/);
+}
+
 // Disk availability must use the reported free value, not total minus used:
 // reserved filesystem blocks are not available to ordinary users.
 const storage = browser();

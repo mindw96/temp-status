@@ -144,10 +144,11 @@ section[id]{scroll-margin-top:24px}
 .gpu-jobs-heading{display:none}
 .gpu-job-row.gpu-block{min-width:0;padding:9px 10px;margin:5px 0 0;font-weight:400;background:transparent;border-color:transparent}
 .gpu-job-row.gpu-block.occupied{background:#fff}
-.gpu-job-row.gpu-block.unallocated{background:#ebebeb}
-:root:not([data-theme='dark']) .gpu-job-row.gpu-block.unallocated{box-shadow:none}
+.gpu-job-row.gpu-block.unallocated,.gpu-job-row.gpu-block.is-offline{background:#ebebeb}
+:root:not([data-theme='dark']) .gpu-job-row.gpu-block.unallocated,:root:not([data-theme='dark']) .gpu-job-row.gpu-block.is-offline{box-shadow:none}
 :root[data-theme='dark'] .gpu-job-row.gpu-block.occupied{background:rgba(255,255,255,.08)}
-:root[data-theme='dark'] .gpu-job-row.gpu-block.unallocated{background:transparent}
+:root[data-theme='dark'] .gpu-job-row.gpu-block.unallocated,:root[data-theme='dark'] .gpu-job-row.gpu-block.is-offline{background:transparent}
+.gpu-job-row.is-offline .gpu-job-index,.gpu-job-row.is-offline .gpu-metric strong{color:var(--text-tertiary)}
 .gpu-job-row:first-of-type{margin-top:0}
 .gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:18.2px;font-size:12px;line-height:1.3}
 .gpu-job-index{font-size:12px;font-weight:400;color:var(--text-primary);white-space:nowrap}
@@ -157,7 +158,7 @@ section[id]{scroll-margin-top:24px}
 .gpu-metric-value{display:contents}
 .gpu-meter,.storage-meter{display:block;min-width:16px;height:4px;border-radius:100px;overflow:hidden;background:var(--meter-track)}
 .gpu-meter>span,.storage-meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,hsl(var(--usage-meter-hue),80%,44%),hsl(var(--usage-meter-hue),85%,50%))}
-.gpu-job-row.unallocated .gpu-meter,.gpu-job-row.unallocated .gpu-meter>span{background:transparent}
+.gpu-job-row.unallocated .gpu-meter,.gpu-job-row.unallocated .gpu-meter>span,.gpu-job-row.is-offline .gpu-meter{background:transparent}
 .gpu-metric strong{text-align:right;font-weight:400;color:var(--link)}
 .gpu-memory{grid-column:1/-1;min-height:1.4em;text-align:right;white-space:nowrap;color:var(--text-secondary)}
 .gpu-job-items{display:grid;gap:4px;min-width:0}
