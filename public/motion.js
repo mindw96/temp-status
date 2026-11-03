@@ -85,7 +85,7 @@
     });
   });
 
-  // Stageshow's measured movement and Meter reveal, adapted for real updates.
+  // Stageshow's Meter and content reveals, adapted for real updates.
   // See third-party/stageshow/NOTICE.md. Text/ARIA always hold the latest data.
   const updates = new Set();
   const moving = new WeakMap();
@@ -156,48 +156,28 @@
     }
   }
   function captureRows(root) {
-    const rows = new Map(), top = root.getBoundingClientRect().top;
+    const keys = [...root.querySelectorAll('[data-motion-row]')].map(row => row.dataset.motionRow);
     const opacity = moving.has(root) ? getComputedStyle(root).opacity : null;
     const focused = root.contains(document.activeElement) ? document.activeElement : null;
     const focusRow = focused?.closest('[data-motion-row]');
-    root.querySelectorAll('[data-motion-row]').forEach(row => {
-      rows.set(row.dataset.motionRow, {top: row.getBoundingClientRect().top - top, visible: visible(row)});
-    });
-    // Capture the current animated position before cancelling an interrupted sort.
+    // Capture current opacity before cancelling an interrupted list change.
     stopWithin(root);
-    return {rows, opacity, focus: focusRow ? {key: focusRow.dataset.motionRow, arrow: focused.classList.contains('table-arrow')} : null};
+    return {keys, opacity, focus: focusRow ? {key: focusRow.dataset.motionRow, arrow: focused.classList.contains('table-arrow')} : null};
   }
   function animateRows(root, previous) {
     if (!previous) return;
-    const rows = [...root.querySelectorAll('[data-motion-row]')], top = root.getBoundingClientRect().top;
+    const rows = [...root.querySelectorAll('[data-motion-row]')];
     if (previous.focus) {
       const row = rows.find(row => row.dataset.motionRow === previous.focus.key);
       (row?.querySelector(previous.focus.arrow ? '.table-arrow' : '.job-name') || document.querySelector('#job-search'))?.focus({preventScroll: true});
     }
-    if (!canAnimate() || !previous.rows.size) return;
-    const currentKeys = new Set(rows.map(row => row.dataset.motionRow));
-    const beforeOrder = [...previous.rows.keys()].filter(key => currentKeys.has(key));
-    const afterOrder = rows.map(row => row.dataset.motionRow).filter(key => previous.rows.has(key));
-    // Reversing a table makes rows cross and obscure each other's text. Keep
-    // the new order readable immediately; reserve travel for noncrossing moves.
-    if (beforeOrder.some((key, index) => key !== afterOrder[index])) {
-      animateUpdate(root, [{opacity: previous.opacity ?? 0.5}, {opacity: 1}],
-        {duration: 180, easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)'});
-      return;
-    }
-    const height = root.getBoundingClientRect().height;
-    let arrived = 0;
-    for (const row of rows) {
-      const before = previous.rows.get(row.dataset.motionRow);
-      const delta = before ? before.top - (row.getBoundingClientRect().top - top) : 0;
-      if (before?.visible && before.top < height && Math.abs(delta) > 1) {
-        animateUpdate(row, [{transform: `translateY(${delta}px)`}, {transform: 'translateY(0)'}],
-          {duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)'});
-      } else if (!before || (before.visible && before.top >= height)) {
-        animateUpdate(row, [{opacity: 0.4, transform: 'translateY(6px)'}, {opacity: 1, transform: 'translateY(0)'}],
-          {duration: 180, delay: Math.min(arrived++ * 16, 48), easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)', fill: 'backwards'});
-      }
-    }
+    if (!canAnimate() || !previous.keys.length) return;
+    const keys = rows.map(row => row.dataset.motionRow);
+    if (keys.length === previous.keys.length && keys.every((key, index) => key === previous.keys[index])) return;
+    // Reveal the latest list as a whole: travelling table rows can overlap or
+    // clip text when sorting, filtering or wrapping changes their geometry.
+    animateUpdate(root, [{opacity: previous.opacity ?? 0.5}, {opacity: 1}],
+      {duration: 180, easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)'});
   }
   function revealContent(element) {
     const current = moving.has(element) ? getComputedStyle(element) : null;

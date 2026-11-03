@@ -11,13 +11,11 @@ the previous rendered fill to the next report using the original Meter easing,
 shortened to 360 ms for live monitoring. Numeric labels and ARIA values update
 immediately; missing, stale and offline reports clear the old fill immediately.
 
-Job row movement is a local, keyed FLIP implementation informed by
-`references/motion.md` and `examples/reorder`: measure current positions, move
-only changed rows, keep readable text at its original size, and settle without
-bounce. When sorting reverses the relative order of shared rows, the new order
-uses a 180 ms opacity reveal instead of crossing text. Moves starting outside
-the reduced result area also use a short reveal. Ranking period changes follow
-the reference's 200 ms / 8 px body reveal.
+Slurm Jobs sorting, filtering and paging use a local keyed list comparison
+and a 180 ms opacity reveal informed by `references/motion.md`: keep readable
+text at its original size, use short response timing and settle without bounce.
+The latest list is immediately in place; rows do not travel across each other.
+Ranking period changes follow the reference's 200 ms / 8 px body reveal.
 These are adaptations for user-driven application state, not copies of a demo.
 
 No Stage/Act runtime, simulated input, React runtime, app icons, fonts or other
