@@ -170,7 +170,7 @@ function usageMeterMarkup(label, value, className) {
   const hue = usable === null ? null : 140 - 108 * blend(25, 35) - 32 * blend(65, 75);
   return usable === null
     ? `<span class="${esc(className)} is-unavailable" aria-hidden="true"></span>`
-    : `<span class="${esc(className)}" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:${usable}%;--usage-meter-hue:${hue}" aria-hidden="true"></span></span>`;
+    : `<span class="${esc(className)}" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usable}"><span style="width:100%;clip-path:inset(0 ${100 - usable}% 0 0 round 3px);--usage-meter-hue:${hue}" aria-hidden="true"></span></span>`;
 }
 function gpuMetricMarkup(label, value) {
   const usable = validNumber(value) !== null && value >= 0 && value <= 100 ? value : null;
@@ -214,6 +214,7 @@ function storageMarkup(n) {
 }
 renderNodes = function() {
   if (liveState.mode === 'demo') return demoRender.nodes();
+  const previousMeters = window.dashboardMotion.captureMeters?.($('#node-grid'));
   $('#node-grid').innerHTML = nodes.length ? nodes.map(n => {
     const modelLabel = nodeGpuModelLabel(n), status = nodeStatus(n);
     return `<article class="node live-node panel ds-server-card ${n.stale ? 'drain-node' : ''}" aria-label="${esc(displayNodeName(n.id))}">
@@ -227,8 +228,10 @@ renderNodes = function() {
     </article>`;
   }).join('') : `<div class="waiting-nodes"><span class="small-icon">${icon('server')}</span><h3>${liveState.error ? 'Cluster data is unavailable' : 'Waiting for node reports'}</h3><p>${liveState.error ? 'The last request failed. The dashboard will retry automatically.' : 'Received node reports will appear here automatically.'}</p><button id="waiting-help">Collector details ↗</button></div>`;
   $('#waiting-help')?.addEventListener('click', showDataInfo);
+  window.dashboardMotion.animateMeters?.($('#node-grid'), previousMeters);
 };
 renderJobs = function() {
+  const previousRows = window.dashboardMotion.captureRows?.($('#job-rows'));
   renderJobFilters();
   renderJobSort();
   const all = jobsForFilterCounts(), rows = filteredJobs(), pages = Math.max(1, Math.ceil(rows.length / JOBS_PER_PAGE)), hasSlurm = liveState.mode === 'demo' || !!liveState.snapshot?.slurm;
@@ -238,12 +241,13 @@ renderJobs = function() {
   $('#total-jobs').textContent = hasSlurm ? all.length : '—';
   $('#running-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'RUNNING').length : '—';
   $('#pending-jobs').textContent = hasSlurm ? all.filter(j => j.state === 'PENDING').length : '—';
-  $('#job-rows').innerHTML = visible.length ? visible.map(j => `<tr><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
+  $('#job-rows').innerHTML = visible.length ? visible.map(j => `<tr data-motion-row="${esc(j.id)}"><td class="mono">${esc(j.id)}</td><td class="job-name-cell"><button class="job-name" data-job="${esc(j.id)}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${esc(stateLabels[j.state] || j.state)}</span></td><td class="mono">${esc(j.gpus)}</td><td class="job-target-cell ${j.state === 'PENDING' ? 'pending-reason' : 'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${esc(j.id)}" aria-label="Job ${esc(j.id)} details">${icon('arrow')}</button></td></tr>`).join('') : `<tr><td colspan="7" class="empty-state">${liveState.mode === 'live' && !liveState.snapshot?.slurm ? liveState.error ? 'Slurm data is unavailable while the request is failing.' : 'Waiting for Slurm reports.' : jobs.length === 0 ? 'No jobs in the latest report.' : 'No matching jobs. Try another search or filter.'}</td></tr>`;
   $('#result-count').textContent = hasSlurm ? `${rows.length} jobs · Showing ${visible.length ? ((liveState.page - 1) * JOBS_PER_PAGE + 1) + '–' + Math.min(liveState.page * JOBS_PER_PAGE, rows.length) : 0}` : liveState.error ? 'Slurm data unavailable' : 'Waiting for Slurm reports';
   $('#page-number').textContent = `${liveState.page} / ${pages}`;
   $('#prev-page').disabled = liveState.page === 1;
   $('#next-page').disabled = liveState.page === pages;
   document.querySelectorAll('.jobs-tabs [data-state]').forEach(b => {b.classList.toggle('active', b.dataset.state === state.jobState); b.setAttribute('aria-pressed', String(b.dataset.state === state.jobState));});
+  window.dashboardMotion.animateRows?.($('#job-rows'), previousRows);
 };
 showNode = function(id) {
   if (liveState.mode === 'demo') return demoRender.node(id);

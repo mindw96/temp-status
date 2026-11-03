@@ -208,7 +208,7 @@ section[id]{scroll-margin-top:24px}
 .jobs-tabs button:hover{color:var(--link)}
 .jobs-tabs button span{padding:2px 6px;border-radius:100px;background:var(--pill-bg);font-size:10px;font-weight:500;color:var(--pill-color);font-variant-numeric:tabular-nums}
 .jobs-scroll-hint{display:none;padding:9px 16px;font-size:11px;color:var(--text-tertiary)}
-.table-scroll{position:relative;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent}
+.table-scroll{position:relative;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent}
 .table-scroll:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
 .table-scroll::-webkit-scrollbar{height:6px;width:6px}
 .table-scroll::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:6px}
@@ -230,6 +230,9 @@ section[id]{scroll-margin-top:24px}
 .jobs-table th:last-child,.jobs-table td:last-child{padding-right:22px}
 .jobs-table tr:last-child td{border-bottom:0}
 .jobs-table tbody tr:hover{background:var(--table-row-hover)}
+/* Keep crossing rows readable; collapsed table rules otherwise cut through text. */
+.jobs-table tbody tr.is-updating{position:relative;z-index:1;background:var(--dialog-bg)}
+.jobs-table tbody:has(tr.is-updating) td{border-bottom-color:transparent}
 .jobs-table td:nth-child(1),.jobs-table td:nth-child(5),.jobs-table td:nth-child(6){white-space:normal;overflow-wrap:anywhere}
 .jobs-table .job-name{width:100%;max-width:none;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.6;text-overflow:ellipsis;text-align:left;font-size:14px;font-weight:500;color:var(--text-primary)}
 .job-name:hover{text-decoration:underline;color:var(--link)}
@@ -324,6 +327,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
 @media(max-width:1152px){.jobs-scroll-hint{display:block}}
 @media(max-width:1050px){.jobs-tools{width:100%}.jobs-tools .search{flex:1;width:auto}}
 @media(max-width:740px){
+  .jobs-panel{margin-bottom:84px}
   main{padding:24px 18px 0}
   .page-heading{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:17px}
   .page-heading h1{font-size:28px}

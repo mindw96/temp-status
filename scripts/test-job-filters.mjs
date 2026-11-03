@@ -56,7 +56,7 @@ for (const name of ['app.js', 'gpu-jobs.js', 'live.js']) {
 const evaluate = code => vm.runInContext(code, context);
 const plain = value => JSON.parse(JSON.stringify(value));
 const ids = () => plain(evaluate('filteredJobs().map(job => job.id)'));
-const visibleIds = () => [...element('#job-rows').innerHTML.matchAll(/<tr><td[^>]*>([^<]*)<\/td>/g)].map(match => match[1]);
+const visibleIds = () => [...element('#job-rows').innerHTML.matchAll(/<tr\b[^>]*><td[^>]*>([^<]*)<\/td>/g)].map(match => match[1]);
 const apply = toolInput => plain(tools.get('filter_cluster_dashboard').execute(toolInput));
 const job = (id, user, target, state = 'RUNNING', extra = {}) => ({
   job_id: String(id), name: `Long training job ${id}`, user, node_list_or_reason: target,

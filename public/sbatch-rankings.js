@@ -114,6 +114,7 @@
 
   function selectPeriod(key, focus = false) {
     if (!periods.includes(key)) return;
+    const changed = selected !== key;
     selected = key;
     for (const tab of tabs) {
       const active = tab.dataset.period === selected;
@@ -123,6 +124,7 @@
     }
     results.setAttribute('aria-labelledby', `sbatch-rankings-tab-${selected}`);
     render();
+    if (changed) window.dashboardMotion?.revealContent?.(results);
   }
 
   function schedule() {

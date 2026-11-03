@@ -85,5 +85,128 @@
     });
   });
 
-  window.dashboardMotion = {openDialog, closeDialog};
+  // Stageshow's measured movement and Meter reveal, adapted for real updates.
+  // See third-party/stageshow/NOTICE.md. Text/ARIA always hold the latest data.
+  const updates = new Set();
+  const moving = new WeakMap();
+  const canAnimate = () => !document.hidden && !reducedMotion.matches;
+  const visible = element => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+  };
+  function stopUpdate(animation) {
+    updates.delete(animation);
+    const target = animation.effect?.target;
+    if (target && moving.get(target) === animation) {
+      moving.delete(target);
+      target.classList.remove('is-updating');
+    }
+    animation.cancel();
+  }
+  function stopWithin(root) {
+    for (const animation of updates) if (root.contains(animation.effect?.target)) stopUpdate(animation);
+  }
+  function animateUpdate(element, frames, options) {
+    if (!canAnimate() || !visible(element) || typeof element.animate !== 'function') return;
+    const previous = moving.get(element);
+    if (previous) stopUpdate(previous);
+    element.classList.add('is-updating');
+    const animation = element.animate(frames, options);
+    updates.add(animation);
+    moving.set(element, animation);
+    const clean = () => {
+      updates.delete(animation);
+      if (moving.get(element) === animation) {
+        moving.delete(element);
+        element.classList.remove('is-updating');
+      }
+    };
+    animation.finished.then(clean, clean);
+  }
+  function meterEntries(root) {
+    const entries = new Map();
+    root.querySelectorAll('.live-node').forEach(node => {
+      const id = node.querySelector('.node-summary[data-node]')?.dataset.node;
+      node.querySelectorAll('.gpu-meter[role="meter"], .storage-meter[role="meter"]').forEach(meter => {
+        const gpu = meter.closest('[data-gpu-index]');
+        const key = JSON.stringify([id, gpu ? `gpu:${gpu.dataset.gpuIndex}` : 'storage', meter.getAttribute('aria-label')]);
+        const fill = meter.firstElementChild;
+        if (fill && visible(meter)) entries.set(key, {fill, value: Number(meter.getAttribute('aria-valuenow'))});
+      });
+    });
+    return entries;
+  }
+  function captureMeters(root) {
+    const previous = new Map();
+    if (canAnimate()) for (const [key, {fill, value}] of meterEntries(root)) {
+      previous.set(key, {value, clip: getComputedStyle(fill).clipPath, moving: moving.has(fill)});
+    }
+    stopWithin(root);
+    return previous;
+  }
+  function animateMeters(root, previous) {
+    if (!previous?.size || !canAnimate()) return;
+    for (const [key, {fill, value}] of meterEntries(root)) {
+      const before = previous.get(key);
+      // Missing/invalid reports have no entry: never animate from stale values
+      // on recovery, or invent a zero baseline for newly collected devices.
+      if (!before || (before.value === value && !before.moving)) continue;
+      animateUpdate(fill, [{clipPath: before.clip}, {clipPath: fill.style.clipPath}],
+        {duration: 360, easing: 'cubic-bezier(0.45, 0, 0.2, 1)'});
+    }
+  }
+  function captureRows(root) {
+    const rows = new Map(), top = root.getBoundingClientRect().top;
+    const opacity = moving.has(root) ? getComputedStyle(root).opacity : null;
+    const focused = root.contains(document.activeElement) ? document.activeElement : null;
+    const focusRow = focused?.closest('[data-motion-row]');
+    root.querySelectorAll('[data-motion-row]').forEach(row => {
+      rows.set(row.dataset.motionRow, {top: row.getBoundingClientRect().top - top, visible: visible(row)});
+    });
+    // Capture the current animated position before cancelling an interrupted sort.
+    stopWithin(root);
+    return {rows, opacity, focus: focusRow ? {key: focusRow.dataset.motionRow, arrow: focused.classList.contains('table-arrow')} : null};
+  }
+  function animateRows(root, previous) {
+    if (!previous) return;
+    const rows = [...root.querySelectorAll('[data-motion-row]')], top = root.getBoundingClientRect().top;
+    if (previous.focus) {
+      const row = rows.find(row => row.dataset.motionRow === previous.focus.key);
+      (row?.querySelector(previous.focus.arrow ? '.table-arrow' : '.job-name') || document.querySelector('#job-search'))?.focus({preventScroll: true});
+    }
+    if (!canAnimate() || !previous.rows.size) return;
+    const currentKeys = new Set(rows.map(row => row.dataset.motionRow));
+    const beforeOrder = [...previous.rows.keys()].filter(key => currentKeys.has(key));
+    const afterOrder = rows.map(row => row.dataset.motionRow).filter(key => previous.rows.has(key));
+    // Reversing a table makes rows cross and obscure each other's text. Keep
+    // the new order readable immediately; reserve travel for noncrossing moves.
+    if (beforeOrder.some((key, index) => key !== afterOrder[index])) {
+      animateUpdate(root, [{opacity: previous.opacity ?? 0.5}, {opacity: 1}],
+        {duration: 180, easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)'});
+      return;
+    }
+    const height = root.getBoundingClientRect().height;
+    let arrived = 0;
+    for (const row of rows) {
+      const before = previous.rows.get(row.dataset.motionRow);
+      const delta = before ? before.top - (row.getBoundingClientRect().top - top) : 0;
+      if (before?.visible && before.top < height && Math.abs(delta) > 1) {
+        animateUpdate(row, [{transform: `translateY(${delta}px)`}, {transform: 'translateY(0)'}],
+          {duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)'});
+      } else if (!before || (before.visible && before.top >= height)) {
+        animateUpdate(row, [{opacity: 0.4, transform: 'translateY(6px)'}, {opacity: 1, transform: 'translateY(0)'}],
+          {duration: 180, delay: Math.min(arrived++ * 16, 48), easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)', fill: 'backwards'});
+      }
+    }
+  }
+  function revealContent(element) {
+    const current = moving.has(element) ? getComputedStyle(element) : null;
+    animateUpdate(element, [{opacity: current?.opacity ?? 0.5, transform: current?.transform ?? 'translateY(8px)'}, {opacity: 1, transform: 'translateY(0)'}],
+      {duration: 200, easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)'});
+  }
+  const settleUpdates = () => {for (const animation of updates) stopUpdate(animation);};
+  reducedMotion.addEventListener('change', () => {if (reducedMotion.matches) settleUpdates();});
+  document.addEventListener('visibilitychange', () => {if (document.hidden) settleUpdates();});
+
+  window.dashboardMotion = {openDialog, closeDialog, captureMeters, animateMeters, captureRows, animateRows, revealContent};
 })();

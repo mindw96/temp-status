@@ -36,6 +36,8 @@ GitHub 업로드에는 웹 화면, 수신 API, D1 스키마, 수집기 연결 �
 
 화면 구성과 문구는 `public/index.html`, 색상·간격·레이아웃은 `public/styles.css`, 공통 화면 기능과 노드 표시 이름은 `public/app.js`, 실제 수신 데이터 표시는 `public/live.js`에서 수정합니다. `public/app.js`의 `nodeDisplayNames`는 `devbox → Server1`, `server2 → Server2`, `ubuntu → Server3`, `server4 → Server4`를 화면에만 적용합니다. 수집기와 DB의 hostname, 노드 연결 키는 변경하지 않습니다.
 
+실제 화면 갱신에는 [Stageshow](https://www.ui-skills.com/skills/benjitaylor/stageshow)의 Meter 방식과 모션 원칙을 적용합니다. GPU UTIL·VRAM·디스크 그래프는 유효한 이전 값에서 새 값으로 360ms 동안 이어지고, 숫자와 접근성 값은 최신 보고로 즉시 갱신됩니다. Off·오래된 보고·조회 실패는 이전 그래프를 즉시 비우며, 새로 수신된 값은 가짜 0% 시작점 없이 표시합니다. Slurm Jobs 필터 변경은 Job ID별 행 위치를 연결하고, 정렬로 행 순서가 뒤집힐 때는 글자가 교차하지 않도록 새 목록을 짧게 전환합니다. 페이지 이동에서는 새 행이 나타나며, Ranking 기간 변경은 본문만 짧게 전환합니다. 같은 데이터가 반복 수신되면 효과를 재생하지 않습니다. `public/motion.js`가 기존 팝업·테마·접기 효과와 갱신 효과를 함께 관리하며, 동작 줄이기 설정과 숨겨진 탭에서는 갱신 애니메이션을 정리합니다. 출처·포팅 범위와 MIT 라이선스는 [Stageshow 기록](third-party/stageshow/NOTICE.md)에 보관합니다.
+
 수정 후 `pnpm run build`로 확인하고 변경 파일을 커밋해 `main`에 푸시합니다. Git 자동 배포가 켜져 있으면 연결된 Render 서비스가 새 코드를 배포하며, 진행 상황은 기존 `temp-status` 서비스의 Events에서 확인합니다. Cloudflare Workers Builds 연결도 별도로 유지됩니다. 각 호스팅 편집기에서 코드를 따로 수정하기보다 이 저장소를 기준으로 관리합니다.
 
 사용자 이름은 제공된 명단을 기준으로 `민동욱(mindw)`처럼 표시합니다. 명단에 없는 사용자명은 그대로 유지합니다. GPU 카드·작업 표·상세창·사용자 필터에 동일하게 적용하며 한글 이름과 원래 사용자명 모두 검색할 수 있습니다. 명단은 `public/app.js`의 `userDisplayNames`에서 관리하며, Slurm 사용자 ID와 필터 값은 바꾸지 않습니다.
