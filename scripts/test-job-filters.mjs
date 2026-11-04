@@ -709,11 +709,11 @@ evaluate('setJobSort("partition")');
 assert.deepEqual(plain(evaluate('jobSort')), validSort, 'Unsupported columns cannot replace the active sort');
 assert.equal(requests, 0, 'Every sort and filter change remains local');
 
-// Server4 pool badges follow fresh job QoS, even for an idle allocation. A
+// Group/pool badges follow fresh job QoS, even for an idle allocation. A
 // group member can use either pool; their username and GPU index are not proof.
-const renderPoolNode = (code = '', server = 'server4') => {
+const renderPoolNode = (code = '', server = 'server4', qoses = ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'unknown', undefined]) => {
   evaluate('liveState.error = null');
-  report(['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'unknown', undefined].map((qos, id) =>
+  report(qoses.map((qos, id) =>
     job(72000 + id, 'kimhy', server, 'RUNNING', {qos,
       gpu_allocations: [{node: server, gres_indices: [id]}]})), [server]);
   evaluate(`liveState.snapshot.nodes[0].data.gpus = Array.from({length: 6}, (_, id) =>
@@ -732,15 +732,27 @@ for (const id of [0, 1]) {
 }
 for (const id of [2, 3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unknown/open/missing QoS and idle GPUs have no pool badge');
 renderPoolNode('', 'server2');
-assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Pool labels apply only to Server4');
-for (const [reason, code] of [
-  ['stale node', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1'],
-  ['stale Slurm', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1'],
-  ['failed refresh', 'liveState.error = "Request failed"']
+assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'QoS must match the server as well as the job');
+for (const [server, qoses, labels, title] of [
+  ['devbox', ['lg_s1_rag', 'lg_s1_merging', 'lg_s1_open', 'lg_s1_cpu', '__proto__'], ['R&amp;R', 'Merging'], 'Merging allocation'],
+  ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D'], 'Agent&amp;Diffusion allocation'],
+  ['server4', ['lg_s4_rag', 'lg_s4_shared'], ['R&amp;R', 'Shared'], 'Shared allocation']
 ]) {
-  renderPoolNode(code);
-  assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], reason);
+  renderPoolNode('', server, qoses);
+  assert.deepEqual(poolLabels(element('#node-grid').innerHTML), labels);
+  assert.ok(poolCard(1).includes(`title="${title}"`));
+  assert.match(poolCard(0), /김하영\(kimhy\)/, 'A user name cannot override the reported job QoS');
+  for (const [reason, code] of [
+    ['stale node', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1'],
+    ['stale Slurm', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1'],
+    ['failed refresh', 'liveState.error = "Request failed"']
+  ]) {
+    renderPoolNode(code, server, qoses);
+    assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], `${server}: ${reason}`);
+  }
 }
+renderPoolNode('', 'ubuntu', ['lg_s1_rag', 'lg_s2_agent', 'lg_s4_shared']);
+assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Unconfigured servers do not inherit other pool labels');
 evaluate('liveState.error = null');
 
 // The demo renderer has the same seven-column, ten-row pagination contract.

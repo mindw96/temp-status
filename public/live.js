@@ -94,6 +94,14 @@ function renderRefreshControl() {
 }
 // GPU indices from Slurm GRES do not necessarily match NVML device indices.
 // Prefer verified device allocations; process IDs provide an explicit fallback.
+const gpuJobPools = new Map([
+  ['devbox:lg_s1_rag', {label:'R&R', title:'RAG&Reasoning allocation'}],
+  ['devbox:lg_s1_merging', {label:'Merging', title:'Merging allocation'}],
+  ['server2:lg_s2_editing', {label:'Editing', title:'Knowledge Editing allocation'}],
+  ['server2:lg_s2_agent', {label:'A&D', title:'Agent&Diffusion allocation'}],
+  ['server4:lg_s4_rag', {label:'R&R', title:'RAG&Reasoning allocation'}],
+  ['server4:lg_s4_shared', {label:'Shared', title:'Shared allocation'}]
+]);
 function gpuJobsMarkup(n, g, compactCard = false) {
   const index = compactCard ? `<span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span>` : '';
   const empty = (message, idle = false) => compactCard
@@ -110,8 +118,8 @@ function gpuJobsMarkup(n, g, compactCard = false) {
     const user = record.users.map(displayUserName).join(', ') || 'User unavailable', source = record.allocated ? 'Slurm allocated' : 'Observed process';
     const userLabel = record.allocated ? user : `Observed: ${user}`;
     // QoS identifies this job's pool. GPU indices and user membership do not.
-    const qos = n.id === 'server4' && !n.stale && n.slurmFresh && nodeStatus(n).connection === 'On' ? record.job?.raw?.qos : null;
-    const pool = qos === 'lg_s4_rag' ? {label:'R&R', title:'RAG&Reasoning allocation'} : qos === 'lg_s4_shared' ? {label:'Shared', title:'Shared allocation'} : null;
+    const qos = !n.stale && n.slurmFresh && nodeStatus(n).connection === 'On' ? record.job?.raw?.qos : null;
+    const pool = gpuJobPools.get(`${n.id}:${qos}`);
     const badge = compactCard && pool ? `<span class="gpu-pool-badge" title="${esc(pool.title)}">${esc(pool.label)}</span>` : '';
     const side = badge ? `<span class="gpu-card-tags">${badge}${position === 0 ? index : ''}</span>` : position === 0 ? index : '';
     const meta = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? esc(record.jobId) : 'Job ID unavailable'}</span><span class="gpu-job-separator" aria-hidden="true">-</span><span class="gpu-job-user" title="${source} · User: ${esc(user)}">${esc(userLabel)}</span></span>`;
