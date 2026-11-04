@@ -32,13 +32,11 @@
   let pollTimer, cooldownTimer, freshnessTimer, previousFreshness = '';
   const now = () => Date.now() + state.offset;
   const report = () => state.snapshot?.report ?? null;
-  const allJobs = () => Array.isArray(report()?.jobs) ? report().jobs : [];
+  // Keep old or overlapping deployments from restoring non-running jobs.
+  const allJobs = () => Array.isArray(report()?.jobs) ? report().jobs.filter(job => job?.status === 'Running') : [];
   const fresh = (at, limit = STALE_MS) => Number.isFinite(dateValue(at)) && now() - dateValue(at) <= limit && dateValue(at) - now() < 60_000;
   const reportStale = () => !!report() && (state.snapshot.stale || !fresh(report().collected_at) || !fresh(state.snapshot.received_at));
   const jobsFresh = () => !!report() && !reportStale() && fresh(report().jobs_collected_at) && !report().errors?.some(code => ['jobs_unavailable','pods_unavailable'].includes(code));
-  const finished = job => ['Succeeded','Failed'].includes(job.status);
-  const completed = job => job.status === 'Succeeded';
-  const statusName = job => ({Running:'Running',Pending:'Queued',Succeeded:'Completed',Failed:'Failed',Suspended:'Suspended',Unknown:'Unknown'}[job.status] || 'Unknown');
   const unitCount = (value, singular, plural = `${singular}s`) => number(value) === null ? `${singular} request unavailable` : `${numericText(value)} ${value === 1 ? singular : plural}`;
   function timestamp(at, includeDate = true) {
     const value = dateValue(at);
@@ -47,8 +45,8 @@
   }
   function duration(job) {
     const start = dateValue(job.started_at);
-    const end = finished(job) ? dateValue(job.finished_at) : now();
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return job.status === 'Pending' ? 'Waiting to start' : 'Runtime unavailable';
+    const end = now();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return 'Runtime unavailable';
     const minutes = Math.max(0, Math.floor((end - start) / 60_000));
     if (minutes < 1) return '< 1m';
     return `${minutes >= 1440 ? `${Math.floor(minutes / 1440)}d ` : ''}${minutes >= 60 ? `${Math.floor(minutes / 60) % 24}h ` : ''}${minutes % 60}m`;
@@ -79,8 +77,7 @@
     const storageValid = !!storage && !storage.error && !reportStale() && fresh(storage.collected_at, STORAGE_STALE_MS) && number(storage.used_bytes) !== null && number(storage.limit_bytes) !== null && storage.limit_bytes > 0;
     const storagePercent = storageValid ? storage.used_bytes / storage.limit_bytes * 100 : null;
     const storageNote = storageValid ? `Lab-wide GPFS quota · measured ${timestamp(storage.collected_at, false)}` : storage?.error ? 'Storage usage is unavailable.' : data ? 'Storage usage is stale or not reported.' : 'Waiting for storage report.';
-    const failedCount = jobs.filter(job => job.status === 'Failed').length;
-    $('#a100-summary').innerHTML = `<div class="a100-summary-card"><div class="a100-summary-title"><span>Requested GPUs</span><span class="a100-summary-value">${quotaValid ? numericText(quota.gpu_used) : '—'} <span class="a100-denominator">/ ${quotaValid ? numericText(quota.gpu_limit) : '—'}</span></span></div><p class="a100-summary-note">${esc(quotaNote)}</p><div class="a100-counts"><span>Running <b>${jobCounts ? jobs.filter(job => job.status === 'Running').length : '—'}</b></span><span>Queued <b>${jobCounts ? jobs.filter(job => job.status === 'Pending').length : '—'}</b></span>${jobCounts && failedCount ? `<span class="a100-failure">Failed <b>${failedCount}</b></span>` : ''}</div></div><div class="a100-summary-card"><div class="a100-summary-title"><span>Shared storage</span><span class="a100-summary-value">${storageValid ? numericText(storagePercent) : '—'}<span class="a100-denominator">${storageValid ? '%' : ''}</span></span></div><div class="a100-storage-line"><span>Used / quota</span><span>${storageValid ? `${byteText(storage.used_bytes)} / ${byteText(storage.limit_bytes)}` : '— / —'}</span></div>${meter('Shared storage usage',storagePercent === null ? null : Math.min(100,storagePercent),'a100-storage-meter')}<p class="a100-summary-note">${esc(storageNote)}</p></div>`;
+    $('#a100-summary').innerHTML = `<div class="a100-summary-card"><div class="a100-summary-title"><span>Requested GPUs</span><span class="a100-summary-value">${quotaValid ? numericText(quota.gpu_used) : '—'} <span class="a100-denominator">/ ${quotaValid ? numericText(quota.gpu_limit) : '—'}</span></span></div><p class="a100-summary-note">${esc(quotaNote)}</p><div class="a100-counts"><span>Running <b>${jobCounts ? jobs.length : '—'}</b></span></div></div><div class="a100-summary-card"><div class="a100-summary-title"><span>Shared storage</span><span class="a100-summary-value">${storageValid ? numericText(storagePercent) : '—'}<span class="a100-denominator">${storageValid ? '%' : ''}</span></span></div><div class="a100-storage-line"><span>Used / quota</span><span>${storageValid ? `${byteText(storage.used_bytes)} / ${byteText(storage.limit_bytes)}` : '— / —'}</span></div>${meter('Shared storage usage',storagePercent === null ? null : Math.min(100,storagePercent),'a100-storage-meter')}<p class="a100-summary-note">${esc(storageNote)}</p></div>`;
   }
   function renderConnection() {
     const data = report();
@@ -102,7 +99,7 @@
     $('#a100-owner').innerHTML = '<option value="">All users</option>' + users.map(user => `<option value="${esc(user)}"${state.owner === user ? ' selected' : ''}>${esc(ownerName(user))}</option>`).join('');
   }
   function matches(job) {
-    return (!state.owner || state.owner === job.owner) && (!state.search || [job.name,job.owner,ownerName(job.owner),statusName(job)].some(value => String(value || '').toLocaleLowerCase().includes(state.search)));
+    return (!state.owner || state.owner === job.owner) && (!state.search || [job.name,job.owner,ownerName(job.owner),job.status].some(value => String(value || '').toLocaleLowerCase().includes(state.search)));
   }
   function gpuMarkup(gpu, index, count, job) {
     const usable = !reportStale() && jobsFresh() && fresh(gpu.collected_at);
@@ -117,38 +114,29 @@
   function jobMarkup(job) {
     const gpus = Array.isArray(job.gpus) ? job.gpus : [];
     const gpuRequest = number(job.requested_gpus);
-    const noMetrics = job.status === 'Pending' ? 'GPU activity will appear after the job starts.' : job.status === 'Failed' ? 'Job failed. Open its details to view the reported status.' : gpuRequest === 0 ? 'No GPUs requested.' : 'GPU activity is unavailable.';
+    const noMetrics = gpuRequest === 0 ? 'No GPUs requested.' : 'GPU activity is unavailable.';
     const restarts = (job.pods || []).reduce((sum,pod) => sum + (number(pod.restarts) ?? 0),0);
-    const partial = gpuRequest !== null && gpuRequest > gpus.length && job.status === 'Running' && gpus.length > 0;
+    const partial = gpuRequest !== null && gpuRequest > gpus.length && gpus.length > 0;
     const measurementTimes = gpus.map(gpu => dateValue(gpu.collected_at)).filter(Number.isFinite);
     const lastMeasurement = measurementTimes.length ? timestamp(Math.min(...measurementTimes),false) : 'unknown time';
-    return `<article class="a100-job-card"><div class="a100-job-top"><span class="a100-job-owner" title="${esc(ownerName(job.owner))}">${esc(ownerName(job.owner))}</span><span class="a100-job-status${job.status === 'Failed' ? ' a100-failure' : ''}">${esc(statusName(job))}</span></div><button type="button" class="a100-job-name" data-a100-job="${esc(job.id)}" aria-label="${esc(job.name)}, job details">${esc(job.name || 'Unnamed job')}</button><div class="a100-job-meta"><span>${gpuRequest === null ? 'GPU request unavailable' : `${esc(unitCount(gpuRequest,'GPU'))} requested`}</span><span>${esc(duration(job))}</span></div>${job.reason ? `<p class="a100-job-reason a100-warning">${esc(job.reason)}</p>` : ''}<div class="a100-gpu-list">${gpus.length ? gpus.map((gpu,index) => gpuMarkup(gpu,index,gpus.length,job)).join('') : `<p class="a100-metrics-note">${esc(noMetrics)}</p>`}</div>${partial ? `<p class="a100-metrics-note a100-warning">Measurements received for ${gpus.length} of ${numericText(gpuRequest)} requested GPUs.</p>` : ''}${job.metrics_error && gpus.length ? `<p class="a100-metrics-note a100-warning">Last measurement: ${esc(lastMeasurement)}. The latest collection was incomplete.</p>` : ''}${restarts ? `<p class="a100-metrics-note">${restarts} container ${restarts === 1 ? 'restart' : 'restarts'}</p>` : ''}</article>`;
+    return `<article class="a100-job-card"><div class="a100-job-top"><span class="a100-job-owner" title="${esc(ownerName(job.owner))}">${esc(ownerName(job.owner))}</span><span class="a100-job-status">${esc(job.status)}</span></div><button type="button" class="a100-job-name" data-a100-job="${esc(job.id)}" aria-label="${esc(job.name)}, job details">${esc(job.name || 'Unnamed job')}</button><div class="a100-job-meta"><span>${gpuRequest === null ? 'GPU request unavailable' : `${esc(unitCount(gpuRequest,'GPU'))} requested`}</span><span>${esc(duration(job))}</span></div>${job.reason ? `<p class="a100-job-reason a100-warning">${esc(job.reason)}</p>` : ''}<div class="a100-gpu-list">${gpus.length ? gpus.map((gpu,index) => gpuMarkup(gpu,index,gpus.length,job)).join('') : `<p class="a100-metrics-note">${esc(noMetrics)}</p>`}</div>${partial ? `<p class="a100-metrics-note a100-warning">Measurements received for ${gpus.length} of ${numericText(gpuRequest)} requested GPUs.</p>` : ''}${job.metrics_error && gpus.length ? `<p class="a100-metrics-note a100-warning">Last measurement: ${esc(lastMeasurement)}. The latest collection was incomplete.</p>` : ''}${restarts ? `<p class="a100-metrics-note">${restarts} container ${restarts === 1 ? 'restart' : 'restarts'}</p>` : ''}</article>`;
   }
   function renderJobs() {
     const jobs = allJobs();
-    const active = jobs.filter(job => !finished(job));
-    const visible = active.filter(matches).sort((a,b) => ({Running:0,Pending:1,Suspended:2,Unknown:3}[a.status] ?? 4) - ({Running:0,Pending:1,Suspended:2,Unknown:3}[b.status] ?? 4) || String(a.name).localeCompare(String(b.name)));
-    const newestFinishedFirst = (a,b) => (dateValue(b.finished_at) || 0) - (dateValue(a.finished_at) || 0);
-    const failed = jobs.filter(job => job.status === 'Failed').filter(matches).sort(newestFinishedFirst);
-    const done = jobs.filter(completed).filter(matches).sort(newestFinishedFirst);
-    const finishedRow = job => `<div class="a100-finished-row"><button type="button" class="a100-job-name" data-a100-job="${esc(job.id)}">${esc(job.name || 'Unnamed job')}</button><span>${esc(ownerName(job.owner))}</span><span>${esc(statusName(job))}</span></div>`;
-    $('#a100-active-count').textContent = report() ? state.owner || state.search ? `${visible.length} / ${active.length}` : String(active.length) : '—';
-    const empty = !report() ? 'Waiting for the first report.' : state.owner || state.search ? 'No matching active jobs.' : !jobsFresh() ? 'The current job list is unavailable.' : 'No active jobs in the latest report.';
+    const visible = jobs.filter(matches).sort((a,b) => String(a.name).localeCompare(String(b.name)));
+    $('#a100-active-count').textContent = report() ? state.owner || state.search ? `${visible.length} / ${jobs.length}` : String(jobs.length) : '—';
+    const empty = !report() ? 'Waiting for the first report.' : state.owner || state.search ? 'No matching running jobs.' : !jobsFresh() ? 'The current job list is unavailable.' : 'No running jobs in the latest report.';
     $('#a100-job-cards').innerHTML = visible.length ? visible.map(jobMarkup).join('') : `<p class="a100-empty">${empty}</p>`;
-    $('#a100-failed-count').textContent = report() ? String(failed.length) : '—';
-    $('#a100-failed-list').innerHTML = failed.length ? failed.map(finishedRow).join('') : '<p class="a100-summary-note">No failed jobs match the current filters.</p>';
-    $('#a100-finished-count').textContent = report() ? String(done.length) : '—';
-    $('#a100-finished-list').innerHTML = done.length ? done.map(finishedRow).join('') : '<p class="a100-summary-note">No completed jobs match the current filters.</p>';
   }
   const detail = (label,value) => `<div><dt>${esc(label)}</dt><dd>${esc(value ?? 'Not reported')}</dd></div>`;
   function renderDialog() {
     const job = allJobs().find(item => item.id === state.dialogId);
     if (!job) {
-      if ($('#a100-dialog').open) $('#a100-dialog-content').innerHTML = '<h2 id="a100-dialog-title">Job no longer reported</h2><p class="dialog-subtitle">This job is no longer present in the latest report.</p>';
+      if ($('#a100-dialog').open) $('#a100-dialog-content').innerHTML = '<h2 id="a100-dialog-title">Job no longer reported</h2><p class="dialog-subtitle">This job is no longer in the latest running-job report.</p>';
       return;
     }
     const pods = Array.isArray(job.pods) ? job.pods : [];
-    $('#a100-dialog-content').innerHTML = `<h2 id="a100-dialog-title">${esc(job.name || 'Unnamed job')}</h2><p class="dialog-subtitle">${esc(ownerName(job.owner))} · ${esc(statusName(job))}</p><dl class="detail-grid">${detail('Requested GPUs',numericText(job.requested_gpus))}${detail('Requested CPU',number(job.cpu_requested) === null ? 'Not reported' : `${numericText(job.cpu_requested)} cores`)}${detail('Requested RAM',number(job.ram_requested_bytes) === null ? 'Not reported' : byteText(job.ram_requested_bytes))}${detail('Runtime',duration(job))}${detail('Created',timestamp(job.created_at))}${detail('Started',timestamp(job.started_at))}${finished(job) ? detail('Finished',timestamp(job.finished_at)) : ''}${detail('Node',job.node || 'Not assigned')}${job.reason ? detail('Reason',job.reason) : ''}</dl>${!jobsFresh() ? '<p class="dialog-note">Job status is stale or unavailable. These are the last reported details.</p>' : ''}<div class="a100-dialog-pods">${pods.length ? pods.map(pod => `<div class="a100-dialog-pod">${esc(pod.name)}<span>${esc(pod.phase || 'Unknown')} · ${number(pod.restarts) === null ? 'Restarts not reported' : `${numericText(pod.restarts)} restarts`}</span></div>`).join('') : '<p>No Pods reported for this job yet.</p>'}</div>`;
+    $('#a100-dialog-content').innerHTML = `<h2 id="a100-dialog-title">${esc(job.name || 'Unnamed job')}</h2><p class="dialog-subtitle">${esc(ownerName(job.owner))} · ${esc(job.status)}</p><dl class="detail-grid">${detail('Requested GPUs',numericText(job.requested_gpus))}${detail('Requested CPU',number(job.cpu_requested) === null ? 'Not reported' : `${numericText(job.cpu_requested)} cores`)}${detail('Requested RAM',number(job.ram_requested_bytes) === null ? 'Not reported' : byteText(job.ram_requested_bytes))}${detail('Runtime',duration(job))}${detail('Created',timestamp(job.created_at))}${detail('Started',timestamp(job.started_at))}${detail('Node',job.node || 'Not assigned')}${job.reason ? detail('Reason',job.reason) : ''}</dl>${!jobsFresh() ? '<p class="dialog-note">Job status is stale or unavailable. These are the last reported details.</p>' : ''}<div class="a100-dialog-pods">${pods.length ? pods.map(pod => `<div class="a100-dialog-pod">${esc(pod.name)}<span>${esc(pod.phase || 'Unknown')} · ${number(pod.restarts) === null ? 'Restarts not reported' : `${numericText(pod.restarts)} restarts`}</span></div>`).join('') : '<p>No Pods reported for this job yet.</p>'}</div>`;
   }
   function render() {
     renderConnection();

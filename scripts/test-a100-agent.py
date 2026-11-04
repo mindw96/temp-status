@@ -56,14 +56,10 @@ class Quantities(unittest.TestCase):
 
 
 class Jobs(unittest.TestCase):
-    def test_queued_job_without_pod_visible(self):
+    def test_queued_job_without_pod_not_reported(self):
         job, _ = fixtures()
         rows, targets = agent.make_jobs([job], [])
-        self.assertEqual(rows[0]["status"], "Pending")
-        self.assertEqual(rows[0]["reason"], "WaitingForPod")
-        self.assertIsNone(rows[0]["started_at"])
-        self.assertEqual(rows[0]["requested_gpus"], 2)
-        self.assertEqual(rows[0]["cpu_requested"], 1.5)
+        self.assertEqual(rows, [])
         self.assertEqual(targets, {})
 
     def test_multi_gpu_and_owner_only_from_labels(self):
@@ -71,6 +67,8 @@ class Jobs(unittest.TestCase):
         rows, targets = agent.make_jobs([job], [pod])
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["owner"], "mindw")
+        self.assertEqual(rows[0]["requested_gpus"], 2)
+        self.assertEqual(rows[0]["cpu_requested"], 1.5)
         self.assertEqual(rows[0]["pods"][0]["restarts"], 2)
         self.assertEqual(targets["job-id"], [("experiment-abc", "main", 2)])
         del job["metadata"]["labels"]
@@ -104,16 +102,27 @@ class Jobs(unittest.TestCase):
         job["metadata"]["uid"] = "replacement-id"
         pod["metadata"]["labels"] = {"job-name": "experiment"}
         rows, _ = agent.make_jobs([job], [pod])
-        self.assertEqual(len(rows), 2)
-        queued = next(row for row in rows if row["id"] == "replacement-id")
-        self.assertEqual(queued["status"], "Pending")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], "pod-id")
+        self.assertEqual(rows[0]["status"], "Running")
 
-    def test_completed_standalone_pod_ends_elapsed_time(self):
-        _, pod = fixtures()
-        pod["status"]["phase"] = "Succeeded"
-        pod["status"]["containerStatuses"][0]["state"] = {"terminated": {"reason": "Completed", "finishedAt": "2026-10-09T01:00:00Z"}}
-        rows, _ = agent.make_jobs([], [pod])
-        self.assertEqual(rows[0]["finished_at"], "2026-10-09T01:00:00Z")
+    def test_only_running_jobs_and_pods_are_reported(self):
+        job, pod = fixtures()
+        for phase in ["Pending", "Succeeded", "Failed", "Unknown"]:
+            pod["status"]["phase"] = phase
+            self.assertEqual(agent.make_jobs([], [pod]), ([], {}))
+        pod["status"]["phase"] = "Running"
+        for condition in ["Complete", "Failed", "Suspended"]:
+            job["status"]["conditions"] = [{"type": condition, "status": "True"}]
+            self.assertEqual(agent.make_jobs([job], [pod]), ([], {}))
+        job["status"]["conditions"] = []
+        previous = copy.deepcopy(pod)
+        previous["metadata"]["uid"] = "old-pod"
+        previous["status"]["phase"] = "Failed"
+        rows, targets = agent.make_jobs([job], [pod, previous])
+        self.assertEqual([p["phase"] for p in rows[0]["pods"]], ["Running"])
+        self.assertEqual(len(targets["job-id"]), 1)
+        self.assertIsNone(rows[0]["finished_at"])
 
     def test_failed_attempt_does_not_mark_healthy_retry(self):
         job, current = fixtures()
@@ -125,11 +134,11 @@ class Jobs(unittest.TestCase):
         current["status"]["containerStatuses"][0]["state"] = {"waiting": {"reason": "ContainerCreating"}}
         self.assertEqual(agent.job_state(job, [previous, current]), ("Pending", "ContainerCreating"))
 
-    def test_history_bound_never_silently_removes_active_jobs(self):
+    def test_bounds_exclude_history_and_never_drop_running_jobs(self):
         active = {"id": "active", "status": "Running", "pods": [], "gpus": []}
         completed = [{"id": str(i), "status": "Succeeded", "pods": [], "gpus": []} for i in range(600)]
         rows = agent.bound_jobs(completed + [active])
-        self.assertEqual(len(rows), 500)
+        self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["id"], "active")
         with self.assertRaises(agent.CollectionError):
             agent.bound_jobs([copy.deepcopy(active) for _ in range(501)])
@@ -171,7 +180,12 @@ class Metrics(unittest.TestCase):
             kind = args[args.index("get") + 1]
             if kind in fail:
                 raise agent.CollectionError("command_failed")
-            values = {"pods": {"items": [pod]}, "jobs": {"items": [job]}, "resourcequota": {"status": {"hard": {"requests.nvidia.com/gpu": "8"}, "used": {"requests.nvidia.com/gpu": "2"}}}}
+            if kind == "pods":
+                self.assertIn("status.phase=Running", args)
+            if kind == "jobs":
+                self.assertEqual(args[args.index("jobs") + 1], "experiment")
+                self.assertIn("--ignore-not-found", args)
+            values = {"pods": {"items": [pod]}, "jobs": job, "resourcequota": {"status": {"hard": {"requests.nvidia.com/gpu": "8"}, "used": {"requests.nvidia.com/gpu": "2"}}}}
             return json.dumps(values[kind])
 
         collector = agent.Collector(runner=run, storage_interval=300)
@@ -189,12 +203,69 @@ class Metrics(unittest.TestCase):
         self.assertEqual(second["jobs"][0]["gpus"][0]["collected_at"], "first")
         self.assertEqual(second["jobs"][0]["metrics_error"], "gpu_metrics_unavailable")
         self.assertEqual(second["jobs_collected_at"], "second")
+        fail.add("jobs")
+        with patch.object(agent, "utc_now", return_value="jobs-failed"):
+            failed_jobs = collector.collect()
+        self.assertEqual(failed_jobs["jobs_collected_at"], "second")
+        self.assertIn("jobs_unavailable", failed_jobs["errors"])
         fail.add("pods")
         with patch.object(agent, "utc_now", return_value="third"):
             third = collector.collect()
         self.assertEqual(third["jobs_collected_at"], "second")
         self.assertIn("pods_unavailable", third["errors"])
         self.assertTrue(set(third["errors"]) <= agent.PUBLIC_ERRORS)
+
+    def test_running_job_completion_clears_report_and_metrics_without_history_query(self):
+        job, pod = fixtures()
+        pods, calls = [pod], []
+
+        def run(args):
+            calls.append(args)
+            if args[0].endswith("mmlsquota"):
+                return QUOTA
+            if "exec" in args:
+                return "GPU-a, A100, 99, 40000, 81920\nGPU-b, A100, 0, 4, 81920\n"
+            kind = args[args.index("get") + 1]
+            if kind == "pods":
+                self.assertIn("status.phase=Running", args)
+                return json.dumps({"items": pods})
+            if kind == "jobs":
+                self.assertEqual(args[args.index("jobs") + 1], "experiment")
+                return json.dumps(job)
+            return json.dumps({"status": {"hard": {"requests.nvidia.com/gpu": "8"}, "used": {"requests.nvidia.com/gpu": "2"}}})
+
+        collector = agent.Collector(runner=run)
+        with patch.object(agent, "utc_now", return_value="running"):
+            self.assertEqual(len(collector.collect()["jobs"]), 1)
+        self.assertTrue(collector.gpu_cache)
+        calls.clear()
+        pods.clear()
+        with patch.object(agent, "utc_now", return_value="empty"):
+            empty = collector.collect()
+        self.assertEqual(empty["jobs"], [])
+        self.assertEqual(empty["jobs_collected_at"], "empty")
+        self.assertEqual(empty["errors"], [])
+        self.assertEqual(collector.gpu_cache, {})
+        self.assertFalse(any("jobs" in args or "exec" in args for args in calls))
+
+    def test_targeted_job_list_and_deleted_job_race(self):
+        job, pod = fixtures()
+        second = copy.deepcopy(job)
+        second["metadata"]["name"] = "second"
+        second_pod = copy.deepcopy(pod)
+        second_pod["metadata"]["ownerReferences"][0]["name"] = "second"
+        calls = []
+        def run(args):
+            calls.append(args)
+            return json.dumps({"kind": "List", "items": [job, second]})
+        collector = agent.Collector(runner=run)
+        self.assertEqual(collector.owner_jobs([pod, pod, second_pod]), [job, second])
+        self.assertEqual(calls[0][calls[0].index("jobs") + 1:calls[0].index("--ignore-not-found")], ["experiment", "second"])
+        collector.runner = lambda args: ""
+        self.assertEqual(collector.owner_jobs([pod]), [])
+        rows, targets = agent.make_jobs([], [pod])
+        self.assertEqual(rows[0]["id"], "pod-id")
+        self.assertEqual(len(targets["pod-id"]), 1)
 
     def test_storage_cached_for_five_minutes(self):
         def run(args):

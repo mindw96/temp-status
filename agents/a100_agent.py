@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read namespace GPU jobs and push a minimal snapshot; Python 3.8 stdlib only.
+"""Read Running namespace GPU jobs and push a minimal snapshot; Python 3.8 stdlib only.
 
 No workload logs, container environment, commands, or kubeconfig are published.
 Only containers explicitly requesting GPUs are queried. UUIDs identify devices;
@@ -176,7 +176,8 @@ def gpu_targets(pods):
 
 
 def make_jobs(job_items, pod_items):
-    """Include Jobs before their first Pod, plus standalone interactive Pods."""
+    """Report only Running Jobs and standalone Running interactive Pods."""
+    pod_items = [pod for pod in pod_items if (pod.get("status") or {}).get("phase") == "Running"]
     by_uid, by_name, attached = {}, {}, set()
     for job in job_items:
         metadata = job.get("metadata") or {}
@@ -213,32 +214,29 @@ def make_jobs(job_items, pod_items):
             state = (obj.get("status") or {}).get("phase", "Unknown")
             state = state if state in {"Running", "Pending", "Succeeded", "Failed", "Unknown"} else "Unknown"
             reason = pod_reason(obj)
+        if state != "Running":
+            continue
         owner = owner_of(obj) or owner_of(template)
         if not owner:
             owners = {owner_of(p) for p in pods} - {None}
             owner = next(iter(owners)) if len(owners) == 1 else None
         resources = [pod_resource(pod_spec, key) for key in (GPU_RESOURCE, "cpu", "memory")]
         resources = [value * parallelism if value is not None else None for value in resources]
-        status = obj.get("status") or {}
-        pod_finishes = [((item.get("state") or {}).get("terminated") or {}).get("finishedAt")
-                        for item in status.get("containerStatuses") or []] if not is_job else []
-        pod_finishes = [item for item in pod_finishes if item]
         starts = [(p.get("status") or {}).get("startTime") for p in pods]
         starts = [item for item in starts if item]
         nodes = sorted({(p.get("spec") or {}).get("nodeName") for p in pods} - {None, ""})
         job_id = meta.get("uid") or (("job:" if is_job else "pod:") + meta["name"])
         # Job startTime includes quota waiting; only a Pod startTime represents
-        # the start of an attempt. A no-Pod queued Job has no start timestamp.
+        # the start of a running attempt.
         output.append({"id": job_id, "name": meta["name"], "owner": owner,
                        "status": state, "reason": reason, "requested_gpus": resources[0],
                        "cpu_requested": resources[1], "ram_requested_bytes": resources[2],
                        "created_at": meta.get("creationTimestamp"),
                        "started_at": min(starts) if starts else None,
-                       "finished_at": status.get("completionTime") or next((c.get("lastTransitionTime") for c in status.get("conditions") or [] if c.get("type") == "Failed" and c.get("status") == "True"), None) or (max(pod_finishes) if pod_finishes and state in {"Succeeded", "Failed"} else None),
+                       "finished_at": None,
                        "node": ", ".join(nodes) if nodes else None,
                        "pods": [pod_summary(p) for p in pods], "gpus": [], "metrics_error": None})
-        if state == "Running":
-            targets[job_id] = gpu_targets(pods)
+        targets[job_id] = gpu_targets(pods)
     output.sort(key=lambda job: (job["created_at"] or "", job["name"]), reverse=True)
     return output, targets
 
@@ -293,23 +291,17 @@ def parse_gpfs_quota(text, user, filesystem, collected_at):
 
 
 def bound_jobs(jobs):
-    """Bound public history without ever silently dropping an active workload."""
-    active = [job for job in jobs if job["status"] not in {"Succeeded", "Failed"}]
-    completed = [job for job in jobs if job["status"] in {"Succeeded", "Failed"}]
-    if len(active) > 500:
+    """Bound Running reports without silently dropping current workloads."""
+    selected = [job for job in jobs if job["status"] == "Running"]
+    if len(selected) > 500:
         raise CollectionError("jobs_unavailable")
-    selected = active + completed[:500 - len(active)]
     for job in selected:
-        current = [pod for pod in job["pods"] if pod["phase"] not in {"Succeeded", "Failed"}]
-        previous = [pod for pod in job["pods"] if pod["phase"] in {"Succeeded", "Failed"}]
-        if len(current) > 64 or len(job["gpus"]) > 64:
+        job["pods"] = [pod for pod in job["pods"] if pod["phase"] == "Running"]
+        if len(job["pods"]) > 64 or len(job["gpus"]) > 64:
             raise CollectionError("jobs_unavailable")
-        job["pods"] = current + previous[:64 - len(current)]
     # Leave room for the envelope/quota/storage beneath the receiver's 1 MiB cap.
-    while len(json.dumps(selected, ensure_ascii=True).encode("utf-8")) > 900000:
-        if len(selected) <= len(active):
-            raise CollectionError("jobs_unavailable")
-        selected.pop()
+    if len(json.dumps(selected, ensure_ascii=True).encode("utf-8")) > 900000:
+        raise CollectionError("jobs_unavailable")
     return selected
 
 
@@ -350,8 +342,10 @@ class Collector:
         return self.runner(["kubectl", "--request-timeout={}s".format(self.timeout),
                             "-n", self.namespace] + list(args))
 
-    def get(self, kind, name=None):
+    def get(self, kind, name=None, field_selector=None):
         args = ["get", kind] + ([name] if name else []) + ["-o", "json"]
+        if field_selector:
+            args += ["--field-selector", field_selector]
         value = json.loads(self.kubectl(*args))
         if not isinstance(value, dict):
             raise CollectionError("invalid_response")
@@ -361,6 +355,34 @@ class Collector:
                 raise CollectionError("invalid_response")
             return items
         return value
+
+    def owner_jobs(self, pods):
+        """Fetch only Jobs referenced by current Pods, never the namespace history."""
+        names = set()
+        for pod in pods:
+            metadata = pod.get("metadata") or {}
+            refs = [ref for ref in metadata.get("ownerReferences") or [] if ref.get("kind") == "Job"]
+            names.update(ref.get("name") for ref in refs)
+            if not refs:
+                name = (metadata.get("labels") or {}).get("job-name")
+                if name:
+                    names.add(name)
+        if not names:
+            return []
+        if any(not isinstance(name, str) or not SAFE_ID.fullmatch(name) or name.startswith("-") for name in names):
+            raise CollectionError("invalid_response")
+        # A Job may disappear between the Pod list and this GET. In that case,
+        # make_jobs preserves the remaining Running Pod as a standalone row.
+        output = self.kubectl("get", "jobs", *sorted(names), "--ignore-not-found", "-o", "json")
+        if not output.strip():
+            return []
+        value = json.loads(output)
+        if not isinstance(value, dict):
+            raise CollectionError("invalid_response")
+        items = value.get("items") if value.get("kind") == "List" else [value]
+        if not isinstance(items, list) or len(items) > 1000 or any(not isinstance(item, dict) for item in items):
+            raise CollectionError("invalid_response")
+        return items
 
     def collect_gpu(self, target):
         pod, container, expected = target
@@ -372,19 +394,18 @@ class Collector:
     def collect(self):
         self.deadline = time.monotonic() + 25
         errors, pods, jobs = [], None, None
-        # Independent metadata queries run together. GPU execs below have their
-        # own pool capped at two, never one process per CPU or per cluster node.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-            futures = {key: pool.submit(self.get, *args) for key, args in
-                       [("pods", ("pods",)), ("jobs", ("jobs",)),
-                        ("quota", ("resourcequota", "compute-resources"))]}
+        # Server-side phase filtering avoids fetching completed/failed history.
+        # GPU execs below have their own pool capped at two.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = {
+                "pods": pool.submit(self.get, "pods", field_selector="status.phase=Running"),
+                "quota": pool.submit(self.get, "resourcequota", "compute-resources")
+            }
             for key, future in futures.items():
                 try:
                     value = future.result()
                     if key == "pods":
-                        pods = value
-                    elif key == "jobs":
-                        jobs = value
+                        pods = [pod for pod in value if (pod.get("status") or {}).get("phase") == "Running"]
                     else:
                         status = value.get("status") or {}
                         used = quantity((status.get("used") or {}).get("requests." + GPU_RESOURCE))
@@ -398,6 +419,11 @@ class Collector:
                     errors.append(error)
                     if key == "quota":
                         self.quota["error"] = error
+        if pods is not None:
+            try:
+                jobs = self.owner_jobs(pods)
+            except (CollectionError, ValueError, TypeError, KeyError):
+                errors.append("jobs_unavailable")
         if jobs is not None and pods is not None:
             try:
                 assembled, targets = make_jobs(jobs, pods)

@@ -58,7 +58,7 @@ export function validateA100Report(payload) {
       if (!object(pod)) throw new Error('Invalid pod');
       return {name: identity(pod.name, 'pod name'), phase: STATES.get(string(pod.phase).toLowerCase()) || 'Unknown',
         restarts: integer(pod.restarts, Number.MAX_SAFE_INTEGER)};
-    });
+    }).filter(pod => pod.phase === 'Running');
     const gpuIds = new Set();
     const gpus = list(job.gpus ?? [], 64, 'gpus').map(gpu => {
       if (!object(gpu)) throw new Error('Invalid GPU');
@@ -80,7 +80,7 @@ export function validateA100Report(payload) {
       started_at: timestamp(job.started_at), finished_at: timestamp(job.finished_at),
       node: string(job.node), pods, gpus, metrics_error: errorCode(job.metrics_error)
     };
-  });
+  }).filter(job => job.status === 'Running');
   const quota = reading(payload.quota, ['gpu_used', 'gpu_limit']);
   quota.gpu_used = integer(quota.gpu_used);
   quota.gpu_limit = integer(quota.gpu_limit);
@@ -94,6 +94,11 @@ export function validateA100Report(payload) {
 
 export function a100Snapshot(row, now = Date.now()) {
   const report = row ? JSON.parse(row.payload) : null;
+  // A previous collector/deployment may have stored historical jobs. Keep the
+  // public response Running-only even before the next collector report arrives.
+  if (report) report.jobs = (Array.isArray(report.jobs) ? report.jobs : [])
+    .filter(job => job?.status === 'Running')
+    .map(job => ({...job, pods: (job.pods ?? []).filter(pod => pod.phase === 'Running')}));
   const received = typeof row?.received_at === 'number' && Number.isFinite(row.received_at) ? row.received_at : null;
   const collected = report ? Date.parse(report.collected_at) : NaN;
   return {

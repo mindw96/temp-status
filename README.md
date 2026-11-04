@@ -4,7 +4,7 @@
 
 임시 Kubernetes 환경은 **[A100 작업 현황](https://status.nlp.io.kr/a100)**에서 별도로 확인합니다. 작업별 GPU 활동·VRAM, 연구실 GPU 요청 쿼터와 GPFS 저장공간을 표시하며, 기존 Slurm 페이지와 수신 토큰·데이터를 분리합니다. 수집기 설치와 종료 방법은 [A100 운영 안내](A100_SETUP.md)를 참고하세요.
 
-A100 작업 카드는 Running을 먼저 표시합니다. Failed와 Completed 작업은 각각 **Failed jobs**, **Completed jobs** 영역에 기본적으로 접어두며, 펼치면 간단한 목록과 작업 상세를 확인할 수 있습니다. 사용자 필터와 검색은 세 영역에 함께 적용됩니다.
+A100 화면은 **Running jobs**만 표시합니다. 완료·실패·대기 작업은 수집·전송·화면에서 제외하며, 사용자 필터와 검색은 실행 중인 작업에 적용됩니다. 작업이 더 이상 실행 중으로 보고되지 않으면 카드가 사라지고 열린 상세창도 해당 작업이 현재 목록에 없음을 표시합니다. GPU UTIL·VRAM, 연구실 GPU 할당량과 공유 저장공간은 계속 갱신합니다.
 
 Render에서는 동일한 화면과 API를 Node 서버로 실행하며 최신 보고만 메모리에 보관합니다. 홈페이지 배포와 수집기 연결은 별도이므로 실제 데이터 수신 여부는 화면의 노드·Slurm 보고 시각으로 확인합니다. [Cloudflare 대체 배포](https://temp-status.mindw96-3c8.workers.dev/)의 설치 방법은 [Cloudflare 설정 안내](SETUP.md)에 유지합니다. [기존 Sites 대시보드](https://lattice-lab-gpu.mindw96.chatgpt.site/)는 별도의 비공개 배포입니다.
 

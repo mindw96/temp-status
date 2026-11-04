@@ -66,6 +66,28 @@ try {
   assert.equal(JSON.stringify(current).includes('lab-server'), false);
   assert.equal(JSON.stringify(current).includes('lab-job'), false);
 
+  // Legacy collectors may still send historical/queued rows during rollout.
+  // Only Running jobs and their Running Pods are stored and sent to browsers.
+  const mixed = structuredClone(report);
+  mixed.jobs.push(...['Succeeded', 'Failed', 'Pending', 'Suspended', 'Unknown'].map(status =>
+    ({...structuredClone(report.jobs[0]), id: `excluded-${status}`, status})));
+  mixed.jobs[0].pods.push({name: 'old-failed-attempt', phase: 'Failed', restarts: 1});
+  assert.equal((await post(mixed)).status, 200);
+  current = await snapshot();
+  assert.deepEqual(current.report.jobs, validateA100Report(report).jobs);
+  const stored = JSON.parse(DB.raw.prepare('SELECT payload FROM reports WHERE key=?').get('a100:cluster').payload);
+  assert.deepEqual(stored.jobs, current.report.jobs);
+  assert.deepEqual(current.report.quota, validateA100Report(report).quota);
+  assert.deepEqual(current.report.storage, validateA100Report(report).storage);
+
+  // Rows written before this deployment are also filtered without waiting for
+  // collection; a successful all-finished report removes the former live job.
+  DB.raw.prepare('UPDATE reports SET payload=? WHERE key=?').run(JSON.stringify(mixed), 'a100:cluster');
+  assert.deepEqual((await snapshot()).report.jobs, report.jobs);
+  assert.equal((await post({...report, jobs: [{...report.jobs[0], status: 'Succeeded'}]})).status, 200);
+  assert.deepEqual((await snapshot()).report.jobs, []);
+  assert.equal((await post()).status, 200);
+
   const poisoned = structuredClone(report);
   poisoned.token = token; poisoned.kubeconfig = 'private-kube-config'; poisoned.logs = 'private-log';
   poisoned.errors = ['gpu_metrics_unavailable', 'stderr contains secret-token'];
@@ -169,4 +191,4 @@ try {
   assert.equal((await fetch(base + '/api/a100/report', {method: 'POST', body: '{}'})).status, 503);
   assert.equal((await fetch(base + '/api/snapshot')).status, 200);
 } finally {await close(server);}
-console.log('PASS: A100 separate tokens/storage/read policy, public allowlist, null-vs-zero metrics, source timestamps/staleness, bounded ingestion, API isolation, cached page aliases/assets, and optional-token restart.');
+console.log('PASS: A100 Running-only storage and legacy snapshots, terminal transition clearing, separate tokens/read policy, public allowlist, null-vs-zero metrics, source timestamps/staleness, bounded ingestion, API isolation, cached page aliases/assets, and optional-token restart.');

@@ -16,8 +16,9 @@ This shares the existing Render service, so service restarts affect both pages.
 `agents/a100_agent.py` requires Python 3.8+, `kubectl`, and the existing GPFS quota
 command on the A100 login node. It uses only Python's standard library.
 
-- Lists namespace Jobs **and** Pods. A Job waiting for GPU quota can exist before
-  its first Pod; it is shown as Pending / WaitingForPod, not silently omitted.
+- Queries namespace Pods with `--field-selector=status.phase=Running`, then
+  fetches only their owning Jobs by name. Completed/failed history and queued
+  Jobs are not listed, transmitted, or shown. Standalone Running Pods are included.
 - Reads the live `compute-resources` ResourceQuota. Its remaining GPU quota is
   not a statement that those physical GPUs can immediately run a new Pod.
 - Runs read-only `nvidia-smi` in Running containers that explicitly request GPUs,
@@ -39,10 +40,12 @@ requests account for regular containers, init-container maxima and Pod overhead
 for this Kubernetes 1.23 cluster. Job terminal conditions are authoritative;
 failed Pod attempts do not automatically mark a retrying Job failed.
 
-The report retains active workloads first and then the newest completed Jobs,
-up to 500 rows and 64 Pod summaries per row, within the receiver's 1 MiB limit.
-If active workloads alone exceed these bounds, collection is marked unavailable
-instead of silently presenting an incomplete active workload list.
+The report contains only Running workloads and Running Pod summaries, up to
+500 rows and 64 Pod summaries per row, within the receiver's 1 MiB limit.
+If Running workloads exceed these bounds, collection is marked unavailable
+instead of silently presenting an incomplete list. A successful empty Running
+Pod query clears the previous list and GPU cache immediately. Kubernetes Jobs
+and Pods themselves are never removed by this collector.
 
 ## Configuration
 
@@ -83,8 +86,10 @@ These commands run on the A100 login node from the private agent directory:
 /usr/bin/python3 a100_agent.py --env-file config.env --once
 ```
 
-Compare the output against `kubectl -n nlp-lab get jobs,pods`, the namespace
-ResourceQuota, read-only `nvidia-smi` from a Running GPU container, and GPFS quota.
+Compare the output against `kubectl -n nlp-lab get pods --field-selector=status.phase=Running`,
+the namespace ResourceQuota, read-only `nvidia-smi` from a Running GPU container,
+and GPFS quota. Owner Job lookups use `kubectl get jobs <names> --ignore-not-found`
+to tolerate a Job disappearing between the Pod list and its metadata query.
 The normal test command in a development checkout is:
 
 ```bash
@@ -127,10 +132,11 @@ timestamps and Kubernetes-provided lifecycle dates are never rewritten.
 On a source failure, a previously successful value retains its original
 `collected_at` timestamp and an explicit error. Missing values remain null.
 `jobs_collected_at` is independent of report receipt time, so fresh transport
-cannot make an old job listing look freshly queried. Terminal/deleted workloads
-drop out when Kubernetes removes them; retained metrics are not reassigned to
-new workloads. Storage polling failures are retried at its normal 300-second
-interval to avoid hammering the shared filesystem.
+cannot make an old job listing look freshly queried. Workloads drop out on the
+next successful query when their Pods stop Running or their Job reaches a terminal
+condition, without waiting for Kubernetes history cleanup. Retained metrics are
+not reassigned to new workloads. Storage polling failures are retried at the normal
+300-second interval to avoid hammering the shared filesystem.
 
 The agent receives no commands from the report receiver. To retire the temporary
 server, remove only its dedicated cron entry, stop the PID recorded in its

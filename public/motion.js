@@ -38,7 +38,7 @@
       if (opener && !opener.isConnected) {
         const attribute = ['data-job', 'data-a100-job', 'data-node'].find(name => opener.hasAttribute(name));
         const replacement = attribute && document.querySelector(`[${attribute}="${CSS.escape(opener.getAttribute(attribute))}"]`);
-        (replacement || document.querySelector('#retry-live, #a100-refresh'))?.focus({preventScroll: true});
+        (replacement || document.querySelector('#retry-live:not(:disabled), #a100-refresh:not(:disabled), #job-search, #a100-owner'))?.focus({preventScroll: true});
       }
       openers.delete(dialog);
     };
