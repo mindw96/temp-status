@@ -88,6 +88,7 @@ section[id]{scroll-margin-top:24px}
 .node-summary{display:block;width:100%;padding:20px 20px 10px;text-align:left;border-radius:20px 20px 0 0;background:var(--server-surface)}
 .node-summary:hover{background:var(--server-surface-hover)}
 .node-summary:focus-visible{outline-offset:-4px}
+.node-address{margin-bottom:3px;font-size:10px;line-height:1.4;font-weight:400;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
 .node-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .node-title{display:flex;align-items:center;gap:8px;min-width:0;flex-shrink:0}
 .node-name{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--text-primary);overflow-wrap:anywhere}
