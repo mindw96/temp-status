@@ -109,9 +109,14 @@ function gpuJobsMarkup(n, g, compactCard = false) {
   return g.jobRecords.map((record, position) => {
     const user = record.users.map(displayUserName).join(', ') || 'User unavailable', source = record.allocated ? 'Slurm allocated' : 'Observed process';
     const userLabel = record.allocated ? user : `Observed: ${user}`;
+    // QoS identifies this job's pool. GPU indices and user membership do not.
+    const qos = n.id === 'server4' && !n.stale && n.slurmFresh && nodeStatus(n).connection === 'On' ? record.job?.raw?.qos : null;
+    const pool = qos === 'lg_s4_rag' ? {label:'R&R', title:'RAG&Reasoning allocation'} : qos === 'lg_s4_shared' ? {label:'Shared', title:'Shared allocation'} : null;
+    const badge = compactCard && pool ? `<span class="gpu-pool-badge" title="${esc(pool.title)}">${esc(pool.label)}</span>` : '';
+    const side = badge ? `<span class="gpu-card-tags">${badge}${position === 0 ? index : ''}</span>` : position === 0 ? index : '';
     const meta = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? esc(record.jobId) : 'Job ID unavailable'}</span><span class="gpu-job-separator" aria-hidden="true">-</span><span class="gpu-job-user" title="${source} · User: ${esc(user)}">${esc(userLabel)}</span></span>`;
-    const content = `${compactCard ? `<span class="gpu-card-header">${meta}${position === 0 ? index : ''}</span>` : meta}<span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
-    return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" data-source="${record.allocated ? 'allocation' : 'process'}" title="${source} · Job ${esc(record.jobId)} · ${esc(user)} · ${esc(record.name)}" aria-label="${source} · Job ${esc(record.jobId)}: ${esc(record.name)} by ${esc(user)}, details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
+    const content = `${compactCard ? `<span class="gpu-card-header">${meta}${side}</span>` : meta}<span class="gpu-job-name">${esc(record.name || 'Name unavailable')}</span>`;
+    return record.job ? `<button class="gpu-job-link" data-job="${esc(record.job.id)}" data-source="${record.allocated ? 'allocation' : 'process'}" title="${source} · Job ${esc(record.jobId)} · ${esc(user)} · ${esc(record.name)}" aria-label="${source} · Job ${esc(record.jobId)}: ${esc(record.name)} by ${esc(user)}${badge ? `, ${esc(pool.title)}` : ''}, details">${content}</button>` : `<div class="gpu-job-unlinked" title="${esc(record.name || 'No matching Slurm job information')}">${content}</div>`;
   }).join('');
 }
 function cloudProcessesMarkup(n, g) {

@@ -154,6 +154,9 @@ section[id]{scroll-margin-top:24px}
 .gpu-card-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;min-height:18.2px;font-size:12px;line-height:1.3}
 .gpu-job-index{font-size:12px;font-weight:400;color:var(--text-primary);white-space:nowrap}
 .gpu-card-header .gpu-job-index{flex-shrink:0;margin-left:auto}
+.gpu-card-tags{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;margin-left:auto}
+.gpu-card-tags .gpu-job-index{margin-left:0}
+.gpu-pool-badge{padding:1px 4px;border:1px solid var(--divider);border-radius:4px;background:var(--pill-bg);color:var(--text-secondary);font-size:10px;font-weight:400;line-height:1.2;white-space:nowrap}
 .gpu-metrics{display:grid;grid-template-columns:auto minmax(16px,1fr) auto;align-items:center;gap:2px 6px;margin-top:5px;min-width:0;font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums;color:var(--text-tertiary)}
 .gpu-metric{display:contents;white-space:nowrap}
 .gpu-metric-value{display:contents}

@@ -194,6 +194,8 @@ GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. �
 
 노드별 파티션 목록, GPU 온도/전력, 작업 제출 시각은 수집하지 않습니다. 대기 작업의 실행 시간 0:00을 대기시간으로 해석하지 않습니다. 작업 표의 **GPUS**는 요청 GPU 수이며, 작업 상세의 **Requested GPUs**와 **Slurm allocated GPUs**는 각각 요청·할당 TRES의 GPU 수입니다. 같은 일괄 조회로 200개 제한 이후 작업까지 수집하며, 일반 GPU 합계와 모델별 GPU 수를 중복 합산하지 않습니다. **GPUs with observed processes**는 프로세스가 확인된 장치만 표시하므로 할당 수보다 적을 수 있습니다. Slurm GRES 인덱스를 NVIDIA 물리 GPU 번호로 추정해 표시하지 않습니다. 다중 노드 NodeList와 작업 배열 ID도 문자열 그대로 보존합니다. 과거 `sacct` 기록은 이 화면의 범위에 포함하지 않고 수신 응답에 `accounting_status: not_enabled`를 명시합니다.
 
+Server4의 GPU 카드에는 작업의 Slurm QoS에 따라 작은 풀 배지를 표시합니다. `lg_s4_rag`는 **R&R**, `lg_s4_shared`는 **Shared**이며, 사용자 소속이나 물리 GPU 번호로 구분하지 않습니다. R&R 소속 사용자가 공용 QoS로 실행한 작업도 Shared로 표시합니다. 수집기는 기존 `squeue --json` 일괄 조회에서 작업 ID가 정확히 일치한 QoS만 전달합니다. 미할당·누락·모호한 작업·오래된 보고·Off 상태에는 배지가 없으며, 별도 예외 QoS인 `lg_s4_open`을 공용으로 간주하지 않습니다.
+
 ## 기존 수집기를 보존하는 연결
 
 `collector_bridge.py`는 기존 Python 모듈을 읽어서 새 목적지와 인증 헤더를 설정합니다. 원본 파일을 수정하거나 기존 프로세스를 중지하지 않습니다. 실행 환경은 기존 `/home/mindw/status_agent/.venv/bin/python`을 사용합니다. 노드 보고는 각 GPU 서버에서, Slurm 보고는 컨트롤러 하나에서 실행합니다.

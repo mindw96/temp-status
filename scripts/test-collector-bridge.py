@@ -90,7 +90,7 @@ many_jobs = {'squeue': [{'job_id': str(i), 'req_cpus': '', 'req_mem': '', 'req_g
              'sinfo': [{'hostname': 'server1', 'alloc_memory': 123}]}
 many_report = {'jobs': [{'job_id': i, 'tres_req_str': 'cpu=4,mem=8G,node=1,gres/gpu=2',
                         'tres_alloc_str': 'cpu=64,mem=128G,gres/gpu=4', 'cpus': optional(64),
-                        'time_limit': optional(1440)}
+                        'time_limit': optional(1440), 'qos': 'lg_s4_shared'}
                        for i in range(1, 210)]}
 enriched, calls = enrich_requests(many_jobs, many_report)
 assert calls == ['build', 'query']
@@ -98,9 +98,18 @@ assert len(enriched['squeue']) == 209
 assert all(job['req_cpus'] == '4' and job['req_mem'] == '8G'
            and job['req_mem_scope'] == 'total' and job['req_gpus'] == '2'
            and job['alloc_gpus'] == '4' and job['time_limit'] == '1-00:00:00'
+           and job['qos'] == 'lg_s4_shared'
            for job in enriched['squeue'])
 # The original builder's node allocation calculation is not rerun or modified.
 assert enriched['sinfo'] == [{'hostname': 'server1', 'alloc_memory': 123}]
+
+# QoS is a reported scheduler identifier, never a guess from group/user/GPU.
+for qos in ('lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'normal'):
+    assert bridge.slurm_job_request({'qos': qos, 'user_name': 'kimhy'}) == {'qos': qos}
+for invalid in (None, True, 1, [], {}, {'name': 'lg_s4_rag'}, '', 'Unknown',
+                'None', 'null', '(null)', 'N/A', 'lg_s4_rag ', 'lg_s4_rag\n',
+                'lg_s4_rag,lg_s4_shared', 'x' * 129):
+    assert bridge.slurm_job_request({'qos': invalid}) == {}
 
 assert bridge.slurm_job_request({'cpus': optional(12), 'memory_per_node': optional(4096)}) == {
     'req_cpus': '12', 'req_mem': '4096M', 'req_mem_scope': 'node'}
@@ -212,21 +221,30 @@ identities_payload = {'squeue': [
     {'job_id': 'sD8DM3P9RE0E00'}, {'job_id': '602'},
     {'job_id': '500_9', 'job_id_aliases': ['500', 'sParent']},
     {'job_id': '500_[2-5]', 'job_id_aliases': ['500', 'sParent']},
-    {'job_id': '700', 'req_cpus': 'original'},
+    {'job_id': '700', 'req_cpus': 'original', 'qos': 'lg_s4_shared'},
 ]}
 identity_report = {'jobs': [
     {'job_id': 601, 'array_job_id': optional(500), 'array_task_id': optional(0),
-     'tres_req_str': 'cpu=1,mem=1G'},
+     'tres_req_str': 'cpu=1,mem=1G', 'qos': 'lg_s4_shared'},
     {'job_id': 602, 'array_job_id': optional(500), 'array_task_id': optional(1),
-     'step_id': {'sluid': 'sD8DM3P9RE0E00'}, 'tres_req_str': 'cpu=2,mem=2G'},
+     'step_id': {'sluid': 'sD8DM3P9RE0E00'}, 'tres_req_str': 'cpu=2,mem=2G', 'qos': 'lg_s4_rag'},
     {'job_id': 500, 'array_job_id': optional(500), 'array_task_id': optional(0, present=False),
-     'array_task_string': '2-8%3', 'step_id': {'sluid': 'sParent'}, 'tres_req_str': 'cpu=8,mem=8G'},
-    {'job_id': 700, 'tres_req_str': 'cpu=3,mem=3G'},
-    {'job_id': 700, 'tres_req_str': 'cpu=4,mem=4G'},
+     'array_task_string': '2-8%3', 'step_id': {'sluid': 'sParent'}, 'tres_req_str': 'cpu=8,mem=8G', 'qos': 'lg_s4_shared'},
+    {'job_id': 700, 'tres_req_str': 'cpu=3,mem=3G', 'qos': 'lg_s4_rag'},
+    {'job_id': 700, 'tres_req_str': 'cpu=4,mem=4G', 'qos': 'lg_s4_shared'},
 ]}
 identity_result, _ = enrich_requests(identities_payload, identity_report)
 assert [job.get('req_cpus') for job in identity_result['squeue']] == ['1', '2', '8', '2', '2', None, None, 'original']
 assert not any('req_mem' in job for job in identity_result['squeue'][5:])
+assert [job.get('qos') for job in identity_result['squeue']] == [
+    'lg_s4_shared', 'lg_s4_rag', 'lg_s4_shared', 'lg_s4_rag', 'lg_s4_rag', None, None, None]
+
+for report in (None, {'errors': ['query failed'], 'jobs': []}, {'jobs': []},
+               {'jobs': [{'job_id': 123, 'qos': {'name': 'lg_s4_rag'}}]}):
+    payload = {'squeue': [{'job_id': '123', 'qos': 'lg_s4_shared'}]}
+    assert enrich_requests(payload, report)[0] == {'squeue': [{'job_id': '123'}]}
+assert enrich_requests({'squeue': [{'job_id': '123', 'qos': 'lg_s4_rag'}]},
+                       error=RuntimeError('Slurm unavailable'))[0] == {'squeue': [{'job_id': '123'}]}
 
 original = {'squeue': [{'job_id': '123', 'req_cpus': '4', 'req_mem': '6G', 'req_mem_scope': 'total',
                         'time_limit': '01:00:00'}]}
@@ -311,4 +329,4 @@ else: raise AssertionError('Network error must propagate')
 assert module.REPORT_INTERVAL_SEC == 30
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 60
 module.SESSION.post(); assert module.REPORT_INTERVAL_SEC == 15
-print('PASS: bulk Slurm requests beyond 200 jobs, minute-based finite/unlimited/unset time limits, separate requested/allocated GPU totals without typed duplication, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')
+print('PASS: exact-match QoS reporting with malformed/ambiguous/failure clearing; bulk Slurm requests beyond 200 jobs, minute-based finite/unlimited/unset time limits, separate requested/allocated GPU totals without typed duplication, total/scoped/all-node RAM, optional numeric flags, exact array identity and graceful failure; true available disk capacity, full/missing disks and monitored paths; 15-second reports, bounded failure backoff and recovery; credentials stay private.')

@@ -709,6 +709,40 @@ evaluate('setJobSort("partition")');
 assert.deepEqual(plain(evaluate('jobSort')), validSort, 'Unsupported columns cannot replace the active sort');
 assert.equal(requests, 0, 'Every sort and filter change remains local');
 
+// Server4 pool badges follow fresh job QoS, even for an idle allocation. A
+// group member can use either pool; their username and GPU index are not proof.
+const renderPoolNode = (code = '', server = 'server4') => {
+  evaluate('liveState.error = null');
+  report(['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'unknown', undefined].map((qos, id) =>
+    job(72000 + id, 'kimhy', server, 'RUNNING', {qos,
+      gpu_allocations: [{node: server, gres_indices: [id]}]})), [server]);
+  evaluate(`liveState.snapshot.nodes[0].data.gpus = Array.from({length: 6}, (_, id) =>
+    ({id, slurm_gres_index: id, gpu_utilization: 0, processes: []}));
+    ${code}; normalizeSnapshot(liveState.snapshot); renderNodes();`);
+};
+const poolCard = id => evaluate(`gpuBlockMarkup(nodes[0], nodes[0].gpus[${id}])`);
+const poolLabels = html => [...html.matchAll(/class="gpu-pool-badge"[^>]*>([^<]*)<\/span>/g)].map(match => match[1]);
+renderPoolNode();
+assert.deepEqual(poolLabels(poolCard(0)), ['R&amp;R']);
+assert.deepEqual(poolLabels(poolCard(1)), ['Shared']);
+for (const id of [0, 1]) {
+  assert.match(poolCard(id), /김하영\(kimhy\)/);
+  assert.match(poolCard(id), /data-source="allocation"/);
+  assert.equal(evaluate(`nodes[0].gpus[${id}].processes.length`), 0);
+}
+for (const id of [2, 3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unknown/open/missing QoS and idle GPUs have no pool badge');
+renderPoolNode('', 'server2');
+assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Pool labels apply only to Server4');
+for (const [reason, code] of [
+  ['stale node', 'liveState.snapshot.nodes[0].receivedAt = Date.now() - FRESHNESS_MS - 1'],
+  ['stale Slurm', 'liveState.snapshot.slurm.receivedAt = Date.now() - FRESHNESS_MS - 1'],
+  ['failed refresh', 'liveState.error = "Request failed"']
+]) {
+  renderPoolNode(code);
+  assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], reason);
+}
+evaluate('liveState.error = null');
+
 // The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 evaluate('renderNodes()');
