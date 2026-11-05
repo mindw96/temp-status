@@ -725,18 +725,19 @@ const poolLabels = html => [...html.matchAll(/class="gpu-pool-badge"[^>]*>([^<]*
 renderPoolNode();
 assert.deepEqual(poolLabels(poolCard(0)), ['R&amp;R']);
 assert.deepEqual(poolLabels(poolCard(1)), ['Shared']);
+assert.deepEqual(poolLabels(poolCard(2)), ['Shared'], 'Server4 Unassigned/open jobs use the Shared display label');
 for (const id of [0, 1]) {
   assert.match(poolCard(id), /김하영\(kimhy\)/);
   assert.match(poolCard(id), /data-source="allocation"/);
   assert.equal(evaluate(`nodes[0].gpus[${id}].processes.length`), 0);
 }
-for (const id of [2, 3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unknown/open/missing QoS and idle GPUs have no pool badge');
+for (const id of [3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unknown/missing QoS and idle GPUs have no pool badge');
 renderPoolNode('', 'server2');
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'QoS must match the server as well as the job');
 for (const [server, qoses, labels, title] of [
   ['devbox', ['lg_s1_rag', 'lg_s1_merging', 'lg_s1_open', 'lg_s1_cpu', '__proto__'], ['R&amp;R', 'Merging'], 'Merging allocation'],
   ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D'], 'Agent&amp;Diffusion allocation'],
-  ['server4', ['lg_s4_rag', 'lg_s4_shared'], ['R&amp;R', 'Shared'], 'Shared allocation']
+  ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_cpu'], ['R&amp;R', 'Shared', 'Shared'], 'Shared allocation']
 ]) {
   renderPoolNode('', server, qoses);
   assert.deepEqual(poolLabels(element('#node-grid').innerHTML), labels);

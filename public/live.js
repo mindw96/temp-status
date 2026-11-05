@@ -100,7 +100,8 @@ const gpuJobPools = new Map([
   ['server2:lg_s2_editing', {label:'Editing', title:'Knowledge Editing allocation'}],
   ['server2:lg_s2_agent', {label:'A&D', title:'Agent&Diffusion allocation'}],
   ['server4:lg_s4_rag', {label:'R&R', title:'RAG&Reasoning allocation'}],
-  ['server4:lg_s4_shared', {label:'Shared', title:'Shared allocation'}]
+  ['server4:lg_s4_shared', {label:'Shared', title:'Shared allocation'}],
+  ['server4:lg_s4_open', {label:'Shared', title:'Shared allocation'}]
 ]);
 function gpuJobsMarkup(n, g, compactCard = false) {
   const index = compactCard ? `<span class="gpu-job-index gpu-id">GPU ${esc(g.index)}</span>` : '';
