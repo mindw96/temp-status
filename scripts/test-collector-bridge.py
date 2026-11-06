@@ -239,9 +239,20 @@ assert not any('req_mem' in job for job in identity_result['squeue'][5:])
 assert [job.get('qos') for job in identity_result['squeue']] == [
     'lg_s4_shared', 'lg_s4_rag', 'lg_s4_shared', 'lg_s4_rag', 'lg_s4_rag', None, None, None]
 
+# Use exact displayed task and range IDs, including a valid held score of zero.
+identity_report['jobs'][0].update(job_state=['PENDING'], priority=optional(0))
+identity_report['jobs'][1].update(job_state=['RUNNING'], priority=optional(900))
+identity_report['jobs'][2].update(job_state=['PENDING'], priority=optional(1730))
+identity_report['jobs'][3].update(job_state=['PENDING'], priority=optional(1500))
+identity_result, calls = enrich_requests(identities_payload, identity_report)
+assert calls == ['build', 'query']
+assert [job.get('priority') for job in identity_result['squeue']] == [0, None, 1730, None, None, None, None, None]
+for invalid in (None, True, -1, 1.5, '123', 4294967294, optional(7, present=False), optional(7, infinite=True)):
+    assert 'priority' not in bridge.slurm_job_request({'job_state': ['PENDING'], 'priority': invalid})
+
 for report in (None, {'errors': ['query failed'], 'jobs': []}, {'jobs': []},
                {'jobs': [{'job_id': 123, 'qos': {'name': 'lg_s4_rag'}}]}):
-    payload = {'squeue': [{'job_id': '123', 'qos': 'lg_s4_shared'}]}
+    payload = {'squeue': [{'job_id': '123', 'qos': 'lg_s4_shared', 'priority': 10}]}
     assert enrich_requests(payload, report)[0] == {'squeue': [{'job_id': '123'}]}
 assert enrich_requests({'squeue': [{'job_id': '123', 'qos': 'lg_s4_rag'}]},
                        error=RuntimeError('Slurm unavailable'))[0] == {'squeue': [{'job_id': '123'}]}

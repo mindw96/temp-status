@@ -457,6 +457,12 @@ def slurm_job_request(job):
     if (isinstance(qos, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", qos)
             and qos.lower() not in {"unknown", "none", "null"}):
         result["qos"] = qos
+    state = job.get("job_state")
+    states = state if isinstance(state, list) else [state]
+    if "PENDING" in states or "PD" in states:
+        priority = _allocation_integer(job.get("priority"))
+        if priority is not None and priority < 4294967294:
+            result["priority"] = priority
     time_limit = slurm_time_limit(job.get("time_limit"))
     if time_limit is not None:
         result["time_limit"] = time_limit
@@ -501,11 +507,11 @@ def install_slurm_job_requests(module, kind):
         jobs = payload.get("squeue") if isinstance(payload, dict) else None
         if not isinstance(jobs, list) or not jobs:
             return payload
-        # Pool badges require an exact match in this fresh bulk query. Do not
-        # carry a previous QoS through a failed or ambiguous enrichment.
+        # QoS and priority require an exact match in this fresh bulk query.
         for job in jobs:
             if isinstance(job, dict):
                 job.pop("qos", None)
+                job.pop("priority", None)
         try:
             report = module.run_slurm_json(["squeue", "--json"], quiet=True)
         except Exception:

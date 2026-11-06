@@ -107,6 +107,13 @@ const allocationCases=[
 assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:allocationCases.map(([job_id,gpu_allocations])=>({job_id,gpu_allocations}))},reportHeaders)).status,200);
 snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
 for(const [index,[name,,expected]] of allocationCases.entries())assert.deepEqual(snapshot.slurm.data.squeue[index].gpu_allocations,expected,name);
+const priorityCases=[
+  ['PD',1549,1549],['PENDING',0,0],['PENDING',4294967293,4294967293],['RUNNING',1549,undefined],
+  ...[undefined,null,'1549',true,{},-1,1.5,4294967294,4294967295,4294967296].map(value=>['PENDING',value,undefined]),
+];
+assert.equal((await call('/api/report/slurm','POST',{sinfo:[],squeue:priorityCases.map(([job_state,priority],index)=>({job_id:String(index+1),job_state,priority}))},reportHeaders)).status,200);
+snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();
+assert.deepEqual(snapshot.slurm.data.squeue.map(job=>job.priority),priorityCases.map(([, ,expected])=>expected));
 assert.equal((await call('/api/report/slurm','POST',slurmReport,reportHeaders)).status,200);
 node.gpus[0].gpu_utilization=50;await call('/api/report/node','POST',node,reportHeaders);snapshot=await(await call('/api/snapshot','GET',null,{'oai-authenticated-user-id':'test'})).json();assert.equal(snapshot.nodes.length,1);assert.deepEqual(snapshot.history,[]);assert.equal(snapshot.nodes[0].data.gpus[0].gpu_utilization,50);
 const publicEnv={...env,SNAPSHOT_AUTH_MODE:'public'};

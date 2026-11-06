@@ -115,15 +115,22 @@ assert.throws(() => apply({user: 123}), /Unsupported filter/);
 // apparent target, batch host, or shared partition is not a server assignment.
 element('#reset-job-filters').dispatch('click');
 const pendingQueue = [
-  job(101, 'alice', '(Resources)', 'PENDING', {req_node_list: 'devbox,server2', batch_host: 'ubuntu'}),
-  job(102, 'alice', '(Priority)', 'PD', {req_node_list: 'server[2,4]'}),
+  job(101, 'alice', '(Resources)', 'PENDING', {req_node_list: 'devbox,server2', batch_host: 'ubuntu', priority: 12345}),
+  job(102, 'alice', '(Priority)', 'PD', {req_node_list: 'server[2,4]', priority: 0}),
   job(103, 'bob', '(Resources)', 'PENDING', {req_node_list: 'server20'}),
-  job(104, 'bob', '(ReqNodeNotAvail, UnavailableNodes:server2)', 'PENDING', {batch_host: 'server2'}),
-  job(105, 'alice', 'server2', 'PENDING', {req_node_list: '(null)', batch_host: 'server2'}),
-  job(106, 'alice', '(Resources)', 'PENDING', {req_node_list: ' ubuntu '}),
-  job(107, 'bob', 'server4', 'RUNNING', {req_node_list: 'server2'})
+  job(104, 'bob', '(ReqNodeNotAvail, UnavailableNodes:server2)', 'PENDING', {batch_host: 'server2', priority: '12345'}),
+  job(105, 'alice', 'server2', 'PENDING', {req_node_list: '(null)', batch_host: 'server2', priority: null}),
+  job(106, 'alice', '(Resources)', 'PENDING', {req_node_list: ' ubuntu ', priority: 4294967294}),
+  job(107, 'bob', 'server4', 'RUNNING', {req_node_list: 'server2', priority: 56789})
 ];
 report(pendingQueue);
+assert.deepEqual([...element('#job-rows').innerHTML.matchAll(/>Priority ([\d,]+)<\/span>/g)].map(([, score]) => score), ['12,345', '0']);
+for (const [id, score] of [[101, '12,345'], [102, '0']]) {
+  evaluate(`showJob('${id}')`);
+  assert.ok(element('#dialog-content').innerHTML.includes(`<dt>Slurm priority</dt><dd>${score}</dd>`));
+}
+evaluate('showJob("107")');
+assert.doesNotMatch(element('#dialog-content').innerHTML, /Slurm priority/);
 assert.deepEqual(apply({server: 'server2'}).visibleJobIds, ['101', '102']);
 assert.equal(element('#total-jobs').textContent, 2);
 assert.equal(element('#pending-jobs').textContent, 2);
@@ -147,6 +154,11 @@ assert.match(element('#dialog-content').innerHTML, /<dt>Requested nodes<\/dt><dd
 assert.doesNotMatch(element('#dialog-content').innerHTML, /<dt>Assigned nodes<\/dt><dd>Server3/);
 evaluate('showJob("105")');
 assert.match(element('#dialog-content').innerHTML, /<dt>Requested nodes<\/dt><dd>Not specified<\/dd>/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /Slurm priority/);
+element('#reset-job-filters').dispatch('click');
+evaluate('liveState.snapshot.slurm.receivedAt -= FRESHNESS_MS; renderJobs(); showJob("101");');
+assert.doesNotMatch(element('#job-rows').innerHTML, />Priority \d/);
+assert.doesNotMatch(element('#dialog-content').innerHTML, /Slurm priority/);
 
 // Missing or malformed metadata cannot silently assign a pending job. Slurm's
 // common empty sentinels also remain in the unassigned view without throwing.
