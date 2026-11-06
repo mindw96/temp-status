@@ -220,7 +220,7 @@ section[id]{scroll-margin-top:24px}
 .jobs-table .job-id-column{width:160px}
 .jobs-table .job-user-column{width:140px}
 .jobs-table .job-gpus-column{width:75px}
-.jobs-table .job-target-column{width:205px}
+.jobs-table .job-target-column{width:260px}
 .jobs-table .job-priority-column{width:116px}
 .jobs-table .job-details-column{width:48px}
 .jobs-table thead th{padding:8px 14px;border-block:1px solid var(--table-row-border);background:var(--table-header-bg);font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--table-header-color);white-space:nowrap}
@@ -241,7 +241,9 @@ section[id]{scroll-margin-top:24px}
 .job-name:hover{text-decoration:underline;color:var(--link)}
 .job-user{display:block;min-width:0;white-space:normal;overflow-wrap:anywhere;font-size:14px;color:var(--text-secondary)}
 .jobs-table .pending-reason{font-size:14px;color:var(--pending-text)}
-.job-requested-nodes{display:block;margin-bottom:3px;color:var(--text-secondary);font-weight:500}
+.job-target-cell>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.job-target-cell.pending-reason>span{-webkit-line-clamp:1}
+.job-requested-nodes{margin-bottom:3px;color:var(--text-secondary);font-weight:500}
 .table-arrow{display:grid;place-items:center;min-height:30px;width:26px;color:var(--text-tertiary);border-radius:6px}
 .table-arrow svg{width:15px;height:15px}
 .table-arrow:hover{color:var(--link);background:var(--table-row-hover)}
@@ -347,7 +349,7 @@ dialog::backdrop{background:rgba(12,16,30,.45);backdrop-filter:blur(5px);-webkit
   .jobs-tabs{margin-inline:16px;gap:20px}
   .jobs-table{min-width:980px}
   .jobs-table .job-user-column{width:125px}
-  .jobs-table .job-target-column{width:175px}
+  .jobs-table .job-target-column{width:225px}
   .jobs-table .job-id-column{width:145px}
   .table-footer{padding:10px 16px;flex-wrap:wrap;gap:10px}
   dialog{padding:20px;max-height:calc(100dvh - 24px)}
