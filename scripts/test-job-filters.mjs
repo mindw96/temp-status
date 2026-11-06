@@ -34,7 +34,7 @@ function element(selector) {
 const tabs = ['all', 'RUNNING', 'PENDING'].map(state => {
   const tab = element(`[data-state="${state}"]`); tab.dataset.state = state; return tab;
 });
-const sortButtons = ['id', 'name', 'user'].map(key => {
+const sortButtons = ['id', 'name', 'user', 'priority'].map(key => {
   const button = element(`[data-job-sort="${key}"]`);
   button.dataset.jobSort = key;
   button.closest = selector => selector === 'th' ? element(`#sort-header-${key}`) : null;
@@ -246,7 +246,7 @@ report([]);
 assert.deepEqual(ids(), []);
 assert.equal(element('#job-user-filter').value, 'bob');
 assert.equal(evaluate('state.server'), 'server2');
-assert.match(element('#job-rows').innerHTML, /colspan="8"/);
+assert.match(element('#job-rows').innerHTML, /colspan="7"/);
 assert.match(element('#job-rows').innerHTML, /No jobs in the latest report/);
 assert.equal(element('#page-number').textContent, '1 / 1');
 assert.equal(element('#prev-page').disabled, true);
@@ -288,10 +288,15 @@ assert.equal(requests, 0);
 const unusualName = 'Training <script> & "full name"';
 report([job(44, 'user<one>"', 'devbox', 'RUNNING', {name: unusualName})]);
 const markup = element('#job-rows').innerHTML;
-assert.equal((markup.match(/<td(?:\s|>)/g) || []).length, 8);
+const cells = markup.match(/<td(?:\s|>).*?<\/td>/g) || [];
+assert.equal(cells.length, 7);
+assert.match(cells[3], /class="mono job-priority">—<\/td>/);
+assert.match(cells[4], />1<\/td>/);
+assert.match(cells[5], /class="job-target-cell\b/);
+assert.match(cells[6], /class="table-arrow"/);
 assert.match(markup, /class="job-name-cell"/);
 assert.match(markup, /title="Training &lt;script&gt; &amp; &quot;full name&quot;"/);
-assert.doesNotMatch(markup, /<script>|partition-chip|12:34:56/);
+assert.doesNotMatch(markup, /<script>|partition-chip|12:34:56|class="job-status\b/);
 assert.match(element('#job-user-filter').innerHTML, /user&lt;one&gt;&quot;/);
 
 // Requested nodes are untrusted report text in both the row and detail dialog.
@@ -639,7 +644,7 @@ const ascendingIds = ['2', '3', '4', '7', '8', '10', '20', '42', '99', '100', '1
 report(shuffledIds.map(id => job(id, 'mindw', 'devbox')));
 assert.deepEqual(ids(), shuffledIds, 'No sort is forced before the user selects a column');
 assert.deepEqual(plain(evaluate('jobSort')), {key: null, direction: 'desc'});
-for (const key of ['id', 'name', 'user']) {
+for (const key of ['id', 'name', 'user', 'priority']) {
   assert.equal(element(`#sort-header-${key}`).getAttribute('aria-sort'), 'none');
   assert.equal(element(`#sort-indicator-${key}`).textContent, '↕');
 }
@@ -721,6 +726,36 @@ assert.deepEqual(ids(), ['61', '60']);
 const validSort = plain(evaluate('jobSort'));
 evaluate('setJobSort("partition")');
 assert.deepEqual(plain(evaluate('jobSort')), validSort, 'Unsupported columns cannot replace the active sort');
+
+const priorityQueue = [
+  job(7, 'mindw', '(Resources)', 'PENDING', {priority: 0}),
+  job(60, 'mindw', 'devbox', 'RUNNING', {priority: 999999}),
+  job(91, 'mindw', '(Resources)', 'PENDING', {priority: 9}),
+  job(12, 'mindw', '(Resources)', 'PENDING', {priority: '50000'}),
+  job(11, 'mindw', '(Resources)', 'PD', {priority: 12345}),
+  job(23, 'mindw', '(Resources)', 'PENDING', {priority: 9}),
+  job(70, 'mindw', '(Resources)', 'PENDING')
+];
+report(priorityQueue);
+const prioritySource = plain(evaluate('jobs'));
+const priorityButton = element('[data-job-sort="priority"]');
+priorityButton.dispatch('click');
+assert.deepEqual(visibleIds(), ['11', '91', '23', '7', '70', '60', '12']);
+assert.equal(element('#sort-header-priority').getAttribute('aria-sort'), 'descending');
+assert.equal(element('#sort-indicator-priority').textContent, '↓');
+assert.equal(element('#sort-header-user').getAttribute('aria-sort'), 'none');
+assert.match(priorityButton.getAttribute('aria-label'), /sort ascending$/);
+priorityButton.dispatch('click');
+assert.deepEqual(visibleIds(), ['7', '23', '91', '11', '12', '60', '70']);
+assert.equal(element('#sort-header-priority').getAttribute('aria-sort'), 'ascending');
+assert.equal(element('#sort-indicator-priority').textContent, '↑');
+assert.match(priorityButton.getAttribute('aria-label'), /sort descending$/);
+assert.deepEqual(plain(evaluate('jobs')), prioritySource, 'Priority sorting preserves collector data');
+evaluate('liveState.snapshot.slurm.receivedAt -= FRESHNESS_MS; renderJobs();');
+assert.deepEqual(visibleIds(), ['7', '11', '12', '23', '60', '70', '91']);
+assert.deepEqual(priorityCells(), Array(priorityQueue.length).fill('—'));
+report(priorityQueue.toReversed());
+assert.deepEqual(visibleIds(), ['7', '23', '91', '11', '12', '60', '70'], 'A fresh report restores score order');
 assert.equal(requests, 0, 'Every sort and filter change remains local');
 
 // Group/pool badges follow fresh job QoS, even for an idle allocation. A
@@ -770,17 +805,17 @@ renderPoolNode('', 'ubuntu', ['lg_s1_rag', 'lg_s2_agent', 'lg_s4_shared']);
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Unconfigured servers do not inherit other pool labels');
 evaluate('liveState.error = null');
 
-// The demo renderer has the same eight-column, ten-row pagination contract.
+// The demo renderer has the same seven-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 evaluate('renderNodes()');
 assert.equal(renderedBadge(), 'H100 × 8');
 assert.match(element('#node-grid').innerHTML, />RTX 4090 × 4<\/span>/);
 assert.doesNotMatch(element('#node-grid').innerHTML, /NVIDIA/);
-assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 8);
+assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);
 assert.deepEqual(priorityCells(), Array(10).fill('—'));
 assert.doesNotMatch(element('#job-rows').innerHTML, /partition-chip/);
 element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, numeric and array ID sorting, natural name sorting, Korean display-user sorting, accessible sort state, refresh/filter sort retention, immutable source rows, reset, counts, escaping, eight columns with separate priority, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, numeric and array ID sorting, natural name sorting, Korean display-user sorting, priority sorting, accessible sort state, refresh/filter sort retention, immutable source rows, reset, counts, escaping, seven columns with separate priority, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');

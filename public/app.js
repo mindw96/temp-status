@@ -54,7 +54,7 @@ let jobs=jobSpecs.map(([id,name,user,state,partition,gpus,elapsed,target,indices
 const reasons={Resources:'Insufficient resources',Priority:'Waiting for priority',Dependency:'Waiting for dependency',QOSMaxGRESPerUser:'User GPU limit'};
 const state={jobState:'all',search:'',user:'',server:''};
 const jobSort = {key: null, direction: 'desc'};
-const jobSortLabels = Object.freeze({id: 'Job ID', name: 'Job Name', user: 'User'});
+const jobSortLabels = Object.freeze({id: 'Job ID', name: 'Job Name', user: 'User', priority: 'Priority'});
 const jobIdOrder = new Intl.Collator('en', {numeric: true, sensitivity: 'base'});
 const jobTextOrder = new Intl.Collator('ko', {numeric: true, sensitivity: 'base'});
 const $=selector=>document.querySelector(selector);
@@ -110,6 +110,12 @@ function hostlistContains(hostlist, hostname) {
 }
 function jobIsPending(job) {
   return ['PD', 'PENDING'].includes(job.state) || ['PD', 'PENDING'].includes(job.raw?.job_state);
+}
+function pendingPriorityScore(job) {
+  const score = job.raw?.priority;
+  return Number.isInteger(score) && score >= 0 && score < 4294967294 && jobIsPending(job)
+    && typeof liveState !== 'undefined' && liveState.mode === 'live' && fresh(liveState.snapshot?.slurm?.receivedAt)
+    ? score : null;
 }
 function requestedNodeList(job) {
   const value = job.raw?.req_node_list;
@@ -171,6 +177,11 @@ function filteredJobs() {
   // Numeric collation also preserves array IDs and avoids Number precision loss.
   return rows.sort((a, b) => {
     const byId = jobIdOrder.compare(a.id, b.id);
+    if (jobSort.key === 'priority') {
+      const left = pendingPriorityScore(a), right = pendingPriorityScore(b);
+      if ((left === null) !== (right === null)) return left === null ? 1 : -1;
+      return direction * ((left ?? 0) - (right ?? 0) || byId);
+    }
     const primary = jobSort.key === 'id' ? byId : jobSort.key === 'user'
       ? jobTextOrder.compare(displayUserName(a.user), displayUserName(b.user))
       : jobTextOrder.compare(a.name, b.name);
@@ -202,13 +213,7 @@ function resetJobFilters() {
   $('#job-search').value = '';
   resetJobPage(); render();
 }
-function jobStatusClass(status) {
-  const badge = {RUNNING: 'running', PENDING: 'pending', SUSPENDED: 'pending',
-    COMPLETING: 'completing', CONFIGURING: 'completing', COMPLETED: 'completed',
-    FAILED: 'down', CANCELLED: 'down', TIMEOUT: 'down'}[status] || 'idle';
-  return `badge badge-${badge}${status === 'PENDING' ? ' pending' : ''}`;
-}
-function renderJobs(){renderJobFilters();renderJobSort();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map(j=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td><span class="job-status ${jobStatusClass(j.state)}">${j.state==='RUNNING'?'Running':'Pending'}</span></td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${jobTargetMarkup(j)}</td><td class="mono job-priority">—</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('.jobs-tabs [data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
+function renderJobs(){renderJobFilters();renderJobSort();const all=jobsForFilterCounts(),rows=filteredJobs();$('#job-count').textContent=all.length;$('#total-jobs').textContent=all.length;$('#running-jobs').textContent=all.filter(j=>j.state==='RUNNING').length;$('#pending-jobs').textContent=all.filter(j=>j.state==='PENDING').length;$('#job-rows').innerHTML=rows.length?rows.map(j=>`<tr><td class="mono">${j.id}</td><td class="job-name-cell"><button class="job-name" data-job="${j.id}" title="${esc(j.name)}">${esc(j.name)}</button></td><td><span class="job-user">${esc(displayUserName(j.user))}</span></td><td class="mono job-priority">—</td><td class="mono">${j.gpus}</td><td class="job-target-cell ${j.state==='PENDING'?'pending-reason':'mono'}">${jobTargetMarkup(j)}</td><td><button class="table-arrow" data-job="${j.id}" aria-label="Job ${j.id} details">${icon('arrow')}</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">No matching jobs. Try another search or filter.</td></tr>';$('#result-count').textContent=`Showing ${rows.length} of ${all.length} jobs`;document.querySelectorAll('.jobs-tabs [data-state]').forEach(b=>{b.classList.toggle('active',b.dataset.state===state.jobState);b.setAttribute('aria-pressed',String(b.dataset.state===state.jobState));});}
 function render(){renderNodes();renderJobs();}
 function openDialog(html,eyebrow){$('#dialog-content').innerHTML=html;$('#dialog-eyebrow').textContent=eyebrow;const dialog=$('#detail-dialog');window.dashboardMotion.openDialog(dialog);dialog.scrollTop=0;}
 function showGroups(){
