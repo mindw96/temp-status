@@ -124,7 +124,9 @@ const pendingQueue = [
   job(107, 'bob', 'server4', 'RUNNING', {req_node_list: 'server2', priority: 56789})
 ];
 report(pendingQueue);
-assert.deepEqual([...element('#job-rows').innerHTML.matchAll(/>Priority ([\d,]+)<\/span>/g)].map(([, score]) => score), ['12,345', '0']);
+const priorityCells = () => [...element('#job-rows').innerHTML.matchAll(/<td class="mono job-priority">([^<]+)<\/td>/g)].map(([, score]) => score);
+assert.deepEqual(priorityCells(), ['12,345', '0', '—', '—', '—', '—', '—']);
+assert.doesNotMatch(element('#job-rows').innerHTML, />Priority \d/);
 for (const [id, score] of [[101, '12,345'], [102, '0']]) {
   evaluate(`showJob('${id}')`);
   assert.ok(element('#dialog-content').innerHTML.includes(`<dt>Slurm priority</dt><dd>${score}</dd>`));
@@ -157,7 +159,7 @@ assert.match(element('#dialog-content').innerHTML, /<dt>Requested nodes<\/dt><dd
 assert.doesNotMatch(element('#dialog-content').innerHTML, /Slurm priority/);
 element('#reset-job-filters').dispatch('click');
 evaluate('liveState.snapshot.slurm.receivedAt -= FRESHNESS_MS; renderJobs(); showJob("101");');
-assert.doesNotMatch(element('#job-rows').innerHTML, />Priority \d/);
+assert.deepEqual(priorityCells(), pendingQueue.map(() => '—'));
 assert.doesNotMatch(element('#dialog-content').innerHTML, /Slurm priority/);
 
 // Missing or malformed metadata cannot silently assign a pending job. Slurm's
@@ -244,7 +246,7 @@ report([]);
 assert.deepEqual(ids(), []);
 assert.equal(element('#job-user-filter').value, 'bob');
 assert.equal(evaluate('state.server'), 'server2');
-assert.match(element('#job-rows').innerHTML, /colspan="7"/);
+assert.match(element('#job-rows').innerHTML, /colspan="8"/);
 assert.match(element('#job-rows').innerHTML, /No jobs in the latest report/);
 assert.equal(element('#page-number').textContent, '1 / 1');
 assert.equal(element('#prev-page').disabled, true);
@@ -286,7 +288,7 @@ assert.equal(requests, 0);
 const unusualName = 'Training <script> & "full name"';
 report([job(44, 'user<one>"', 'devbox', 'RUNNING', {name: unusualName})]);
 const markup = element('#job-rows').innerHTML;
-assert.equal((markup.match(/<td(?:\s|>)/g) || []).length, 7);
+assert.equal((markup.match(/<td(?:\s|>)/g) || []).length, 8);
 assert.match(markup, /class="job-name-cell"/);
 assert.match(markup, /title="Training &lt;script&gt; &amp; &quot;full name&quot;"/);
 assert.doesNotMatch(markup, /<script>|partition-chip|12:34:56/);
@@ -768,16 +770,17 @@ renderPoolNode('', 'ubuntu', ['lg_s1_rag', 'lg_s2_agent', 'lg_s4_shared']);
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Unconfigured servers do not inherit other pool labels');
 evaluate('liveState.error = null');
 
-// The demo renderer has the same seven-column, ten-row pagination contract.
+// The demo renderer has the same eight-column, ten-row pagination contract.
 evaluate('liveState.mode = "demo"; nodes = demoData.nodes; jobs = demoData.jobs; partitionMeta = demoData.partitions; renderJobs();');
 evaluate('renderNodes()');
 assert.equal(renderedBadge(), 'H100 × 8');
 assert.match(element('#node-grid').innerHTML, />RTX 4090 × 4<\/span>/);
 assert.doesNotMatch(element('#node-grid').innerHTML, /NVIDIA/);
-assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 7);
+assert.equal((element('#job-rows').innerHTML.match(/<td(?:\s|>)/g) || []).length, 10 * 8);
+assert.deepEqual(priorityCells(), Array(10).fill('—'));
 assert.doesNotMatch(element('#job-rows').innerHTML, /partition-chip/);
 element('#next-page').onclick();
 assert.equal(visibleIds().length, 2);
 assert.equal(element('#page-number').textContent, '2 / 2');
 assert.equal(element('#next-page').disabled, true);
-console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, numeric and array ID sorting, natural name sorting, Korean display-user sorting, accessible sort state, refresh/filter sort retention, immutable source rows, reset, counts, escaping, seven columns, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');
+console.log('Slurm job filter tests passed: exact hostlists, pending semantics, combined filters, pagination, numeric and array ID sorting, natural name sorting, Korean display-user sorting, accessible sort state, refresh/filter sort retention, immutable source rows, reset, counts, escaping, eight columns with separate priority, blank unallocated job-name line with retained warnings, compact hardware badges, and fresh allocation/process highlights on GPU detail cards.');

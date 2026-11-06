@@ -222,6 +222,7 @@ section[id]{scroll-margin-top:24px}
 .jobs-table .job-status-column{width:120px}
 .jobs-table .job-gpus-column{width:75px}
 .jobs-table .job-target-column{width:205px}
+.jobs-table .job-priority-column{width:116px}
 .jobs-table .job-details-column{width:48px}
 .jobs-table thead th{padding:8px 14px;border-block:1px solid var(--table-row-border);background:var(--table-header-bg);font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--table-header-color);white-space:nowrap}
 /* The paginated table only scrolls horizontally; nested sticky blur can hide its labels. */
@@ -230,6 +231,7 @@ section[id]{scroll-margin-top:24px}
 .job-sort-button:hover{color:var(--link)}
 .job-sort-button.is-active .job-sort-indicator{color:inherit}
 .jobs-table td{padding:8px 14px;border-bottom:1px solid var(--table-row-border);color:var(--text-primary);vertical-align:middle;font-variant-numeric:tabular-nums}
+.jobs-table .job-priority{padding-inline:10px;text-align:right;white-space:nowrap}
 .jobs-table th:first-child,.jobs-table td:first-child{padding-left:22px}
 .jobs-table th:last-child,.jobs-table td:last-child{padding-right:22px}
 .jobs-table tr:last-child td{border-bottom:0}
