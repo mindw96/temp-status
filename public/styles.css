@@ -232,6 +232,7 @@ section[id]{scroll-margin-top:24px}
 .jobs-table td{padding:8px 14px;border-bottom:1px solid var(--table-row-border);color:var(--text-primary);vertical-align:middle;font-variant-numeric:tabular-nums}
 .jobs-table .job-priority{padding-inline:10px;text-align:right;white-space:nowrap}
 .jobs-table .job-priority .job-sort-button{justify-content:flex-end}
+.jobs-table td.job-priority,.jobs-table td:nth-child(5){text-align:center}
 .jobs-table th:first-child,.jobs-table td:first-child{padding-left:22px}
 .jobs-table th:last-child,.jobs-table td:last-child{padding-right:22px}
 .jobs-table tr:last-child td{border-bottom:0}
