@@ -275,7 +275,7 @@ assert.deepEqual(plain(evaluate('currentNodes().map(node => node.id)')), ['devbo
 // Clearing also clears the shared status and search filters.
 apply({jobState: 'RUNNING', search: 'job'});
 element('#reset-job-filters').dispatch('click');
-assert.deepEqual(plain(evaluate('state')), {jobState: 'all', search: '', user: '', server: ''});
+assert.deepEqual(plain(evaluate('state')), {jobState: 'all', search: '', user: '', server: '', group: ''});
 assert.equal(evaluate('liveState.page'), 1);
 assert.equal(element('#job-search').value, '');
 assert.equal(element('#job-user-filter').value, '');
@@ -283,6 +283,42 @@ assert.equal(element('#job-server-filter').value, '');
 assert.equal(element('#reset-job-filters').disabled, true);
 assert.deepEqual(ids(), ['43']);
 assert.equal(requests, 0);
+
+// Group membership is based on the owner's exact username and combines with
+// the current filters. A refresh with no jobs must keep the selection active.
+const groupQueue = [
+  ...Array.from({length: 11}, (_, index) => job(300 + index, 'mindw', 'server2')),
+  job(91, 'mindw', 'server2', 'RUNNING', {name: 'Group probe'}),
+  job(92, 'mindw', 'devbox', 'RUNNING', {name: 'Group probe'}),
+  job(93, 'mindw', '(Resources)', 'PENDING', {name: 'Group probe', req_node_list: 'server2'}),
+  job(94, 'kimhy', 'server2', 'RUNNING', {name: 'Group probe'}),
+  job(95, 'mindw-guest', 'server2', 'RUNNING', {name: 'Group probe'}),
+  job(96, 'nash', 'server4'),
+  job(97, 'kangmk', 'server4')
+];
+const groupFilter = element('#job-group-filter');
+report(groupQueue);
+assert.match(groupFilter.innerHTML, /<option value="">All groups<\/option>/);
+assert.match(groupFilter.innerHTML, /<option value="RAG&amp;Reasoning">RAG&amp;Reasoning<\/option>/);
+element('#next-page').onclick();
+assert.equal(evaluate('liveState.page'), 2);
+groupFilter.dispatch('change', 'RAG&Reasoning');
+assert.equal(evaluate('liveState.page'), 1);
+assert.equal(element('#reset-job-filters').disabled, false);
+assert.deepEqual(apply({server: 'server2', search: 'group probe', jobState: 'RUNNING'}).visibleJobIds, ['91', '94']);
+assert.deepEqual(apply({user: 'mindw'}).visibleJobIds, ['91']);
+report([]);
+assert.equal(groupFilter.value, 'RAG&Reasoning');
+assert.deepEqual(ids(), []);
+report(groupQueue);
+assert.deepEqual(ids(), ['91']);
+element('#reset-job-filters').dispatch('click');
+assert.equal(groupFilter.value, '');
+assert.equal(element('#reset-job-filters').disabled, true);
+assert.ok(ids().includes('95'), 'All groups includes users outside the group list');
+groupFilter.dispatch('change', 'Unassigned');
+assert.deepEqual(ids(), ['96', '97']);
+element('#reset-job-filters').dispatch('click');
 
 // Escaping still protects names in widened cells, titles, and select labels.
 const unusualName = 'Training <script> & "full name"';

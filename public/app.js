@@ -52,7 +52,7 @@ let nodes=nodeSpecs.map(([id,partition,total,allocated,state,utils,temp,cpu,cpuA
 const jobSpecs=[['48217','llama3-70b-sft','minji','RUNNING','accelerated',8,'03:42:18','gpu-01',[0,1,2,3,4,5,6,7]],['48231','multimodal-pretrain','jiwon','RUNNING','accelerated',4,'01:28:05','gpu-02',[0,1,2,3]],['48236','retrieval-ablation','hyunwoo','RUNNING','accelerated',2,'00:46:12','gpu-02',[4,5]],['48222','diffusion-train','seoyeon','RUNNING','compute',4,'02:53:40','gpu-03',[0,1,2,3]],['48240','embedding-train','yujin','RUNNING','compute',1,'00:31:09','gpu-04',[0]],['48241','reranker-eval','junho','RUNNING','compute',1,'00:24:16','gpu-04',[1]],['48245','data-validation','doyun','RUNNING','interactive',1,'00:12:24','gpu-05',[0]],['48246','tokenizer-benchmark','harin','RUNNING','interactive',1,'00:10:03','gpu-05',[1]],['48248','llama-full-ft','doyun','PENDING','accelerated',8,'00:38:12','Resources',[]],['48250','reward-model','harin','PENDING','accelerated',2,'00:22:45','Priority',[]],['48253','eval-after-sft','minji','PENDING','interactive',1,'00:14:06','Dependency',[]],['48254','diffusion-sweep','seoyeon','PENDING','compute',4,'00:08:32','QOSMaxGRESPerUser',[]]];
 let jobs=jobSpecs.map(([id,name,user,state,partition,gpus,elapsed,target,indices])=>({id,name,user,state,partition,gpus,elapsed,target,indices}));
 const reasons={Resources:'Insufficient resources',Priority:'Waiting for priority',Dependency:'Waiting for dependency',QOSMaxGRESPerUser:'User GPU limit'};
-const state={jobState:'all',search:'',user:'',server:''};
+const state={jobState:'all',search:'',user:'',server:'',group:''};
 const jobSort = {key: null, direction: 'desc'};
 const jobSortLabels = Object.freeze({id: 'Job ID', name: 'Job Name', user: 'User', priority: 'Priority'});
 const jobIdOrder = new Intl.Collator('en', {numeric: true, sensitivity: 'base'});
@@ -158,14 +158,17 @@ function renderJobFilters() {
   const users = jobFilterUsers(), servers = jobFilterServers();
   const options = [
     ['#job-user-filter', state.user, [['', 'All users'], ...users.map(user => [user, displayUserName(user)])]],
-    ['#job-server-filter', state.server, [['', 'All servers'], ...servers.map(id => [id, displayNodeName(id)]), ['@unassigned', 'Unassigned / pending']]]
+    ['#job-server-filter', state.server, [['', 'All servers'], ...servers.map(id => [id, displayNodeName(id)]), ['@unassigned', 'Unassigned / pending']]],
+    ['#job-group-filter', state.group, [['', 'All groups'], ...researchGroups.map(({name}) => [name, name])]]
   ];
   for (const [selector, value, entries] of options) renderFilterSelect(selector, value, entries);
-  $('#reset-job-filters').disabled = !state.user && !state.server && !state.search && state.jobState === 'all';
+  $('#reset-job-filters').disabled = !state.user && !state.server && !state.group && !state.search && state.jobState === 'all';
 }
 function jobsForFilterCounts() {
   const q = state.search.toLowerCase();
+  const group = researchGroups.find(({name}) => name === state.group);
   return currentJobs().filter(job => (!state.user || job.user === state.user) && jobMatchesServer(job, state.server)
+    && (!state.group || group?.members.includes(job.user))
     && [job.name, job.user, displayUserName(job.user), job.id, job.target, jobIsPending(job) ? requestedNodeList(job) : displayNodeList(job.target), jobIsPending(job) ? displayNodeList(requestedNodeList(job)) : '']
       .some(value => String(value ?? '').toLowerCase().includes(q)));
 }
@@ -209,7 +212,7 @@ function renderJobSort() {
 }
 function resetJobPage() {if (typeof liveState !== 'undefined') liveState.page = 1;}
 function resetJobFilters() {
-  Object.assign(state, {jobState: 'all', search: '', user: '', server: ''});
+  Object.assign(state, {jobState: 'all', search: '', user: '', server: '', group: ''});
   $('#job-search').value = '';
   resetJobPage(); render();
 }
@@ -229,6 +232,7 @@ $('#show-groups')?.addEventListener('click',showGroups);
 $('#job-search').addEventListener('input',e=>{state.search=e.target.value;resetJobPage();renderJobs();});
 $('#job-user-filter').addEventListener('change',e=>{state.user=e.target.value;resetJobPage();renderJobs();});
 $('#job-server-filter').addEventListener('change',e=>{state.server=e.target.value;resetJobPage();renderJobs();});
+$('#job-group-filter').addEventListener('change',e=>{state.group=e.target.value;resetJobPage();renderJobs();});
 $('#reset-job-filters').addEventListener('click',resetJobFilters);
 document.querySelectorAll('.jobs-tabs [data-state]').forEach(b=>b.addEventListener('click',()=>{state.jobState=b.dataset.state;resetJobPage();renderJobs();}));
 document.addEventListener('click',e=>{const node=e.target.closest('[data-node]'),job=e.target.closest('[data-job]');if(node)showNode(node.dataset.node);if(job)showJob(job.dataset.job);});
