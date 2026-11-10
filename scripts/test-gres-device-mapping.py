@@ -38,6 +38,21 @@ noncontiguous = {"gpus": [{"id": 0, "minor_number": 3}, {"id": 1, "minor_number"
 result, _ = mapped(noncontiguous, "Name=gpu File=/dev/nvidia[0,2-3] Count=3")
 assert [gpu["slurm_gres_index"] for gpu in result["gpus"]] == [2, 0, 1]
 
+# Server4 reports all eight GPUs, but only the six Slurm devices get indices.
+server4_config = "AutoDetect=off\nName=gpu Type=rtx_pro_6000 File=/dev/nvidia[2-7] Flags=nvidia_gpu_env"
+server4 = {"server_name": "server4", "gpus": [
+    {"id": index, "minor_number": index, "slurm_gres_index": 99} for index in range(8)]}
+result, _ = mapped(copy.deepcopy(server4), server4_config)
+assert all("slurm_gres_index" not in gpu for gpu in result["gpus"][:2])
+assert [gpu["slurm_gres_index"] for gpu in result["gpus"][2:]] == list(range(6))
+result, _ = mapped(copy.deepcopy(server4), server4_config.replace("AutoDetect=off", "AutoDetect=nvml"))
+assert all("slurm_gres_index" not in gpu for gpu in result["gpus"]), 'AutoDetect may add unlisted devices'
+for index, replacement_minor in ((7, 8), (0, 6)):  # Missing GPU 7, or duplicate GPU 6.
+    payload = copy.deepcopy(server4)
+    payload["gpus"][index]["minor_number"] = replacement_minor
+    result, _ = mapped(payload, server4_config)
+    assert all("slurm_gres_index" not in gpu for gpu in result["gpus"]), replacement_minor
+
 for config, expected in (
         ("# comment\nName=gpu Type=a6000 File=/dev/nvidia[0-7] # comment", list(range(8))),
         ("AutoDetect=nvml\nName=gpu Type=a6000 File=/dev/nvidia[0-7]", list(range(8))),

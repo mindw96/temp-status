@@ -585,7 +585,7 @@ def install_storage_reporting(module, kind):
     module.build_payload = build_payload
 
 
-def slurm_gpu_minor_order(config):
+def slurm_gpu_minor_order(config, *, physical_count=None):
     """Read an unambiguous explicit NVIDIA File order from the local GRES file.
 
     GRES indices enumerate configured devices; they are not NVML GPU indices.
@@ -595,6 +595,7 @@ def slurm_gpu_minor_order(config):
     if not isinstance(config, str):
         return None
     minors = []
+    autodetect = False
     for line in config.splitlines():
         try:
             tokens = shlex.split(line, comments=True)
@@ -611,8 +612,10 @@ def slurm_gpu_minor_order(config):
             fields[key] = value
         if "include" in fields or "nodename" in fields:
             return None
-        if "autodetect" in fields and fields["autodetect"].lower() not in ("off", "nvml", "nvidia"):
+        mode = fields.get("autodetect", "off").lower()
+        if mode not in ("off", "nvml", "nvidia"):
             return None
+        autodetect |= mode != "off"
         if fields.get("name", "").lower() != "gpu":
             continue
         if ("multiplefiles" in fields or "file" not in fields
@@ -646,6 +649,9 @@ def slurm_gpu_minor_order(config):
     # or unsupported configuration must not silently reshuffle existing jobs.
     if not minors or any(previous >= current for previous, current in zip(minors, minors[1:])):
         return None
+    # AutoDetect can add devices beyond the explicit File records.
+    if autodetect and physical_count is not None and len(minors) != physical_count:
+        return None
     return minors
 
 
@@ -664,10 +670,10 @@ def install_slurm_gpu_mapping(module, kind):
             if isinstance(gpu, dict):
                 gpu.pop("slurm_gres_index", None)
         try:
-            minors = slurm_gpu_minor_order(Path("/etc/slurm/gres.conf").read_text())
+            minors = slurm_gpu_minor_order(Path("/etc/slurm/gres.conf").read_text(), physical_count=len(gpus))
         except (OSError, UnicodeError):
             return payload
-        if minors is None or len(minors) != len(gpus):
+        if minors is None:
             return payload
         by_minor = {}
         for gpu in gpus:
@@ -677,7 +683,8 @@ def install_slurm_gpu_mapping(module, kind):
             if minor is None or not minor.is_integer() or minor in by_minor:
                 return payload
             by_minor[int(minor)] = gpu
-        if set(by_minor) != set(minors):
+        # GPUs reserved outside Slurm are still reported, without a GRES index.
+        if not set(minors).issubset(by_minor):
             return payload
         for index, minor in enumerate(minors):
             by_minor[minor]["slurm_gres_index"] = index
