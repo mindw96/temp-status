@@ -112,20 +112,21 @@ function gpuJobsMarkup(n, g, compactCard = false) {
   if (nodeStatus(n).connection === 'Off') return empty('Server Off · GPU unavailable', true);
   if (g.error && !g.allocationRecords?.length) return empty('GPU report unavailable');
   if (n.isCloud) return !g.processes.length ? empty(n.stale ? 'No process in last report' : 'No process observed', !n.stale) : `${compactCard ? `<div class="gpu-card-header">${index}</div>` : ''}${cloudProcessesMarkup(n, g)}`;
+  // shortcut: use the current Server4 display slots, update when the project assignment changes.
+  const ndmiSlot = n.id === 'server4' && ['0', '1'].includes(String(g.index));
   if (!g.jobRecords.length) {
     const mapped = Number.isInteger(g.gresIndex) && g.gresIndex >= 0, idle = !n.stale && n.slurmFresh && mapped;
-    return empty(n.stale ? 'GPU data stale' : !n.slurmFresh ? 'Slurm data stale' : !mapped ? 'Allocation unavailable' : 'No allocation reported', idle);
+    const unmapped = ndmiSlot ? 'Allocation NDMI' : 'Allocation unavailable';
+    return empty(n.stale ? 'GPU data stale' : !n.slurmFresh ? 'Slurm data stale' : !mapped ? unmapped : 'No allocation reported', idle);
   }
   const freshJobData = !n.stale && n.slurmFresh && nodeStatus(n).connection === 'On';
-  // shortcut: use the current Server4 display slots, update when the project assignment changes.
-  const ndmiSlot = freshJobData && n.id === 'server4' && ['0', '1'].includes(String(g.index));
   return g.jobRecords.map((record, position) => {
     const user = record.users.map(displayUserName).join(', ') || 'User unavailable', source = record.allocated ? 'Slurm allocated' : 'Observed process';
     const userLabel = record.allocated ? user : `Observed: ${user}`;
     // QoS identifies this job's pool. GPU indices and user membership do not.
     const qos = freshJobData ? record.job?.raw?.qos : null;
     let pool = gpuJobPools.get(`${n.id}:${qos}`);
-    if (ndmiSlot) pool = position === 0 ? {label:'NDMI', title:'NDMI project GPU'} : null;
+    if (freshJobData && ndmiSlot) pool = position === 0 ? {label:'NDMI', title:'NDMI project GPU'} : null;
     const badge = compactCard && pool ? `<span class="gpu-pool-badge" title="${esc(pool.title)}">${esc(pool.label)}</span>` : '';
     const side = badge ? `<span class="gpu-card-tags">${badge}${position === 0 ? index : ''}</span>` : position === 0 ? index : '';
     const meta = `<span class="gpu-job-meta"><span class="gpu-job-id">${record.jobId ? esc(record.jobId) : 'Job ID unavailable'}</span><span class="gpu-job-separator" aria-hidden="true">-</span><span class="gpu-job-user" title="${source} · User: ${esc(user)}">${esc(userLabel)}</span></span>`;

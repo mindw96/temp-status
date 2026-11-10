@@ -817,9 +817,10 @@ for (const id of [0, 1]) {
   assert.equal(evaluate(`nodes[0].gpus[${id}].processes.length`), 0);
 }
 for (const id of [3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unknown/missing QoS and idle GPUs have no pool badge');
-renderPoolNode("liveState.snapshot.nodes[0].data.gpus[0].id = '0';", 'server4', [undefined]);
+renderPoolNode("liveState.snapshot.nodes[0].data.gpus[0].id = '0'; liveState.snapshot.nodes[0].data.gpus[1].slurm_gres_index = null;", 'server4', [undefined]);
 assert.deepEqual(poolLabels(poolCard(0)), ['NDMI'], 'Occupied NDMI slots do not require a matching QoS');
 assert.deepEqual(poolLabels(poolCard(1)), [], 'An idle NDMI slot has no badge');
+assert.match(poolCard(1), /<span class="gpu-job-status">Allocation NDMI<\/span>/);
 renderPoolNode('liveState.snapshot.slurm.data.squeue[1].gpu_allocations[0].gres_indices = [0];', 'server4', ['lg_s4_rag', 'lg_s4_zuchi']);
 assert.equal(evaluate('nodes[0].gpus[0].jobRecords.length'), 2);
 assert.deepEqual(poolLabels(poolCard(0)), ['NDMI'], 'Multiple jobs on an NDMI slot still show only one project badge');
