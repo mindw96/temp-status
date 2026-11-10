@@ -196,7 +196,7 @@ GPU 카드의 사용자·Job은 Slurm의 실제 장치 할당 기준입니다. �
 
 Server1·2·4의 GPU 카드에는 작업의 Slurm QoS에 따라 작은 그룹·풀 배지를 표시합니다. Server1의 `lg_s1_rag`는 **R&R**, `lg_s1_merging`은 **Merging**, Server2의 `lg_s2_editing`은 **Editing**(Knowledge Editing), `lg_s2_agent`는 **A&D**(Agent&Diffusion), Server4의 `lg_s4_rag`는 **R&R**, `lg_s4_shared`는 **Shared**, `lg_s4_zuchi`는 **Zuchi**입니다. 배지에 마우스를 올리면 전체 그룹명을 확인할 수 있습니다. 사용자 소속이나 물리 GPU 번호로 구분하지 않으므로 R&R 소속 사용자가 공용 QoS로 실행한 작업도 Shared로 표시합니다. 수집기는 기존 `squeue --json` 일괄 조회에서 작업 ID가 정확히 일치한 QoS만 전달합니다. 미할당·누락·모호한 작업·오래된 보고·Off 상태에는 배지가 없습니다. Server4의 미포함(Unassigned) 사용자 작업에 쓰이는 `lg_s4_open`도 화면에서는 **Shared**로 표시합니다. 이 표시 규칙은 실제 Slurm QoS·권한·할당 한도를 변경하지 않으며, Server1·2의 `_open`에는 배지를 표시하지 않습니다.
 
-Server4의 GPU 0·1번은 최신 보고에서 작업이 확인되면 재난연 과제용 **NDMI** 배지도 표시합니다. 이 표시는 현재의 임시 장치 배정을 따릅니다.
+Server4의 GPU 0·1번은 최신 보고에서 작업이 확인되면 QoS 배지 대신 재난연 과제용 **NDMI** 배지를 표시합니다. 이 표시는 현재의 임시 장치 배정을 따릅니다.
 
 ## 기존 수집기를 보존하는 연결
 

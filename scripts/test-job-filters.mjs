@@ -808,8 +808,8 @@ const renderPoolNode = (code = '', server = 'server4', qoses = ['lg_s4_rag', 'lg
 const poolCard = id => evaluate(`gpuBlockMarkup(nodes[0], nodes[0].gpus[${id}])`);
 const poolLabels = html => [...html.matchAll(/class="gpu-pool-badge"[^>]*>([^<]*)<\/span>/g)].map(match => match[1]);
 renderPoolNode();
-assert.deepEqual(poolLabels(poolCard(0)), ['NDMI', 'R&amp;R']);
-assert.deepEqual(poolLabels(poolCard(1)), ['NDMI', 'Shared']);
+assert.deepEqual(poolLabels(poolCard(0)), ['NDMI']);
+assert.deepEqual(poolLabels(poolCard(1)), ['NDMI']);
 assert.deepEqual(poolLabels(poolCard(2)), ['Shared'], 'Server4 Unassigned/open jobs use the Shared display label');
 for (const id of [0, 1]) {
   assert.match(poolCard(id), /김하영\(kimhy\)/);
@@ -820,12 +820,15 @@ for (const id of [3, 4, 5]) assert.deepEqual(poolLabels(poolCard(id)), [], 'Unkn
 renderPoolNode("liveState.snapshot.nodes[0].data.gpus[0].id = '0';", 'server4', [undefined]);
 assert.deepEqual(poolLabels(poolCard(0)), ['NDMI'], 'Occupied NDMI slots do not require a matching QoS');
 assert.deepEqual(poolLabels(poolCard(1)), [], 'An idle NDMI slot has no badge');
+renderPoolNode('liveState.snapshot.slurm.data.squeue[1].gpu_allocations[0].gres_indices = [0];', 'server4', ['lg_s4_rag', 'lg_s4_zuchi']);
+assert.equal(evaluate('nodes[0].gpus[0].jobRecords.length'), 2);
+assert.deepEqual(poolLabels(poolCard(0)), ['NDMI'], 'Multiple jobs on an NDMI slot still show only one project badge');
 renderPoolNode('', 'server2', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi']);
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'QoS must match the server as well as the job');
 for (const [server, qoses, labels, title] of [
   ['devbox', ['lg_s1_rag', 'lg_s1_merging', 'lg_s1_open', 'lg_s1_cpu', '__proto__'], ['R&amp;R', 'Merging'], 'Merging allocation'],
   ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D'], 'Agent&amp;Diffusion allocation'],
-  ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_cpu'], ['NDMI', 'R&amp;R', 'NDMI', 'Shared', 'Shared', 'Zuchi'], 'Shared allocation']
+  ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_cpu'], ['NDMI', 'NDMI', 'Shared', 'Zuchi'], 'NDMI project GPU']
 ]) {
   renderPoolNode('', server, qoses);
   assert.deepEqual(poolLabels(element('#node-grid').innerHTML), labels);
