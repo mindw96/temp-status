@@ -99,6 +99,7 @@ const gpuJobPools = new Map([
   ['devbox:lg_s1_merging', {label:'Merging', title:'Merging allocation'}],
   ['server2:lg_s2_editing', {label:'Editing', title:'Knowledge Editing allocation'}],
   ['server2:lg_s2_agent', {label:'A&D', title:'Agent&Diffusion allocation'}],
+  ['server2:lg_s2_chunmei', {label:'Mei', title:'Chunmei allocation'}],
   ['server4:lg_s4_rag', {label:'R&R', title:'RAG&Reasoning allocation'}],
   ['server4:lg_s4_shared', {label:'Shared', title:'Shared allocation'}],
   ['server4:lg_s4_open', {label:'Shared', title:'Shared allocation'}],

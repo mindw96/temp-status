@@ -828,7 +828,7 @@ renderPoolNode('', 'server2', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'QoS must match the server as well as the job');
 for (const [server, qoses, labels, title] of [
   ['devbox', ['lg_s1_rag', 'lg_s1_merging', 'lg_s1_open', 'lg_s1_cpu', '__proto__'], ['R&amp;R', 'Merging'], 'Merging allocation'],
-  ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D'], 'Agent&amp;Diffusion allocation'],
+  ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_chunmei', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D', 'Mei'], 'Agent&amp;Diffusion allocation'],
   ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_cpu'], ['NDMI', 'NDMI', 'Shared', 'Zuchi'], 'NDMI project GPU']
 ]) {
   renderPoolNode('', server, qoses);
@@ -844,7 +844,7 @@ for (const [server, qoses, labels, title] of [
     assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], `${server}: ${reason}`);
   }
 }
-renderPoolNode('', 'ubuntu', ['lg_s1_rag', 'lg_s2_agent', 'lg_s4_shared']);
+renderPoolNode('', 'ubuntu', ['lg_s1_rag', 'lg_s2_agent', 'lg_s2_chunmei', 'lg_s4_shared']);
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'Unconfigured servers do not inherit other pool labels');
 evaluate('liveState.error = null');
 
