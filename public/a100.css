@@ -50,5 +50,6 @@
 .a100-dialog-pod span{display:block;margin-top:4px;color:var(--text-tertiary)}
 .a100-noscript{margin:24px;color:var(--danger-text)}
 @media(max-width:1200px){.a100-job-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){.a100-page .heading-controls{flex-wrap:wrap;justify-content:flex-end}.a100-page .heading-controls .snapshot{flex-basis:100%;margin-bottom:2px}}
 @media(max-width:740px){.a100-summary{gap:12px;margin-bottom:24px}.a100-summary-card{padding:15px}.a100-summary-title{align-items:flex-start;flex-direction:column;gap:7px}.a100-summary-value{font-size:22px}.a100-section-heading{align-items:stretch;flex-direction:column;gap:12px}.a100-filters{justify-content:stretch}.a100-filters>label:first-child{width:42%}.a100-filters select{width:100%;max-width:none}.a100-search{flex:1;width:auto}.a100-job-grid{gap:12px}.a100-job-card{padding:13px}}
 @media(max-width:520px){.a100-job-grid{grid-template-columns:1fr}.a100-summary{grid-template-columns:1fr}.a100-summary-title{flex-direction:row;align-items:baseline}.a100-counts{gap:8px 20px}.a100-footer{font-size:11px}.a100-job-card{padding:15px}}
