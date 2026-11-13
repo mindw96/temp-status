@@ -10,18 +10,16 @@
   min-height:44px;
   padding:10px 16px;
   border:1px solid var(--toggle-border);
-  border-radius:100px;
+  border-radius:8px;
   background:var(--dialog-bg);
   color:var(--text-primary);
-  box-shadow:0 2px 1px var(--glass-inset) inset, 0 4px 20px var(--glass-shadow);
+  box-shadow:none;
   font-size:13px;
   font-weight:500;
-  backdrop-filter:blur(20px) saturate(160%);
-  -webkit-backdrop-filter:blur(20px) saturate(160%);
   transition:background 150ms ease, box-shadow 150ms ease;
 }
 .sbatch-rankings-launcher:hover,
-.sbatch-rankings-launcher[aria-expanded="true"] {background:var(--toggle-bg);box-shadow:0 2px 1px var(--glass-inset) inset, 0 6px 24px var(--glass-shadow-deep)}
+.sbatch-rankings-launcher[aria-expanded="true"] {background:var(--toggle-bg);box-shadow:none}
 .sbatch-rankings-launcher svg {width:18px;height:18px;color:var(--link)}
 .sbatch-rankings-panel {
   position:fixed;
@@ -34,12 +32,10 @@
   max-height:min(620px, calc(100dvh - 100px));
   overflow:hidden;
   border:1px solid var(--control-border);
-  border-radius:20px;
+  border-radius:12px;
   background:var(--dialog-bg);
   color:var(--text-primary);
-  box-shadow:0 2px 1px var(--glass-inset) inset, 0 16px 50px var(--glass-shadow-deep);
-  backdrop-filter:blur(30px) saturate(180%);
-  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  box-shadow:0 12px 36px var(--glass-shadow-deep);
   transform-origin:bottom right;
   animation:sbatch-rankings-appear 180ms var(--modal-ease, ease-out);
 }
@@ -52,7 +48,7 @@
 .sbatch-rankings-tabs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin:0 18px 12px;padding:4px;border:1px solid var(--control-border);border-radius:12px;background:var(--control-bg);flex-shrink:0}
 .sbatch-rankings-tabs button {min-height:36px;padding:5px 3px;border:1px solid transparent;border-radius:8px;color:var(--text-secondary);font-size:12px;line-height:1.5;white-space:nowrap}
 .sbatch-rankings-tabs button:hover {color:var(--text-primary)}
-.sbatch-rankings-tabs button[aria-selected="true"] {border-color:var(--control-border);background:var(--dialog-bg);color:var(--text-primary);box-shadow:0 1px 5px var(--glass-shadow)}
+.sbatch-rankings-tabs button[aria-selected="true"] {border-color:var(--control-border);background:var(--dialog-bg);color:var(--text-primary);box-shadow:none}
 .sbatch-rankings-scroll {min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 18px 5px}
 .sbatch-rankings-status {margin:0 0 10px;padding:9px 11px;border-radius:10px;background:var(--soft-blue);color:var(--text-secondary);font-size:11px;line-height:1.7}
 .sbatch-rankings-status[data-kind="warning"] {color:var(--pending-text)}

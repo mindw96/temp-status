@@ -9,14 +9,22 @@ These names identify frontend releases, not a change to the collector protocol.
 | [vApple](https://github.com/mindw96/temp-status/tree/vApple) | Annotated `vApple` tag | User-supplied `DESIGN.md`, system fonts, compact solid controls, elevated surfaces, primary `#191bdf`, and retained dark mode. See [adoption decisions](vApple.md). |
 | [vApple-noto-20261012](https://github.com/mindw96/temp-status/tree/vApple-noto-20261012) | `a21dff9c602a48bb9f96a75cb251162e252fe8b3` | vApple with the v261011 Noto Sans / Noto Sans KR font stack restored; exact baseline before vToss. |
 | [vToss](https://github.com/mindw96/temp-status/tree/vToss) | Annotated `vToss` tag | Supplied Toss reference, white canvas, blue/gray roles, 8px shapes, compact elevated cards and Noto fonts. See [adoption decisions](vToss.md). |
+| vAstryx-reference-20261114 | [Scope and recovery record](astryx-reference-20261114.md) | Active CSS-only Astryx-inspired neutral surfaces and controls on main and A100 pages; existing Noto typography, compact geometry and behavior retained; no Astryx/React dependencies. |
 
 Tags are immutable snapshots. Do not move an existing version tag to a newer commit.
 
 The Noto typography amendment is preserved by `vApple-noto-20261012`. The
 original `vApple` tag and backup remain the initial release. On 2026-10-12 KST,
-the user requested restoration of **v261011**, which is now the active design on
-`main`. The preceding vToss tag, ZIP and verification records remain preserved.
-See the [restoration record](restore-v261011-20261012.md).
+the user requested restoration of **v261011**. The preceding vToss tag, ZIP and
+verification records remain preserved. See the
+[restoration record](restore-v261011-20261012.md). On 2026-11-14 KST, the user
+requested the current **vAstryx-reference-20261114** design, using Astryx only as
+a visual reference and keeping the existing lightweight runtime.
+
+The exact preceding source is preserved by `pre-astryx-reference-20261114` at
+`a527df955014fd0640e34d7b4dabbcc1a0c81af0`. The
+[new design record](astryx-reference-20261114.md) includes its local source ZIP,
+checksum and recovery instructions.
 
 Use a new dated version for subsequent named releases. The active design is also
 identified by `data-design-version` and a `design-version` meta tag in both HTML
@@ -78,7 +86,8 @@ verified independently from local fixture-based checks.
   `f2a3278d10d1b7119f22db569a44513e22de12e01a8cc0a5acddd0e2d6b0b87d`.
 - The historical references are retained at [references/vApple.md](references/vApple.md)
   and [references/vToss.md](references/vToss.md). Root `DESIGN.md` identifies
-  the active v261011 design after the 2026-10-12 restoration.
+  the current active design; the 2026-10-12 v261011 restoration remains recorded
+  separately.
 - vToss source, captures, fidelity record and deployment evidence are stored in
   `../../backups/vToss/` after final verification.
 - To inspect the exact preceding version, use
