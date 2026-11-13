@@ -824,12 +824,12 @@ assert.match(poolCard(1), /<span class="gpu-job-status">Allocation NDMI<\/span>/
 renderPoolNode('liveState.snapshot.slurm.data.squeue[1].gpu_allocations[0].gres_indices = [0];', 'server4', ['lg_s4_rag', 'lg_s4_zuchi']);
 assert.equal(evaluate('nodes[0].gpus[0].jobRecords.length'), 2);
 assert.deepEqual(poolLabels(poolCard(0)), ['NDMI'], 'Multiple jobs on an NDMI slot still show only one project badge');
-renderPoolNode('', 'server2', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi']);
+renderPoolNode('', 'server2', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_leeki']);
 assert.deepEqual(poolLabels(element('#node-grid').innerHTML), [], 'QoS must match the server as well as the job');
 for (const [server, qoses, labels, title] of [
   ['devbox', ['lg_s1_rag', 'lg_s1_merging', 'lg_s1_open', 'lg_s1_cpu', '__proto__'], ['R&amp;R', 'Merging'], 'Merging allocation'],
   ['server2', ['lg_s2_editing', 'lg_s2_agent', 'lg_s2_chunmei', 'lg_s2_open', 'lg_s2_cpu', 'lg_s1_rag'], ['Editing', 'A&amp;D', 'Mei'], 'Agent&amp;Diffusion allocation'],
-  ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_cpu'], ['NDMI', 'NDMI', 'Shared', 'Zuchi'], 'NDMI project GPU']
+  ['server4', ['lg_s4_rag', 'lg_s4_shared', 'lg_s4_open', 'lg_s4_zuchi', 'lg_s4_leeki', 'lg_s4_cpu'], ['NDMI', 'NDMI', 'Shared', 'Zuchi', 'LeeKI'], 'NDMI project GPU']
 ]) {
   renderPoolNode('', server, qoses);
   assert.deepEqual(poolLabels(element('#node-grid').innerHTML), labels);
